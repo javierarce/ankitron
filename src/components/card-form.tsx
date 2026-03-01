@@ -7,17 +7,26 @@ import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { useRouter } from "next/navigation";
 
+type CardType = "Basic" | "Cloze";
+
 interface CardFormProps {
   deckName: string;
   note?: Note;
   onClose: () => void;
 }
 
+function isClozeNote(note: Note): boolean {
+  return note.modelName === "Cloze" || "Text" in note.fields;
+}
+
+function hasClozePattern(html: string): boolean {
+  const text = html.replace(/<[^>]*>/g, "");
+  return /\{\{c\d+::.*?\}\}/.test(text);
+}
+
 export function CardForm({ deckName, note, onClose }: CardFormProps) {
   const router = useRouter();
   const noteFields = note?.fields ?? {};
-  const frontField = noteFields["Front"] ?? Object.values(noteFields)[0];
-  const backField = noteFields["Back"] ?? Object.values(noteFields)[1];
 
   function extractValue(field: unknown): string {
     if (!field) return "";
@@ -28,13 +37,26 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
     return "";
   }
 
+  const isEdit = !!note;
+  const initialType: CardType = note && isClozeNote(note) ? "Cloze" : "Basic";
+
+  const [cardType, setCardType] = useState<CardType>(initialType);
+
+  // Basic fields
+  const frontField = noteFields["Front"] ?? Object.values(noteFields)[0];
+  const backField = noteFields["Back"] ?? Object.values(noteFields)[1];
   const [front, setFront] = useState(extractValue(frontField));
   const [back, setBack] = useState(extractValue(backField));
+
+  // Cloze fields
+  const textField = noteFields["Text"];
+  const backExtraField = noteFields["Back Extra"];
+  const [clozeText, setClozeText] = useState(extractValue(textField));
+  const [backExtra, setBackExtra] = useState(extractValue(backExtraField));
+
   const [tags, setTags] = useState<string[]>(note?.tags ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const isEdit = !!note;
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -47,9 +69,20 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!front.trim() || !back.trim()) {
-      setError("Front and back are required.");
-      return;
+    if (cardType === "Basic") {
+      if (!front.trim() || !back.trim()) {
+        setError("Front and back are required.");
+        return;
+      }
+    } else {
+      if (!clozeText.trim()) {
+        setError("Text is required.");
+        return;
+      }
+      if (!hasClozePattern(clozeText)) {
+        setError("Text must contain at least one cloze deletion, e.g. {{c1::word}}");
+        return;
+      }
     }
 
     setSaving(true);
@@ -57,12 +90,18 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
 
     try {
       if (isEdit) {
-        const fieldNames = Object.keys(note.fields ?? {});
-        const frontKey = fieldNames[0] ?? "Front";
-        const backKey = fieldNames[1] ?? "Back";
-        await ankiFetch("updateNoteFields", {
-          note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
-        });
+        if (cardType === "Cloze") {
+          await ankiFetch("updateNoteFields", {
+            note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
+          });
+        } else {
+          const fieldNames = Object.keys(note.fields ?? {});
+          const frontKey = fieldNames[0] ?? "Front";
+          const backKey = fieldNames[1] ?? "Back";
+          await ankiFetch("updateNoteFields", {
+            note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
+          });
+        }
         // Update tags
         for (const tag of note.tags) {
           await ankiFetch("removeTags", { notes: [note.noteId], tags: tag });
@@ -74,15 +113,22 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
           });
         }
       } else {
-        const noteId = await ankiFetch<number>("addNote", {
-          note: {
-            deckName,
-            modelName: "Basic",
-            fields: { Front: front, Back: back },
-            tags,
-          },
-        });
-        // Ensure tags are applied (some AnkiConnect versions ignore tags in addNote)
+        const noteData =
+          cardType === "Cloze"
+            ? {
+                deckName,
+                modelName: "Cloze",
+                fields: { Text: clozeText, "Back Extra": backExtra },
+                tags,
+              }
+            : {
+                deckName,
+                modelName: "Basic",
+                fields: { Front: front, Back: back },
+                tags,
+              };
+
+        const noteId = await ankiFetch<number>("addNote", { note: noteData });
         if (tags.length > 0 && noteId) {
           await ankiFetch("addTags", {
             notes: [noteId],
@@ -107,19 +153,69 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
         </h3>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-              Front
-            </label>
-            <CardEditor content={front} onChange={setFront} placeholder="Front of card..." />
-          </div>
+          {!isEdit && (
+            <div className="flex gap-1 rounded-lg bg-foreground/5 p-1">
+              <button
+                type="button"
+                onClick={() => setCardType("Basic")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  cardType === "Basic"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-foreground/50 hover:text-foreground/70"
+                }`}
+              >
+                Basic
+              </button>
+              <button
+                type="button"
+                onClick={() => setCardType("Cloze")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  cardType === "Cloze"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-foreground/50 hover:text-foreground/70"
+                }`}
+              >
+                Cloze
+              </button>
+            </div>
+          )}
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-              Back
-            </label>
-            <CardEditor content={back} onChange={setBack} placeholder="Back of card..." />
-          </div>
+          {cardType === "Basic" ? (
+            <>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                  Front
+                </label>
+                <CardEditor content={front} onChange={setFront} placeholder="Front of card..." />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                  Back
+                </label>
+                <CardEditor content={back} onChange={setBack} placeholder="Back of card..." />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                  Text
+                </label>
+                <CardEditor
+                  content={clozeText}
+                  onChange={setClozeText}
+                  placeholder="The capital of {{c1::France}} is {{c2::Paris}}."
+                  clozeMode
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                  Back Extra <span className="font-normal text-foreground/40">(optional)</span>
+                </label>
+                <CardEditor content={backExtra} onChange={setBackExtra} placeholder="Extra info shown on the back..." />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-foreground/70">

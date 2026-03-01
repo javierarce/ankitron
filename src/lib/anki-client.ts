@@ -81,6 +81,22 @@ export async function addNote(
   });
 }
 
+export async function addClozeNote(
+  deckName: string,
+  text: string,
+  backExtra: string,
+  tags: string[]
+): Promise<number> {
+  return ankiRequest<number>("addNote", {
+    note: {
+      deckName,
+      modelName: "Cloze",
+      fields: { Text: text, "Back Extra": backExtra },
+      tags,
+    },
+  });
+}
+
 export async function updateNote(
   noteId: number,
   front: string,
