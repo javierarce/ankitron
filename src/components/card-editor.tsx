@@ -9,9 +9,17 @@ interface CardEditorProps {
   content: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  clozeMode?: boolean;
 }
 
-export function CardEditor({ content, onChange, placeholder }: CardEditorProps) {
+function getNextClozeNumber(html: string): number {
+  const matches = html.match(/\{\{c(\d+)::/g);
+  if (!matches) return 1;
+  const numbers = matches.map((m) => parseInt(m.replace("{{c", "").replace("::", "")));
+  return Math.max(...numbers) + 1;
+}
+
+export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -40,6 +48,31 @@ export function CardEditor({ content, onChange, placeholder }: CardEditorProps) 
     const url = window.prompt("Image URL:");
     if (url) {
       editor.chain().focus().setImage({ src: url }).run();
+    }
+  }, [editor]);
+
+  const insertCloze = useCallback(() => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+    const currentHtml = editor.getHTML();
+    const n = getNextClozeNumber(currentHtml);
+
+    if (selectedText) {
+      editor
+        .chain()
+        .focus()
+        .insertContentAt({ from, to }, `{{c${n}::${selectedText}}}`)
+        .run();
+    } else {
+      editor
+        .chain()
+        .focus()
+        .insertContent(`{{c${n}::}}`)
+        .run();
+      // Move cursor inside the cloze (before the closing }})
+      const pos = editor.state.selection.from - 2;
+      editor.chain().setTextSelection(pos).run();
     }
   }, [editor]);
 
@@ -77,6 +110,16 @@ export function CardEditor({ content, onChange, placeholder }: CardEditorProps) 
         >
           IMG
         </button>
+        {clozeMode && (
+          <button
+            type="button"
+            onClick={insertCloze}
+            className="rounded px-2 py-1 text-xs font-medium text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
+            title="Wrap selection in cloze deletion (or insert empty cloze)"
+          >
+            [...]
+          </button>
+        )}
       </div>
       {placeholder && editor.isEmpty && (
         <div className="pointer-events-none absolute px-3 py-2 text-sm text-foreground/30">
