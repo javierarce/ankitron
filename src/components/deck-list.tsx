@@ -5,6 +5,39 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ankiFetch } from "@/lib/anki-fetch";
 
+interface DeckTreeNode {
+  name: string;
+  fullName: string;
+  children: DeckTreeNode[];
+  isDeck: boolean;
+}
+
+function buildDeckTree(decks: string[]): DeckTreeNode[] {
+  const root: DeckTreeNode[] = [];
+  const deckSet = new Set(decks);
+
+  const sorted = [...decks].sort();
+  for (const deck of sorted) {
+    const parts = deck.split("::");
+    let siblings = root;
+    for (let i = 0; i < parts.length; i++) {
+      const fullName = parts.slice(0, i + 1).join("::");
+      let node = siblings.find((n) => n.fullName === fullName);
+      if (!node) {
+        node = {
+          name: parts[i],
+          fullName,
+          children: [],
+          isDeck: deckSet.has(fullName),
+        };
+        siblings.push(node);
+      }
+      siblings = node.children;
+    }
+  }
+  return root;
+}
+
 interface DeckListProps {
   decks: string[];
   dueCounts: Record<string, number>;
@@ -18,8 +51,14 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const dueDecks = decks.filter((d) => (dueCounts[d] ?? 0) > 0);
-  const allDecks = decks;
+  const dueDecks = decks.filter((d) => {
+    if ((dueCounts[d] ?? 0) === 0) return false;
+    const hasChildWithDue = decks.some(
+      (other) => other !== d && other.startsWith(d + "::") && (dueCounts[other] ?? 0) > 0
+    );
+    return !hasChildWithDue;
+  });
+  const tree = buildDeckTree(decks);
 
   useEffect(() => {
     if (showDialog) {
@@ -69,18 +108,26 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
         <section className="mb-10">
           <h2 className="mb-3 text-lg font-semibold">Due for review</h2>
           <div className="grid gap-2">
-            {dueDecks.map((deck) => (
-              <Link
-                key={deck}
-                href={`/decks/${encodeURIComponent(deck)}/study`}
-                className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 transition-colors hover:bg-foreground/5"
-              >
-                <span className="font-medium">{deck}</span>
-                <span className="text-sm text-foreground/50">
-                  {dueCounts[deck]} due
-                </span>
-              </Link>
-            ))}
+            {dueDecks.map((deck) => {
+              const parts = deck.split("::");
+              const leaf = parts[parts.length - 1];
+              const prefix = parts.length > 1 ? parts.slice(0, -1).join("::") + "::" : null;
+              return (
+                <Link
+                  key={deck}
+                  href={`/decks/${encodeURIComponent(deck)}/study`}
+                  className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 transition-colors hover:bg-foreground/5"
+                >
+                  <span className="font-medium">
+                    {prefix && <span className="text-foreground/40">{prefix}</span>}
+                    {leaf}
+                  </span>
+                  <span className="text-sm text-foreground/50">
+                    {dueCounts[deck]} due
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}
@@ -96,24 +143,18 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
           </button>
         </div>
 
-        {allDecks.length === 0 ? (
+        {tree.length === 0 ? (
           <p className="text-foreground/50">No decks found. Create one or check that Anki is running.</p>
         ) : (
-          <div className="grid gap-2">
-            {allDecks.map((deck) => (
-              <Link
-                key={deck}
-                href={`/decks/${encodeURIComponent(deck)}`}
-                className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 transition-colors hover:bg-foreground/5"
-              >
-                <span className="font-medium">{deck}</span>
-                <span className="text-foreground/40 text-sm">&rarr;</span>
-              </Link>
+          <div className="grid gap-0.5">
+            {tree.map((node) => (
+              <DeckTreeItem key={node.fullName} node={node} depth={0} dueCounts={dueCounts} />
             ))}
           </div>
         )}
       </section>
 
+      {/* Create deck dialog */}
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={closeDialog}>
           <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
@@ -152,5 +193,49 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
         </div>
       )}
     </div>
+  );
+}
+
+function DeckTreeItem({
+  node,
+  depth,
+  dueCounts,
+}: {
+  node: DeckTreeNode;
+  depth: number;
+  dueCounts: Record<string, number>;
+}) {
+  const due = dueCounts[node.fullName] ?? 0;
+
+  return (
+    <>
+      {node.isDeck ? (
+        <Link
+          href={`/decks/${encodeURIComponent(node.fullName)}`}
+          className="flex items-center justify-between rounded-lg border border-foreground/10 px-4 py-3 transition-colors hover:bg-foreground/5"
+          style={{ paddingLeft: `${1 + depth * 1.25}rem` }}
+        >
+          <span className="font-medium">{node.name}</span>
+          <span className="text-foreground/40 text-sm">
+            {due > 0 ? `${due} due` : "\u2192"}
+          </span>
+        </Link>
+      ) : (
+        <div
+          className="flex items-center rounded-lg px-4 py-2 text-foreground/50 text-sm"
+          style={{ paddingLeft: `${1 + depth * 1.25}rem` }}
+        >
+          {node.name}
+        </div>
+      )}
+      {node.children.map((child) => (
+        <DeckTreeItem
+          key={child.fullName}
+          node={child}
+          depth={depth + 1}
+          dueCounts={dueCounts}
+        />
+      ))}
+    </>
   );
 }

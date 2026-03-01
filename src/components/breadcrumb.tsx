@@ -13,9 +13,14 @@ export function Breadcrumb() {
 
   if (segments[0] === "decks" && segments[1]) {
     const deckName = decodeURIComponent(segments[1]);
-    crumbs.push({
-      label: deckName,
-      href: `/decks/${segments[1]}`,
+    const parts = deckName.split("::");
+
+    parts.forEach((part, i) => {
+      const fullName = parts.slice(0, i + 1).join("::");
+      crumbs.push({
+        label: part,
+        href: `/decks/${encodeURIComponent(fullName)}`,
+      });
     });
 
     if (segments[2] === "study") {
