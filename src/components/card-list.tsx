@@ -22,6 +22,14 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max) + "\u2026";
 }
 
+function stripCloze(text: string): string {
+  return text.replace(/\{\{c\d+::(.*?)\}\}/g, "$1");
+}
+
+function isClozeNote(note: Note): boolean {
+  return note.modelName === "Cloze" || "Text" in note.fields;
+}
+
 function CardMenu({
   note,
   isSuspended,
@@ -189,12 +197,27 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
                 }`}
               >
                 <div className={`flex-1 min-w-0 ${noteSuspended ? "opacity-50" : ""}`}>
-                  <p className="text-sm font-medium">
-                    {truncate(stripHtml(note.fields.Front?.value ?? ""), 80)}
-                  </p>
-                  <p className="text-sm text-foreground/50 mt-0.5">
-                    {truncate(stripHtml(note.fields.Back?.value ?? ""), 80)}
-                  </p>
+                  {isClozeNote(note) ? (
+                    <>
+                      <p className="text-sm font-medium">
+                        {truncate(stripCloze(stripHtml(note.fields.Text?.value ?? "")), 80)}
+                      </p>
+                      {note.fields["Back Extra"]?.value && (
+                        <p className="text-sm text-foreground/50 mt-0.5">
+                          {truncate(stripHtml(note.fields["Back Extra"].value), 80)}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium">
+                        {truncate(stripHtml(note.fields.Front?.value ?? ""), 80)}
+                      </p>
+                      <p className="text-sm text-foreground/50 mt-0.5">
+                        {truncate(stripHtml(note.fields.Back?.value ?? ""), 80)}
+                      </p>
+                    </>
+                  )}
                   {note.tags.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {note.tags.map((tag) => (
@@ -247,7 +270,12 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
       {deletingNote && (
         <ConfirmDialog
           title="Delete Card"
-          message={`Delete "${truncate(stripHtml(deletingNote.fields.Front?.value ?? ""), 50)}"?`}
+          message={`Delete "${truncate(
+            isClozeNote(deletingNote)
+              ? stripCloze(stripHtml(deletingNote.fields.Text?.value ?? ""))
+              : stripHtml(deletingNote.fields.Front?.value ?? ""),
+            50
+          )}"?`}
           onConfirm={handleDelete}
           onCancel={() => setDeletingNote(null)}
           loading={deleting}
