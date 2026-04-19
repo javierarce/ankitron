@@ -62,7 +62,7 @@ async function createWindow() {
     title: "Anki Deck Manager",
     backgroundColor,
     titleBarStyle: isMac ? "hiddenInset" : "default",
-    trafficLightPosition: isMac ? { x: 18, y: 18 } : undefined,
+    trafficLightPosition: isMac ? { x: 18, y: 20 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
