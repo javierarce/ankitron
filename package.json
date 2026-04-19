@@ -2,11 +2,16 @@
   "name": "mem",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron": "electron .",
+    "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:build": "next build && node scripts/stage-electron.mjs && electron-builder",
+    "icons": "node scripts/generate-icon.mjs"
   },
   "dependencies": {
     "@tiptap/extension-image": "^3.20.0",
@@ -22,9 +27,45 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.5"
+  },
+  "build": {
+    "appId": "com.ankideckmanager.app",
+    "productName": "Anki Deck Manager",
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": ".electron-stage/standalone", "to": "standalone" }
+    ],
+    "afterPack": "./scripts/after-pack.cjs",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "mac": {
+      "category": "public.app-category.education",
+      "target": "dmg",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png"
+    }
   }
 }
