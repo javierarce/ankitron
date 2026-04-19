@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Anki Deck Manager
+
+A web-based interface for managing and studying [Anki](https://apps.ankiweb.net/) decks. Built on top of the [AnkiConnect](https://foosoft.net/projects/anki-connect/) add-on, it lets you browse decks, create and edit cards, and run study sessions from the browser.
+
+## Features
+
+- Browse all decks with due-card counts
+- Subdeck hierarchy using the `::` separator
+- Create, edit, and delete cards (Basic and Cloze note types)
+- Tag management per card
+- Spaced repetition study mode driven by Anki's scheduler
+- Light/dark theme toggle with system preference detection
+
+## Prerequisites
+
+1. [Anki desktop](https://apps.ankiweb.net/) must be installed and running.
+2. The [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on must be installed. The app talks to it at `http://localhost:8765`.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and start the dev server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+With Anki running, the homepage lists your decks. Without it, you will see a connection error — launch Anki and reload.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+- `pnpm dev` — start the Next.js dev server
+- `pnpm build` — production build
+- `pnpm start` — serve the production build
+- `pnpm lint` — run ESLint
+- `pnpm electron:dev` — run the app as an Electron desktop window against the Next.js dev server
+- `pnpm electron:build` — build the Next app and package an Electron binary with `electron-builder` (output in `dist/`)
+- `pnpm icons` — regenerate PNG icons from `build/icon.svg` (app icon + favicon)
 
-To learn more about Next.js, take a look at the following resources:
+## Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [Next.js 16](https://nextjs.org/) (App Router, React 19)
+- [Tailwind CSS 4](https://tailwindcss.com/)
+- [Tiptap](https://tiptap.dev/) for the rich-text card editor
+- TypeScript
+- [Electron](https://www.electronjs.org/) for the optional desktop build
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+src/
+  app/                Next.js routes (home, deck pages, study mode, API proxy)
+  components/         UI components (deck list, card editor, study card, etc.)
+  lib/
+    anki-client.ts    Typed wrappers for AnkiConnect actions
+    anki-fetch.ts     Browser-side fetch helpers
+    types.ts          Shared types (Note, Card, AnkiResponse, Ease)
+electron/
+  main.js             Electron main process (BrowserWindow, loads Next in dev/prod)
+  preload.js          Preload script (context-isolated, currently a no-op)
+build/
+  icon.svg            Source app icon
+  icon.png            Rendered 1024px icon (used by electron-builder)
+scripts/
+  generate-icon.mjs   Renders icon.svg → PNGs (app icon + favicon)
+  stage-electron.mjs  Stages Next's standalone output (flattens pnpm tree)
+  after-pack.cjs      electron-builder afterPack hook (injects node_modules)
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The `src/app/api/anki` route proxies requests to AnkiConnect to avoid CORS issues from the browser.

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Breadcrumb } from "@/components/breadcrumb";
-import { ConnectionStatus } from "@/components/connection-status";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
 
@@ -37,18 +36,19 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <header className="border-b border-foreground/10">
-          <div className="mx-auto max-w-5xl flex items-center justify-between px-6 py-4">
-            <Breadcrumb />
-            <ThemeToggle />
+        <header className="app-header border-b border-foreground/10">
+          <div className="app-header-inner mx-auto max-w-5xl flex items-center justify-between px-6 py-4">
+            <div className="app-no-drag">
+              <Breadcrumb />
+            </div>
+            <div className="app-no-drag">
+              <ThemeToggle />
+            </div>
           </div>
         </header>
         <main className="mx-auto max-w-5xl px-6 py-8">
           {children}
         </main>
-        <footer className="fixed bottom-4 left-6">
-          <ConnectionStatus />
-        </footer>
       </body>
     </html>
   );

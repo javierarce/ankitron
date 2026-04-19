@@ -23,6 +23,24 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Electron integration: hidden-inset title bar on macOS. The header becomes
+   the draggable region; interactive children opt out via .app-no-drag. */
+html.electron .app-header {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+html.electron .app-no-drag,
+html.electron .app-no-drag * {
+  -webkit-app-region: no-drag;
+}
+
+/* Reserve space under the traffic lights on macOS so the breadcrumb never
+   collides with them (they live at ~x=18 with ~70px of chrome width). */
+html.electron-mac .app-header-inner {
+  padding-left: 92px;
+}
+
 a,
 button,
 [role="button"],
