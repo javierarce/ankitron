@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CircleHalf, Moon, Sun } from "@phosphor-icons/react";
 
 type Theme = "light" | "dark" | "system";
 
@@ -47,19 +48,20 @@ export function ThemeToggle() {
 
   if (!mounted) return <div className="w-7 h-7" />;
 
-  const icons: Record<Theme, string> = {
-    light: "☀",
-    dark: "☾",
-    system: "◐",
-  };
-
   return (
     <button
       onClick={cycle}
       title={`Theme: ${theme}`}
-      className="flex h-7 w-7 items-center justify-center rounded-md text-sm text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
+      aria-label={`Theme: ${theme}`}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
     >
-      {icons[theme]}
+      <ThemeIcon theme={theme} />
     </button>
   );
+}
+
+function ThemeIcon({ theme }: { theme: Theme }) {
+  if (theme === "light") return <Sun size={16} weight="regular" />;
+  if (theme === "dark") return <Moon size={16} weight="regular" />;
+  return <CircleHalf size={16} weight="regular" />;
 }

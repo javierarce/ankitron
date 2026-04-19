@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { DotsThreeVertical } from "@phosphor-icons/react";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -68,11 +69,7 @@ function CardMenu({
         onClick={() => setOpen((o) => !o)}
         className="rounded-md p-1 text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 transition-all"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="5" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="12" cy="19" r="2" />
-        </svg>
+        <DotsThreeVertical size={16} weight="bold" />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg">
@@ -192,7 +189,7 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
             return (
               <div
                 key={note.noteId}
-                className={`group relative flex items-start gap-4 rounded-lg border border-foreground/10 px-4 py-3 ${
+                className={`group relative flex items-start gap-4 rounded-lg border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
                   noteSuspended ? "bg-foreground/[0.03]" : ""
                 }`}
               >

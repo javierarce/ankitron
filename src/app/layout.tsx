@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Breadcrumb } from "@/components/breadcrumb";
+import { CommandPalette } from "@/components/command-palette";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
 
@@ -49,6 +50,7 @@ export default function RootLayout({
         <main className="mx-auto max-w-5xl px-6 py-8">
           {children}
         </main>
+        <CommandPalette />
       </body>
     </html>
   );
