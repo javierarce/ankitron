@@ -20,7 +20,11 @@ const rootPkgJson = resolve(root, "package.json");
 
 let skippedLinks = 0;
 
-// Recursive copy that follows symlinks but tolerates broken ones.
+// Recursive copy that follows symlinks but tolerates broken ones. Never
+// overwrites a file that already exists at the destination — this lets us
+// overlay the pnpm store on top of Next's partial trace to fill in files the
+// tracer missed (e.g. @swc/helpers/cjs/_interop_require_default.cjs) without
+// clobbering Next's version choices.
 async function copyTree(from, to) {
   let s;
   try {
@@ -41,6 +45,7 @@ async function copyTree(from, to) {
     return;
   }
   if (s.isFile()) {
+    if (await exists(to)) return;
     await mkdir(dirname(to), { recursive: true });
     await copyFile(from, to);
   }
@@ -125,15 +130,11 @@ async function flattenPnpmStore(closure) {
         for (const s of scoped) {
           const full = `${pkg.name}/${s.name}`;
           if (!closure.has(full)) continue;
-          const target = join(stageNm, pkg.name, s.name);
-          if (await exists(target)) continue;
-          await copyTree(join(nm, pkg.name, s.name), target);
+          await copyTree(join(nm, pkg.name, s.name), join(stageNm, pkg.name, s.name));
         }
       } else {
         if (!closure.has(pkg.name)) continue;
-        const target = join(stageNm, pkg.name);
-        if (await exists(target)) continue;
-        await copyTree(join(nm, pkg.name), target);
+        await copyTree(join(nm, pkg.name), join(stageNm, pkg.name));
       }
     }
   }
