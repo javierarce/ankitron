@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { PencilSimple } from "@phosphor-icons/react";
 import { Ease } from "@/lib/types";
 
 interface StudyCardProps {
@@ -51,7 +52,7 @@ export function StudyCard({
     <div className="w-full max-w-2xl">
       <div
         onClick={!isRevealed ? onReveal : undefined}
-        className={`group relative rounded-xl border border-foreground/10 p-8 ${
+        className={`group relative rounded-xl border border-foreground/10 p-8 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
           !isRevealed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >
@@ -64,10 +65,7 @@ export function StudyCard({
             className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 rounded-md p-1.5 text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 transition-all"
             title="Edit card"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-              <path d="m15 5 4 4" />
-            </svg>
+            <PencilSimple size={14} weight="regular" />
           </button>
         )}
 
@@ -89,16 +87,22 @@ export function StudyCard({
           <button
             onClick={() => onAnswer(1)}
             disabled={answering}
-            className="rounded-lg border border-red-300 px-6 py-3 text-sm font-medium text-red-500 hover:bg-red-500/5 disabled:opacity-50 transition-colors dark:border-red-500/30"
+            className="flex min-w-[140px] items-center justify-between gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-5 py-3 text-sm font-semibold text-rose-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:bg-rose-500/15 active:scale-[0.98] disabled:opacity-50 dark:border-rose-500/30 dark:text-rose-400"
           >
-            Fail <span className="ml-1 text-red-300 text-xs dark:text-red-500/50">1</span>
+            <span>Fail</span>
+            <kbd className="flex h-5 w-5 items-center justify-center rounded border border-rose-500/30 font-sans text-xs font-semibold dark:border-rose-500/40">
+              1
+            </kbd>
           </button>
           <button
             onClick={() => onAnswer(3)}
             disabled={answering}
-            className="rounded-lg border border-green-300 px-6 py-3 text-sm font-medium text-green-600 hover:bg-green-500/5 disabled:opacity-50 transition-colors dark:border-green-500/30 dark:text-green-400"
+            className="flex min-w-[140px] items-center justify-between gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-3 text-sm font-semibold text-emerald-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:bg-emerald-500/15 active:scale-[0.98] disabled:opacity-50 dark:border-emerald-500/30 dark:text-emerald-400"
           >
-            Pass <span className="ml-1 text-green-300 text-xs dark:text-green-500/50">2</span>
+            <span>Pass</span>
+            <kbd className="flex h-5 w-5 items-center justify-center rounded border border-emerald-500/30 font-sans text-xs font-semibold dark:border-emerald-500/40">
+              2
+            </kbd>
           </button>
         </div>
       )}
