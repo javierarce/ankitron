@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
@@ -58,6 +58,8 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const modalRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -65,6 +67,31 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+    modalRef.current?.focus();
+    function tryFocusEditor() {
+      if (cancelled || !modalRef.current) return;
+      const editable = modalRef.current.querySelector<HTMLElement>('[contenteditable="true"]');
+      if (editable) editable.focus();
+      else requestAnimationFrame(tryFocusEditor);
+    }
+    tryFocusEditor();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function getFocusables(): HTMLElement[] {
+    const root = modalRef.current;
+    if (!root) return [];
+    const selector =
+      'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [contenteditable="true"]:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(root.querySelectorAll<HTMLElement>(selector)).filter(
+      (el) => el.offsetParent !== null,
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -147,12 +174,41 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg outline-none"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="mb-4 text-lg font-semibold">
           {isEdit ? "Edit Card" : "Add Card"}
         </h3>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.requestSubmit();
+              return;
+            }
+            if (e.key === "Tab") {
+              const focusables = getFocusables();
+              if (focusables.length === 0) return;
+              const first = focusables[0];
+              const last = focusables[focusables.length - 1];
+              const active = document.activeElement as HTMLElement | null;
+              if (e.shiftKey && (active === first || !modalRef.current?.contains(active))) {
+                e.preventDefault();
+                last.focus();
+              } else if (!e.shiftKey && (active === last || !modalRef.current?.contains(active))) {
+                e.preventDefault();
+                first.focus();
+              }
+            }
+          }}
+          className="space-y-4"
+        >
           {!isEdit && (
             <div className="flex gap-1 rounded-lg bg-foreground/5 p-1">
               <button

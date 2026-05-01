@@ -83,6 +83,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       <div className="flex gap-1 border-b border-foreground/10 px-2 py-1.5 bg-foreground/[0.03]">
         <button
           type="button"
+          tabIndex={-1}
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={`rounded px-2 py-1 text-xs font-bold transition-colors ${
             editor.isActive("bold")
@@ -94,6 +95,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         </button>
         <button
           type="button"
+          tabIndex={-1}
           onClick={() => editor.chain().focus().toggleItalic().run()}
           className={`rounded px-2 py-1 text-xs italic transition-colors ${
             editor.isActive("italic")
@@ -105,6 +107,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         </button>
         <button
           type="button"
+          tabIndex={-1}
           onClick={addImage}
           className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
         >
@@ -113,6 +116,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         {clozeMode && (
           <button
             type="button"
+            tabIndex={-1}
             onClick={insertCloze}
             className="rounded px-2 py-1 text-xs font-medium text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
             title="Wrap selection in cloze deletion (or insert empty cloze)"
