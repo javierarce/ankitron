@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CaretRight, Plus } from "@phosphor-icons/react";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { useVimNav } from "@/hooks/use-vim-nav";
+import { SyncButton } from "./sync-button";
 
 interface DeckTreeNode {
   name: string;
@@ -142,13 +143,16 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">All decks</h2>
-          <button
-            onClick={openDialog}
-            className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
-          >
-            <Plus size={14} weight="bold" />
-            New Deck
-          </button>
+          <div className="flex items-center gap-2">
+            <SyncButton />
+            <button
+              onClick={openDialog}
+              className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
+            >
+              <Plus size={14} weight="bold" />
+              New Deck
+            </button>
+          </div>
         </div>
 
         {tree.length === 0 ? (
