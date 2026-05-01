@@ -36,8 +36,11 @@ html.electron .app-no-drag * {
 }
 
 /* Reserve space under the traffic lights on macOS so the breadcrumb never
-   collides with them (they live at ~x=18 with ~70px of chrome width). */
-html.electron-mac .app-header-inner {
+   collides with them (they live at ~x=18 with ~70px of chrome width).
+   Mirror the same offset on <main> so the header text aligns with the
+   content below it. */
+html.electron-mac .app-header-inner,
+html.electron-mac main {
   padding-left: 92px;
 }
 
