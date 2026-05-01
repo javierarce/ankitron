@@ -7,8 +7,18 @@ import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { useRouter } from "next/navigation";
+import { useVimNav } from "@/hooks/use-vim-nav";
 
 function decodeHtml(html: string): string {
+  if (typeof document === "undefined") {
+    return html
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, " ");
+  }
   const txt = document.createElement("textarea");
   txt.innerHTML = html;
   return txt.value;
@@ -113,6 +123,8 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
 
   const hasDialog = showAddForm || !!editingNote || !!deletingNote;
 
+  useVimNav({ back: "/", enabled: !hasDialog });
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (hasDialog) return;
@@ -189,6 +201,14 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
             return (
               <div
                 key={note.noteId}
+                data-nav-item
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setEditingNote(note);
+                  }
+                }}
                 className={`group relative flex items-start gap-4 rounded-lg border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
                   noteSuspended ? "bg-foreground/[0.03]" : ""
                 }`}

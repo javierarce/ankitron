@@ -48,6 +48,16 @@ summary {
   cursor: pointer;
 }
 
+[data-nav-item] {
+  outline: none;
+}
+
+[data-nav-item]:focus,
+[data-nav-item]:focus-visible {
+  outline: none;
+  background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
 /* Tiptap editor styles */
 .tiptap {
   outline: none;

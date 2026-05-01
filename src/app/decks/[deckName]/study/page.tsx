@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
@@ -16,6 +16,7 @@ interface CurrentCard {
 
 export default function StudyPage() {
   const params = useParams();
+  const router = useRouter();
   const deckName = decodeURIComponent(params.deckName as string);
 
   const [card, setCard] = useState<CurrentCard | null>(null);
@@ -71,11 +72,14 @@ export default function StudyPage() {
       if (e.key === "a") {
         e.preventDefault();
         setShowAddForm(true);
+      } else if (e.key === "h") {
+        e.preventDefault();
+        router.push(`/decks/${encodeURIComponent(deckName)}`);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm]);
+  }, [editingNote, showAddForm, router, deckName]);
 
   async function handleReveal() {
     try {
