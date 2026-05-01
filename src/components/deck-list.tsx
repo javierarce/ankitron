@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CaretRight, Plus } from "@phosphor-icons/react";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { useVimNav } from "@/hooks/use-vim-nav";
 
 interface DeckTreeNode {
   name: string;
@@ -51,6 +52,8 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useVimNav({ enabled: !showDialog });
 
   const dueDecks = decks.filter((d) => {
     if ((dueCounts[d] ?? 0) === 0) return false;
@@ -213,6 +216,7 @@ function DueGroupCard({
   if (decks.length === 1 && decks[0] === root) {
     return (
       <Link
+        data-nav-item
         href={`/decks/${encodeURIComponent(root)}/study`}
         className="flex items-center justify-between rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
       >
@@ -236,6 +240,7 @@ function DueGroupCard({
           return (
             <Link
               key={deck}
+              data-nav-item
               href={`/decks/${encodeURIComponent(deck)}/study`}
               className="flex items-center justify-between px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
             >
@@ -275,6 +280,7 @@ function RootDeckCard({
   if (!hasChildren) {
     return (
       <Link
+        data-nav-item
         href={`/decks/${encodeURIComponent(node.fullName)}`}
         className="flex items-center justify-between rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
       >
@@ -288,6 +294,7 @@ function RootDeckCard({
     <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       {node.isDeck ? (
         <Link
+          data-nav-item
           href={`/decks/${encodeURIComponent(node.fullName)}`}
           className="flex items-center justify-between border-b border-foreground/5 px-4 py-3 transition-colors hover:bg-foreground/5"
         >
@@ -329,6 +336,7 @@ function NestedDeckRow({
     <>
       {node.isDeck ? (
         <Link
+          data-nav-item
           href={`/decks/${encodeURIComponent(node.fullName)}`}
           className="flex items-center justify-between px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
           style={{ paddingLeft }}
