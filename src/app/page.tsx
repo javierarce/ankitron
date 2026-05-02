@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDecks, getDueCount } from "@/lib/anki-client";
 import { DeckList } from "@/components/deck-list";
+import type { DueCounts } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +15,13 @@ export default async function HomePage() {
     hasError = true;
   }
 
-  const dueCounts: Record<string, number> = {};
+  const dueCounts: Record<string, DueCounts> = {};
   if (decks.length > 0) {
     const results = await Promise.all(
-      decks.map(async (deck) => {
-        const due = await getDueCount(deck);
-        return { deck, total: due.new + due.learn + due.review };
-      })
+      decks.map(async (deck) => ({ deck, due: await getDueCount(deck) }))
     );
-    for (const { deck, total } of results) {
-      dueCounts[deck] = total;
+    for (const { deck, due } of results) {
+      dueCounts[deck] = due;
     }
   }
 

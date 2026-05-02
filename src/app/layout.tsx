@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
+import { HeaderNav } from "@/components/header-nav";
+import { SyncButton } from "@/components/sync-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
 
@@ -35,21 +37,23 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased flex min-h-dvh flex-col`}
       >
         <header className="app-header border-b border-foreground/10">
-          <div className="app-header-inner mx-auto max-w-5xl flex items-center justify-between px-6 py-4">
+          <div className="app-row flex items-center justify-between gap-2 py-3">
             <div className="app-no-drag">
-              <Breadcrumb />
+              <HeaderNav />
             </div>
-            <div className="app-no-drag">
+            <div className="app-no-drag flex items-center gap-2">
+              <SyncButton />
               <ThemeToggle />
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-6 py-8">
-          {children}
-        </main>
+        <div className="app-row pt-5">
+          <Breadcrumb />
+        </div>
+        <main className="app-row flex flex-1 flex-col py-6">{children}</main>
         <CommandPalette />
       </body>
     </html>
