@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -35,13 +37,18 @@ html.electron .app-no-drag * {
   -webkit-app-region: no-drag;
 }
 
-/* Reserve space under the traffic lights on macOS so the breadcrumb never
-   collides with them (they live at ~x=18 with ~70px of chrome width).
-   Mirror the same offset on <main> so the header text aligns with the
-   content below it. */
-html.electron-mac .app-header-inner,
-html.electron-mac main {
-  padding-left: 92px;
+/* Shared horizontal layout for the header, breadcrumb, and main rows so
+   they line up at exactly the same left edge. On Electron macOS the left
+   padding grows to clear the traffic-light cluster. */
+.app-row {
+  width: 100%;
+  margin-inline: auto;
+  max-width: 64rem;
+  padding-inline: 1.5rem;
+}
+
+html.electron-mac .app-row {
+  padding-left: 5.75rem; /* 92px clears the traffic lights */
 }
 
 a,

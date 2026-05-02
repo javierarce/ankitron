@@ -1,69 +1,33 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { CaretRight, Plus } from "@phosphor-icons/react";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { CaretRight } from "@phosphor-icons/react";
 import { useVimNav } from "@/hooks/use-vim-nav";
-import { SyncButton } from "./sync-button";
-
-interface DeckTreeNode {
-  name: string;
-  fullName: string;
-  children: DeckTreeNode[];
-  isDeck: boolean;
-}
-
-function buildDeckTree(decks: string[]): DeckTreeNode[] {
-  const root: DeckTreeNode[] = [];
-  const deckSet = new Set(decks);
-
-  const sorted = [...decks].sort();
-  for (const deck of sorted) {
-    const parts = deck.split("::");
-    let siblings = root;
-    for (let i = 0; i < parts.length; i++) {
-      const fullName = parts.slice(0, i + 1).join("::");
-      let node = siblings.find((n) => n.fullName === fullName);
-      if (!node) {
-        node = {
-          name: parts[i],
-          fullName,
-          children: [],
-          isDeck: deckSet.has(fullName),
-        };
-        siblings.push(node);
-      }
-      siblings = node.children;
-    }
-  }
-  return root;
-}
+import type { DueCounts } from "@/lib/types";
 
 interface DeckListProps {
   decks: string[];
-  dueCounts: Record<string, number>;
+  dueCounts: Record<string, DueCounts>;
+}
+
+function totalOf(due: DueCounts | undefined) {
+  if (!due) return 0;
+  return due.new + due.learn + due.review;
 }
 
 export function DeckList({ decks, dueCounts }: DeckListProps) {
-  const router = useRouter();
-  const [showDialog, setShowDialog] = useState(false);
-  const [newDeckName, setNewDeckName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useVimNav({ enabled: !showDialog });
+  useVimNav();
 
   const dueDecks = decks.filter((d) => {
-    if ((dueCounts[d] ?? 0) === 0) return false;
+    if (totalOf(dueCounts[d]) === 0) return false;
     const hasChildWithDue = decks.some(
-      (other) => other !== d && other.startsWith(d + "::") && (dueCounts[other] ?? 0) > 0
+      (other) =>
+        other !== d &&
+        other.startsWith(d + "::") &&
+        totalOf(dueCounts[other]) > 0
     );
     return !hasChildWithDue;
   });
-  const tree = buildDeckTree(decks);
 
   const dueGroups: { root: string; decks: string[] }[] = [];
   {
@@ -80,130 +44,28 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
     }
   }
 
-  useEffect(() => {
-    if (showDialog) {
-      setTimeout(() => inputRef.current?.focus(), 0);
-      function handleKeyDown(e: KeyboardEvent) {
-        if (e.key === "Escape") closeDialog();
-      }
-      window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
-    }
-  }, [showDialog]);
-
-  function openDialog() {
-    setNewDeckName("");
-    setError(null);
-    setShowDialog(true);
-  }
-
-  function closeDialog() {
-    setShowDialog(false);
-    setNewDeckName("");
-    setError(null);
-  }
-
-  async function handleCreateDeck(e: React.FormEvent) {
-    e.preventDefault();
-    const name = newDeckName.trim();
-    if (!name) return;
-
-    setCreating(true);
-    setError(null);
-
-    try {
-      await ankiFetch("createDeck", { deck: name });
-      closeDialog();
-      router.push(`/decks/${encodeURIComponent(name)}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create deck");
-    } finally {
-      setCreating(false);
-    }
+  if (dueGroups.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center pb-[6rem] text-foreground/50">
+        {decks.length === 0
+          ? "No decks found. Open Decks to create one."
+          : "Nothing due. You're all caught up."}
+      </div>
+    );
   }
 
   return (
-    <div>
-      {dueGroups.length > 0 && (
-        <section className="mb-10">
-          <h2 className="mb-3 text-lg font-semibold">Due for review</h2>
-          <div className="grid gap-2">
-            {dueGroups.map((group) => (
-              <DueGroupCard
-                key={group.root}
-                root={group.root}
-                decks={group.decks}
-                dueCounts={dueCounts}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">All decks</h2>
-          <div className="flex items-center gap-2">
-            <SyncButton />
-            <button
-              onClick={openDialog}
-              className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
-            >
-              <Plus size={14} weight="bold" />
-              New Deck
-            </button>
-          </div>
-        </div>
-
-        {tree.length === 0 ? (
-          <p className="text-foreground/50">No decks found. Create one or check that Anki is running.</p>
-        ) : (
-          <div className="grid gap-2">
-            {tree.map((node) => (
-              <RootDeckCard key={node.fullName} node={node} dueCounts={dueCounts} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Create deck dialog */}
-      {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={closeDialog}>
-          <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-lg font-semibold">Create New Deck</h3>
-            <form onSubmit={handleCreateDeck}>
-              <input
-                ref={inputRef}
-                type="text"
-                value={newDeckName}
-                onChange={(e) => setNewDeckName(e.target.value)}
-                placeholder="Deck name..."
-                className="w-full rounded-lg border border-foreground/15 bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              />
-              {error && (
-                <p className="mt-2 text-sm text-red-500">{error}</p>
-              )}
-              <div className="mt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeDialog}
-                  disabled={creating}
-                  className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating || !newDeckName.trim()}
-                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-40"
-                >
-                  {creating ? "Creating..." : "Create Deck"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+    <div className="flex flex-1 items-center justify-center pb-[6rem]">
+      <div className="grid w-full gap-2">
+        {dueGroups.map((group) => (
+          <DueGroupCard
+            key={group.root}
+            root={group.root}
+            decks={group.decks}
+            dueCounts={dueCounts}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -215,27 +77,27 @@ function DueGroupCard({
 }: {
   root: string;
   decks: string[];
-  dueCounts: Record<string, number>;
+  dueCounts: Record<string, DueCounts>;
 }) {
   if (decks.length === 1 && decks[0] === root) {
     return (
       <Link
         data-nav-item
         href={`/decks/${encodeURIComponent(root)}/study`}
-        className="flex items-center justify-between rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
+        className="flex items-center justify-between gap-3 rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
       >
         <span className="font-medium">{root}</span>
-        <DueBadge count={dueCounts[root]} />
+        <DueCountsBadges due={dueCounts[root]} />
       </Link>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      <div className="border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+    <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+      <div className="rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
         {root}
       </div>
-      <div className="py-1">
+      <div className="divide-y divide-foreground/5">
         {decks.map((deck) => {
           const parts = deck.split("::");
           const leaf = parts[parts.length - 1];
@@ -246,13 +108,15 @@ function DueGroupCard({
               key={deck}
               data-nav-item
               href={`/decks/${encodeURIComponent(deck)}/study`}
-              className="flex items-center justify-between px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
+              className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
             >
-              <span>
-                {subPrefix && <span className="text-foreground/40">{subPrefix}</span>}
+              <span className="font-medium">
+                {subPrefix && (
+                  <span className="text-foreground/40">{subPrefix}</span>
+                )}
                 {leaf}
               </span>
-              <DueBadge count={dueCounts[deck]} />
+              <DueCountsBadges due={dueCounts[deck]} />
             </Link>
           );
         })}
@@ -261,109 +125,53 @@ function DueGroupCard({
   );
 }
 
-function DueBadge({ count }: { count: number }) {
-  if (count <= 0)
-    return <CaretRight size={14} weight="bold" className="text-foreground/30" />;
+export function DueCountsBadges({ due }: { due: DueCounts | undefined }) {
+  if (!due || totalOf(due) === 0) {
+    return (
+      <CaretRight size={14} weight="bold" className="text-foreground/30" />
+    );
+  }
   return (
-    <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-xs font-medium tabular-nums text-foreground/70">
-      {count}
+    <span className="flex items-center gap-1 text-xs font-medium tabular-nums">
+      <CountPill value={due.new} label="New" tone="sky" />
+      <CountPill value={due.learn} label="Learning" tone="rose" />
+      <CountPill value={due.review} label="To review" tone="emerald" />
     </span>
   );
 }
 
-function RootDeckCard({
-  node,
-  dueCounts,
-}: {
-  node: DeckTreeNode;
-  dueCounts: Record<string, number>;
-}) {
-  const due = dueCounts[node.fullName] ?? 0;
-  const hasChildren = node.children.length > 0;
+const TONE_STYLES = {
+  sky: "bg-sky-500/20 text-sky-900 dark:text-sky-200",
+  rose: "bg-rose-500/20 text-rose-900 dark:text-rose-200",
+  emerald: "bg-emerald-500/20 text-emerald-900 dark:text-emerald-200",
+} as const;
 
-  if (!hasChildren) {
-    return (
-      <Link
-        data-nav-item
-        href={`/decks/${encodeURIComponent(node.fullName)}`}
-        className="flex items-center justify-between rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
+function CountPill({
+  value,
+  label,
+  tone,
+}: {
+  value: number;
+  label: string;
+  tone: keyof typeof TONE_STYLES;
+}) {
+  const isZero = value === 0;
+  const palette = isZero
+    ? "bg-foreground/5 text-foreground/40"
+    : TONE_STYLES[tone];
+  return (
+    <span className="group/pill relative inline-flex">
+      <span
+        className={`inline-flex min-w-[1.75rem] items-center justify-center rounded-full px-2 py-0.5 leading-none ${palette}`}
       >
-        <span className="font-medium">{node.name}</span>
-        <DueBadge count={due} />
-      </Link>
-    );
-  }
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      {node.isDeck ? (
-        <Link
-          data-nav-item
-          href={`/decks/${encodeURIComponent(node.fullName)}`}
-          className="flex items-center justify-between border-b border-foreground/5 px-4 py-3 transition-colors hover:bg-foreground/5"
-        >
-          <span className="font-semibold">{node.name}</span>
-          <DueBadge count={due} />
-        </Link>
-      ) : (
-        <div className="border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-          {node.name}
-        </div>
-      )}
-      <div className="py-1">
-        {node.children.map((child) => (
-          <NestedDeckRow
-            key={child.fullName}
-            node={child}
-            depth={0}
-            dueCounts={dueCounts}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function NestedDeckRow({
-  node,
-  depth,
-  dueCounts,
-}: {
-  node: DeckTreeNode;
-  depth: number;
-  dueCounts: Record<string, number>;
-}) {
-  const due = dueCounts[node.fullName] ?? 0;
-  const paddingLeft = `${1 + depth * 1.25}rem`;
-
-  return (
-    <>
-      {node.isDeck ? (
-        <Link
-          data-nav-item
-          href={`/decks/${encodeURIComponent(node.fullName)}`}
-          className="flex items-center justify-between px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
-          style={{ paddingLeft }}
-        >
-          <span>{node.name}</span>
-          <DueBadge count={due} />
-        </Link>
-      ) : (
-        <div
-          className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-foreground/40"
-          style={{ paddingLeft }}
-        >
-          {node.name}
-        </div>
-      )}
-      {node.children.map((child) => (
-        <NestedDeckRow
-          key={child.fullName}
-          node={child}
-          depth={depth + 1}
-          dueCounts={dueCounts}
-        />
-      ))}
-    </>
+        {value}
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background opacity-0 shadow-md transition-opacity duration-100 group-hover/pill:opacity-100"
+      >
+        {label}: {value}
+      </span>
+    </span>
   );
 }

@@ -7,8 +7,10 @@ export function Breadcrumb() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
 
+  if (segments.length === 0) return <div className="h-5" />;
+
   const crumbs: { label: string; href: string }[] = [
-    { label: "Decks", href: "/" },
+    { label: "Decks", href: "/decks" },
   ];
 
   if (segments[0] === "decks" && segments[1]) {

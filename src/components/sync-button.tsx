@@ -29,14 +29,14 @@ export function SyncButton() {
       onClick={handleSync}
       disabled={syncing}
       title={error ?? "Sync with AnkiWeb"}
-      className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-60"
+      className="flex items-center gap-1.5 text-sm text-foreground/50 hover:text-foreground transition-colors disabled:opacity-60"
     >
       <ArrowsClockwise
-        size={14}
+        size={13}
         weight="bold"
         className={syncing ? "animate-spin" : ""}
       />
-      {syncing ? "Syncing..." : "Sync"}
+      {syncing ? "Syncing…" : "Sync"}
     </button>
   );
 }

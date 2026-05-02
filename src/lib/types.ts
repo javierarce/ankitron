@@ -33,3 +33,9 @@ export interface Card {
 }
 
 export type Ease = 1 | 2 | 3 | 4; // Again, Hard, Good, Easy
+
+export interface DueCounts {
+  new: number;
+  learn: number;
+  review: number;
+}
