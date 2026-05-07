@@ -29,6 +29,7 @@ export default function StudyPage() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   const containerRef = useRef<HTMLDivElement>(null);
   const cardSlotRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +85,26 @@ export default function StudyPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editingNote, showAddForm, router, deckName]);
+
+  useEffect(() => {
+    if (!completed || reviewed === 0 || syncStatus !== "idle") return;
+    let cancelled = false;
+    setSyncStatus("syncing");
+    (async () => {
+      try {
+        await ankiFetch("sync");
+        if (!cancelled) {
+          setSyncStatus("ok");
+          router.refresh();
+        }
+      } catch {
+        if (!cancelled) setSyncStatus("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [completed, reviewed, syncStatus, router]);
 
   async function handleReveal() {
     const cardRect = cardSlotRef.current?.getBoundingClientRect();
@@ -164,6 +185,13 @@ export default function StudyPage() {
               ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
               : "No cards are due for review."}
           </p>
+          {reviewed > 0 && (
+            <p className="mb-4 text-xs text-foreground/40">
+              {syncStatus === "syncing" && "Syncing with AnkiWeb…"}
+              {syncStatus === "ok" && "Synced with AnkiWeb."}
+              {syncStatus === "error" && "Sync failed — try the Sync button."}
+            </p>
+          )}
           <a
             href={`/decks/${encodeURIComponent(deckName)}`}
             className="rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background inline-block"
