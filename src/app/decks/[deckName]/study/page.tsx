@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
@@ -28,6 +28,9 @@ export default function StudyPage() {
   const [reviewed, setReviewed] = useState(0);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [pinnedTop, setPinnedTop] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cardSlotRef = useRef<HTMLDivElement>(null);
 
   const loadCurrentCard = useCallback(async () => {
     try {
@@ -38,6 +41,7 @@ export default function StudyPage() {
       } else {
         setCard(result);
         setIsRevealed(false);
+        setPinnedTop(null);
         await ankiFetch("guiStartCardTimer");
       }
     } catch {
@@ -82,6 +86,11 @@ export default function StudyPage() {
   }, [editingNote, showAddForm, router, deckName]);
 
   async function handleReveal() {
+    const cardRect = cardSlotRef.current?.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (cardRect && containerRect) {
+      setPinnedTop(cardRect.top - containerRect.top);
+    }
     try {
       await ankiFetch("guiShowAnswer");
       setIsRevealed(true);
@@ -134,7 +143,13 @@ export default function StudyPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center pb-[6rem]">
+    <div
+      ref={containerRef}
+      className={`flex flex-1 flex-col items-center pb-[6rem] ${
+        pinnedTop === null ? "justify-center" : ""
+      }`}
+      style={pinnedTop !== null ? { paddingTop: pinnedTop } : undefined}
+    >
       {loading && (
         <p className="text-foreground/50">Loading cards...</p>
       )}
@@ -159,15 +174,17 @@ export default function StudyPage() {
       )}
 
       {!loading && !error && card && (
-        <StudyCard
-          question={card.question}
-          answer={card.answer}
-          isRevealed={isRevealed}
-          onReveal={handleReveal}
-          onAnswer={handleAnswer}
-          onEdit={handleEdit}
-          answering={answering}
-        />
+        <div ref={cardSlotRef} className="w-full max-w-2xl">
+          <StudyCard
+            question={card.question}
+            answer={card.answer}
+            isRevealed={isRevealed}
+            onReveal={handleReveal}
+            onAnswer={handleAnswer}
+            onEdit={handleEdit}
+            answering={answering}
+          />
+        </div>
       )}
 
       {showAddForm && (

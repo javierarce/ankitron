@@ -26,6 +26,9 @@ export function StudyCard({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (answering) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
 
       if (!isRevealed) {
         if (e.key === " " || e.key === "1" || e.key === "2") {
