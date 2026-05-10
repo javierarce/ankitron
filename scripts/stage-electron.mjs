@@ -18,6 +18,12 @@ const stageNm = resolve(stage, "node_modules");
 const pnpmStore = resolve(root, "node_modules/.pnpm");
 const rootPkgJson = resolve(root, "package.json");
 
+// Packages Turbopack bundles into the .next chunks at build time and that
+// aren't needed at runtime. Shipping their full source trees would just
+// inflate the .app and (for @phosphor-icons/react with ~9000 files) blow
+// macOS's per-process fd limit during code signing.
+const SKIP_PACKAGES = new Set(["@phosphor-icons/react"]);
+
 let skippedLinks = 0;
 
 // Recursive copy that follows symlinks but tolerates broken ones. Never
@@ -92,6 +98,7 @@ async function computeProdClosure() {
   while (queue.length) {
     const name = queue.shift();
     if (seen.has(name)) continue;
+    if (SKIP_PACKAGES.has(name)) continue;
     seen.add(name);
     const manifests = await findPackageManifests(name, storeEntries);
     for (const { pkg } of manifests) {
