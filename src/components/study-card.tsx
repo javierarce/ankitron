@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { PencilSimple } from "@phosphor-icons/react";
+import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { Ease } from "@/lib/types";
 
 interface StudyCardProps {

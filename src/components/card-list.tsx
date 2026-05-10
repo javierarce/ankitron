@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { DotsThreeVertical } from "@phosphor-icons/react";
+import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";

@@ -2,13 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowElbowDownLeft,
-  ArrowUp,
-  ArrowDown,
-  MagnifyingGlass,
-  Plus,
-} from "@phosphor-icons/react";
+import { ArrowElbowDownLeft } from "@phosphor-icons/react/dist/ssr/ArrowElbowDownLeft";
+import { ArrowUp } from "@phosphor-icons/react/dist/ssr/ArrowUp";
+import { ArrowDown } from "@phosphor-icons/react/dist/ssr/ArrowDown";
+import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass";
+import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { CardForm } from "./card-form";
 

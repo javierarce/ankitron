@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleHalf, Moon, Sun } from "@phosphor-icons/react";
+import { CircleHalf } from "@phosphor-icons/react/dist/ssr/CircleHalf";
+import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";
+import { Sun } from "@phosphor-icons/react/dist/ssr/Sun";
 
 type Theme = "light" | "dark" | "system";
 
