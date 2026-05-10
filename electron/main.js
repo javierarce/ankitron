@@ -2,6 +2,8 @@ const { app, BrowserWindow, nativeTheme, shell } = require("electron");
 const path = require("node:path");
 const net = require("node:net");
 
+app.setName("AnkiTron");
+
 const isDev = !app.isPackaged;
 const DEV_URL = "http://localhost:3000";
 const SPLASH_PATH = path.join(__dirname, "splash.html");
@@ -43,8 +45,12 @@ async function startNextServer() {
   process.env.HOSTNAME = "127.0.0.1";
   process.env.NODE_ENV = "production";
 
-  // The standalone server self-starts on require().
+  // The standalone server self-starts on require() and overwrites
+  // process.title to "next-server (vX.Y.Z)" — restore it so macOS keeps
+  // showing AnkiTron in the menu bar / Activity Monitor.
+  const previousTitle = process.title;
   require(path.join(standaloneDir, "server.js"));
+  process.title = previousTitle;
 
   const url = `http://127.0.0.1:${port}`;
   await waitForUrl(url);
@@ -59,7 +65,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: "Anki Deck Manager",
+    title: "AnkiTron",
     backgroundColor,
     titleBarStyle: isMac ? "hiddenInset" : "default",
     trafficLightPosition: isMac ? { x: 18, y: 20 } : undefined,
