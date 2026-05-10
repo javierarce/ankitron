@@ -69,7 +69,8 @@
     "mac": {
       "category": "public.app-category.education",
       "target": "dmg",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "identity": null
     },
     "win": {
       "target": "nsis",
