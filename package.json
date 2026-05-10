@@ -13,6 +13,7 @@
     "electron": "electron .",
     "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && node scripts/stage-electron.mjs && electron-builder",
+    "electron:release": "next build && node scripts/stage-electron.mjs && electron-builder --publish always",
     "icons": "node scripts/generate-icon.mjs"
   },
   "dependencies": {
@@ -44,6 +45,11 @@
   "build": {
     "appId": "com.ankitron.app",
     "productName": "AnkiTron",
+    "publish": {
+      "provider": "github",
+      "owner": "javierarce",
+      "repo": "ankitron"
+    },
     "files": [
       "electron/**/*",
       "package.json"

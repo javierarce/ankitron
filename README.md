@@ -71,6 +71,17 @@ scripts/
 
 The `src/app/api/anki` route proxies requests to AnkiConnect to avoid CORS issues from the browser.
 
+## Releasing
+
+Releases are produced by a GitHub Actions workflow on tag push (`.github/workflows/release.yml`). To cut a release:
+
+```bash
+pnpm version patch        # bumps package.json + creates a v* tag
+git push --follow-tags    # pushes the commit and the tag
+```
+
+The workflow runs `electron-builder` on a macOS runner and uploads the unsigned DMG as a draft GitHub Release. Open the [Releases page](https://github.com/javierarce/ankitron/releases), review the draft, and publish it. Because the build is unsigned, first-time users will need to right-click → Open to bypass Gatekeeper.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
