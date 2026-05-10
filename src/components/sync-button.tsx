@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowsClockwise } from "@phosphor-icons/react";
+import { ArrowsClockwise } from "@phosphor-icons/react/dist/ssr/ArrowsClockwise";
 import { useRouter } from "next/navigation";
 import { ankiFetch } from "@/lib/anki-fetch";
 

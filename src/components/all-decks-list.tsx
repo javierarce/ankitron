@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus } from "@phosphor-icons/react";
+import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import type { DueCounts } from "@/lib/types";

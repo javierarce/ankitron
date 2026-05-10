@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CaretRight } from "@phosphor-icons/react";
+import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import type { DueCounts } from "@/lib/types";
 
