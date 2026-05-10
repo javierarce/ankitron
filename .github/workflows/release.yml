@@ -23,7 +23,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm electron:release
+      - run: |
+          ulimit -n 16384
+          pnpm electron:release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
