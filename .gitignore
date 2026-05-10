@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local notes (kept out of repo)
+CLAUDE.md
+IDEAS.md

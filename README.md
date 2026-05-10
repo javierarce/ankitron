@@ -1,6 +1,6 @@
-# Anki Deck Manager
+# AnkiTron
 
-A web-based interface for managing and studying [Anki](https://apps.ankiweb.net/) decks. Built on top of the [AnkiConnect](https://foosoft.net/projects/anki-connect/) add-on, it lets you browse decks, create and edit cards, and run study sessions from the browser.
+A desktop and web interface for managing and studying [Anki](https://apps.ankiweb.net/) decks — Anki via [Elec]Tron. Built on top of the [AnkiConnect](https://foosoft.net/projects/anki-connect/) add-on, it lets you browse decks, create and edit cards, and run study sessions from the browser or as a packaged Electron app.
 
 ## Features
 
@@ -70,3 +70,7 @@ scripts/
 ```
 
 The `src/app/api/anki` route proxies requests to AnkiConnect to avoid CORS issues from the browser.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).

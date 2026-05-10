@@ -1,7 +1,9 @@
 {
-  "name": "mem",
+  "name": "ankitron",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-3.0-or-later",
+  "author": "javierarce",
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
@@ -40,8 +42,8 @@
     "wait-on": "^9.0.5"
   },
   "build": {
-    "appId": "com.ankideckmanager.app",
-    "productName": "Anki Deck Manager",
+    "appId": "com.ankitron.app",
+    "productName": "AnkiTron",
     "files": [
       "electron/**/*",
       "package.json"

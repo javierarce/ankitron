@@ -120,6 +120,8 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [suspended, setSuspended] = useState<Set<number>>(() => new Set(suspendedCardIds ?? []));
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const hasDialog = showAddForm || !!editingNote || !!deletingNote;
 
@@ -128,8 +130,22 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (hasDialog) return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const inField = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      if (e.key === "/" && !inField) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      if (inField) return;
       if (e.key === "a") {
         e.preventDefault();
         setShowAddForm(true);
@@ -138,6 +154,24 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [hasDialog]);
+
+  const trimmedQuery = query.trim().toLowerCase();
+  const filteredNotes = trimmedQuery
+    ? notes.filter((note) => {
+        const haystack = [
+          note.fields.Front?.value,
+          note.fields.Back?.value,
+          note.fields.Text?.value,
+          note.fields["Back Extra"]?.value,
+        ]
+          .filter(Boolean)
+          .map((v) => stripCloze(stripHtml(v as string)))
+          .concat(note.tags)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(trimmedQuery);
+      })
+    : notes;
 
   function isNoteSuspended(note: Note): boolean {
     return (note.cards ?? []).some((id) => suspended.has(id));
@@ -178,10 +212,24 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-foreground/50">
-          {notes.length} {notes.length === 1 ? "card" : "cards"}
-        </p>
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              if (query) {
+                setQuery("");
+              } else {
+                searchRef.current?.blur();
+              }
+            }
+          }}
+          placeholder="Search cards…"
+          className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
+        />
         <button
           onClick={() => setShowAddForm(true)}
           className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
@@ -190,13 +238,23 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
         </button>
       </div>
 
+      <div className="mb-4">
+        <p className="text-sm text-foreground/50">
+          {trimmedQuery
+            ? `${filteredNotes.length} of ${notes.length} ${notes.length === 1 ? "card" : "cards"}`
+            : `${notes.length} ${notes.length === 1 ? "card" : "cards"}`}
+        </p>
+      </div>
+
       {notes.length === 0 ? (
         <p className="text-foreground/50">
           No cards yet. Add your first card above.
         </p>
+      ) : filteredNotes.length === 0 ? (
+        <p className="text-foreground/50">No cards match &ldquo;{query}&rdquo;.</p>
       ) : (
         <div className="space-y-2">
-          {notes.map((note) => {
+          {filteredNotes.map((note) => {
             const noteSuspended = isNoteSuspended(note);
             return (
               <div
