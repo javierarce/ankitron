@@ -46,11 +46,10 @@ async function startNextServer() {
   process.env.NODE_ENV = "production";
 
   // The standalone server self-starts on require() and overwrites
-  // process.title to "next-server (vX.Y.Z)" — restore it so macOS keeps
-  // showing AnkiTron in the menu bar / Activity Monitor.
-  const previousTitle = process.title;
+  // process.title to "next-server (vX.Y.Z)". Set it back to AnkiTron
+  // so macOS keeps showing the right name in the menu bar.
   require(path.join(standaloneDir, "server.js"));
-  process.title = previousTitle;
+  process.title = "AnkiTron";
 
   const url = `http://127.0.0.1:${port}`;
   await waitForUrl(url);
