@@ -16,6 +16,20 @@ A desktop and web interface for managing and studying [Anki](https://apps.ankiwe
 1. [Anki desktop](https://apps.ankiweb.net/) must be installed and running.
 2. The [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on must be installed. The app talks to it at `http://localhost:8765`.
 
+## Install (macOS)
+
+1. Download the latest `AnkiTron-*-arm64.dmg` from the [Releases page](https://github.com/javierarce/ankitron/releases).
+2. Mount the DMG and drag AnkiTron to **Applications**.
+3. The first time you launch it, macOS will say "Apple could not verify AnkiTron is free of malware…" — that's expected because the build isn't notarized (no paid Apple Developer cert). To get past it: open **System Settings → Privacy & Security**, scroll to "AnkiTron was blocked from use…" and click **Open Anyway**, then re-launch and click **Open** on the next prompt.
+
+   Or, in one terminal command:
+
+   ```bash
+   xattr -cr /Applications/AnkiTron.app
+   ```
+
+   macOS will only nag once.
+
 ## Getting Started
 
 Install dependencies and start the dev server:
