@@ -91,3 +91,13 @@ summary {
 .tiptap em {
   font-style: italic;
 }
+
+/* Cloze deletions: Anki ships them as blue, which is hard to read in dark mode. */
+.cloze {
+  color: #2563eb; /* blue-600 */
+  font-weight: 700;
+}
+
+:root.dark .cloze {
+  color: #fbbf24; /* amber-400 */
+}
