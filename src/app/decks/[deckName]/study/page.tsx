@@ -26,6 +26,7 @@ export default function StudyPage() {
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [reviewed, setReviewed] = useState(0);
+  const [initialTotal, setInitialTotal] = useState(0);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
@@ -57,6 +58,21 @@ export default function StudyPage() {
       setError(null);
       try {
         await ankiFetch("guiDeckReview", { name: deckName });
+        try {
+          const stats = await ankiFetch<
+            Record<string, { new_count: number; learn_count: number; review_count: number }>
+          >("getDeckStats", { decks: [deckName] });
+          const deckStats = Object.values(stats)[0];
+          if (deckStats) {
+            setInitialTotal(
+              (deckStats.new_count ?? 0) +
+                (deckStats.learn_count ?? 0) +
+                (deckStats.review_count ?? 0)
+            );
+          }
+        } catch {
+          // progress bar will simply not show — non-fatal
+        }
         await loadCurrentCard();
       } catch {
         setError(
@@ -230,9 +246,25 @@ export default function StudyPage() {
         />
       )}
 
+      {!completed && initialTotal > 0 && (
+        <div
+          className="fixed bottom-0 left-0 right-0 h-1 bg-foreground/10"
+          aria-hidden
+        >
+          <div
+            className="h-full bg-foreground/60 transition-all duration-300 ease-out"
+            style={{
+              width: `${Math.min(100, (reviewed / initialTotal) * 100)}%`,
+            }}
+          />
+        </div>
+      )}
+
       {reviewed > 0 && (
         <p className="fixed bottom-4 right-6 text-sm text-foreground/30">
-          {reviewed} reviewed
+          {initialTotal > 0
+            ? `${reviewed > initialTotal ? `(+${reviewed - initialTotal}) ` : ""}${Math.min(reviewed, initialTotal)} / ${initialTotal}`
+            : `${reviewed} reviewed`}
         </p>
       )}
     </div>
