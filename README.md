@@ -8,6 +8,7 @@ A desktop and web interface for managing and studying [Anki](https://apps.ankiwe
 - Subdeck hierarchy using the `::` separator
 - Create, edit, and delete cards (Basic and Cloze note types)
 - Tag management per card
+- Per-deck JSON import/export — edit cards offline and re-import to update existing notes (matched by `noteId`) or add new ones
 - Spaced repetition study mode driven by Anki's scheduler
 - Undo the last review with `z` (or `Cmd`/`Ctrl-Z`) during study
 - Launches Anki silently in the background on startup (packaged desktop build)
@@ -53,6 +54,7 @@ In dev mode, Anki must already be running — only the packaged desktop build au
 - `pnpm build` — production build
 - `pnpm start` — serve the production build
 - `pnpm lint` — run ESLint
+- `pnpm test` — run the Vitest unit suite (`pnpm test:watch` for watch mode)
 - `pnpm electron:dev` — run the app as an Electron desktop window against the Next.js dev server
 - `pnpm electron:build` — build the Next app and package an Electron binary with `electron-builder` (output in `dist/`)
 - `pnpm icons` — regenerate PNG icons from `build/icon.svg` (app icon + favicon)
