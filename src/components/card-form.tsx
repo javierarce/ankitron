@@ -133,7 +133,14 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
         await ensureClozeTypedModel();
       }
 
-      if (isEdit) {
+      const modelName =
+        cardType === "ClozeTyped"
+          ? CLOZE_TYPED_MODEL
+          : cardType === "Cloze"
+            ? "Cloze"
+            : "Basic";
+
+      if (isEdit && cardType === initialType) {
         if (isClozeForm) {
           await ankiFetch("updateNoteFields", {
             note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
@@ -157,12 +164,6 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
           });
         }
       } else {
-        const modelName =
-          cardType === "ClozeTyped"
-            ? CLOZE_TYPED_MODEL
-            : cardType === "Cloze"
-              ? "Cloze"
-              : "Basic";
         const noteData = isClozeForm
           ? {
               deckName,
@@ -184,6 +185,9 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
             tags: tags.join(" "),
           });
         }
+        if (isEdit) {
+          await ankiFetch("deleteNotes", { notes: [note.noteId] });
+        }
       }
       router.refresh();
       onClose();
@@ -202,9 +206,16 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
         className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-4 text-lg font-semibold">
-          {isEdit ? "Edit Card" : "Add Card"}
-        </h3>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h3 className="text-lg font-semibold">
+            {isEdit ? "Edit Card" : "Add Card"}
+          </h3>
+          {isEdit && cardType !== initialType && (
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              Changing the card type creates a new card and resets its review history.
+            </p>
+          )}
+        </div>
 
         <form
           onSubmit={handleSubmit}
@@ -231,44 +242,42 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
           }}
           className="space-y-4"
         >
-          {!isEdit && (
-            <div className="flex gap-1 rounded-lg bg-foreground/5 p-1">
-              <button
-                type="button"
-                onClick={() => setCardType("Basic")}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  cardType === "Basic"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-foreground/50 hover:text-foreground/70"
-                }`}
-              >
-                Basic
-              </button>
-              <button
-                type="button"
-                onClick={() => setCardType("Cloze")}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  cardType === "Cloze"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-foreground/50 hover:text-foreground/70"
-                }`}
-              >
-                Cloze
-              </button>
-              <button
-                type="button"
-                onClick={() => setCardType("ClozeTyped")}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  cardType === "ClozeTyped"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-foreground/50 hover:text-foreground/70"
-                }`}
-                title="Cloze with a typed answer"
-              >
-                Cloze (typed)
-              </button>
-            </div>
-          )}
+          <div className="flex gap-1 rounded-lg bg-foreground/5 p-1">
+            <button
+              type="button"
+              onClick={() => setCardType("Basic")}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                cardType === "Basic"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-foreground/50 hover:text-foreground/70"
+              }`}
+            >
+              Basic
+            </button>
+            <button
+              type="button"
+              onClick={() => setCardType("Cloze")}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                cardType === "Cloze"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-foreground/50 hover:text-foreground/70"
+              }`}
+            >
+              Cloze
+            </button>
+            <button
+              type="button"
+              onClick={() => setCardType("ClozeTyped")}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                cardType === "ClozeTyped"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-foreground/50 hover:text-foreground/70"
+              }`}
+              title="Cloze with a typed answer"
+            >
+              Cloze (typed)
+            </button>
+          </div>
 
           {cardType === "Basic" ? (
             <>
