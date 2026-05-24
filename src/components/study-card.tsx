@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { Ease } from "@/lib/types";
+import {
+  diffTypedAnswer,
+  extractExpectedClozeAnswer,
+  groupRuns,
+} from "@/lib/typed-answer-diff";
 
 interface StudyCardProps {
   question: string;
@@ -104,6 +109,16 @@ export function StudyCard({
     [typed, answer]
   );
 
+  const expectedAnswer = useMemo(
+    () => (typed ? extractExpectedClozeAnswer(question, answer) : ""),
+    [typed, question, answer]
+  );
+
+  const typedDiff = useMemo(() => {
+    if (!typed || !submittedValue.trim() || !expectedAnswer) return null;
+    return diffTypedAnswer(submittedValue.trim(), expectedAnswer);
+  }, [typed, submittedValue, expectedAnswer]);
+
   return (
     <div className="w-full max-w-2xl">
       <div
@@ -154,10 +169,54 @@ export function StudyCard({
           <div className="study-answer prose prose-sm dark:prose-invert max-w-none">
             {typed && (
               <>
-                <div className="text-sm">
-                  <span className="text-foreground/40">You typed: </span>
-                  <span className="text-foreground/70">{submittedValue || <em className="text-foreground/30">(nothing)</em>}</span>
-                </div>
+                {typedDiff ? (
+                  typedDiff.correct ? (
+                    <div className="flex justify-center">
+                      <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-mono text-sm text-emerald-600 dark:border-emerald-500/30 dark:text-emerald-400">
+                        {submittedValue.trim()}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-center gap-3 font-mono text-sm">
+                      <span className="inline-flex overflow-hidden rounded-md border border-foreground/10">
+                        {groupRuns(typedDiff.typed).map((r, idx) => (
+                          <span
+                            key={idx}
+                            className={
+                              "px-1.5 py-1 " +
+                              (r.match
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : "bg-rose-500/10 text-rose-600 dark:text-rose-400")
+                            }
+                          >
+                            {r.text}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="text-foreground/30" aria-hidden>→</span>
+                      <span className="inline-flex overflow-hidden rounded-md border border-foreground/10">
+                        {groupRuns(typedDiff.expected).map((r, idx) => (
+                          <span
+                            key={idx}
+                            className={
+                              "px-1.5 py-1 " +
+                              (r.match
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : "bg-foreground/5 text-foreground/40")
+                            }
+                          >
+                            {r.text}
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  )
+                ) : (
+                  <div className="text-sm">
+                    <span className="text-foreground/40">You typed: </span>
+                    <span className="text-foreground/70">{submittedValue || <em className="text-foreground/30">(nothing)</em>}</span>
+                  </div>
+                )}
                 <hr />
               </>
             )}
