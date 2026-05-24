@@ -85,6 +85,18 @@ export default function StudyPage() {
     startReview();
   }, [deckName, loadCurrentCard]);
 
+  const handleUndo = useCallback(async () => {
+    try {
+      await ankiFetch("guiUndo");
+    } catch {
+      return;
+    }
+    setReviewed((r) => Math.max(0, r - 1));
+    setCompleted(false);
+    setSyncStatus("idle");
+    await loadCurrentCard();
+  }, [loadCurrentCard]);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (editingNote || showAddForm) return;
@@ -96,11 +108,14 @@ export default function StudyPage() {
       } else if (e.key === "h") {
         e.preventDefault();
         router.push(`/decks/${encodeURIComponent(deckName)}`);
+      } else if (e.key === "z" || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) {
+        e.preventDefault();
+        handleUndo();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm, router, deckName]);
+  }, [editingNote, showAddForm, router, deckName, handleUndo]);
 
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
