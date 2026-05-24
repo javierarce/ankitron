@@ -1,4 +1,4 @@
-const { app, BrowserWindow, nativeTheme, shell } = require("electron");
+const { app, BrowserWindow, nativeTheme, protocol, shell } = require("electron");
 const path = require("node:path");
 const net = require("node:net");
 const fs = require("node:fs");
@@ -8,10 +8,30 @@ app.setName("AnkiTron");
 
 const isDev = !app.isPackaged;
 const DEV_URL = "http://localhost:3000";
+const APP_URL = "app://ankitron/";
 const SPLASH_PATH = path.join(__dirname, "splash.html");
 const ANKICONNECT_URL = "http://127.0.0.1:8765";
 
+// Register the app:// scheme as a standard, secure origin *before* app-ready.
+// The packaged build loads from app://ankitron/ instead of http://127.0.0.1:<random-port>/
+// so the renderer's origin (and therefore localStorage, IndexedDB, cookies) is
+// stable across launches. Without this, the Next server's port changes every
+// run and all browser-storage state is silently orphaned.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "app",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      corsEnabled: true,
+    },
+  },
+]);
+
 let mainWindow = null;
+let nextServerOrigin = null;
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -125,7 +145,29 @@ async function startNextServer() {
 
   const url = `http://127.0.0.1:${port}`;
   await waitForUrl(url);
+  nextServerOrigin = url;
   return url;
+}
+
+function registerAppProtocol() {
+  protocol.handle("app", async (request) => {
+    if (!nextServerOrigin) {
+      return new Response("Server not ready", { status: 503 });
+    }
+    const url = new URL(request.url);
+    const target = nextServerOrigin + url.pathname + url.search;
+
+    const init = {
+      method: request.method,
+      headers: request.headers,
+      redirect: "manual",
+    };
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      init.body = request.body;
+      init.duplex = "half";
+    }
+    return fetch(target, init);
+  });
 }
 
 async function createWindow() {
@@ -161,7 +203,14 @@ async function createWindow() {
   const ankiReady = ensureAnkiRunning().catch(() => false);
 
   try {
-    const url = isDev ? DEV_URL : await startNextServer();
+    let url;
+    if (isDev) {
+      url = DEV_URL;
+    } else {
+      await startNextServer();
+      registerAppProtocol();
+      url = APP_URL;
+    }
     await ankiReady;
     await mainWindow.loadURL(url);
   } catch (err) {

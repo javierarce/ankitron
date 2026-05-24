@@ -108,6 +108,32 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         <button
           type="button"
           tabIndex={-1}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          className={`rounded px-2 py-1 text-xs transition-colors ${
+            editor.isActive("bulletList")
+              ? "bg-foreground/15 text-foreground"
+              : "text-foreground/50 hover:text-foreground hover:bg-foreground/5"
+          }`}
+          title="Bullet list"
+        >
+          •
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          className={`rounded px-2 py-1 text-xs transition-colors ${
+            editor.isActive("orderedList")
+              ? "bg-foreground/15 text-foreground"
+              : "text-foreground/50 hover:text-foreground hover:bg-foreground/5"
+          }`}
+          title="Numbered list"
+        >
+          1.
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
           onClick={addImage}
           className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
         >
