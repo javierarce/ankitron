@@ -55,7 +55,7 @@ export function StudyCard({
     <div className="w-full max-w-2xl">
       <div
         onClick={!isRevealed ? onReveal : undefined}
-        className={`group relative rounded-xl border border-foreground/10 p-8 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+        className={`group relative rounded-xl border border-foreground/10 px-8 pt-9 pb-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
           !isRevealed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >
