@@ -5,9 +5,10 @@ import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { useRouter } from "next/navigation";
 
-type CardType = "Basic" | "Cloze";
+type CardType = "Basic" | "Cloze" | "ClozeTyped";
 
 interface CardFormProps {
   deckName: string;
@@ -16,7 +17,11 @@ interface CardFormProps {
 }
 
 function isClozeNote(note: Note): boolean {
-  return note.modelName === "Cloze" || "Text" in note.fields;
+  return (
+    note.modelName === "Cloze" ||
+    note.modelName === CLOZE_TYPED_MODEL ||
+    "Text" in note.fields
+  );
 }
 
 function hasClozePattern(html: string): boolean {
@@ -38,7 +43,13 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
   }
 
   const isEdit = !!note;
-  const initialType: CardType = note && isClozeNote(note) ? "Cloze" : "Basic";
+  const initialType: CardType = note
+    ? note.modelName === CLOZE_TYPED_MODEL
+      ? "ClozeTyped"
+      : isClozeNote(note)
+        ? "Cloze"
+        : "Basic"
+    : "Basic";
 
   const [cardType, setCardType] = useState<CardType>(initialType);
 
@@ -96,6 +107,8 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    const isClozeForm = cardType === "Cloze" || cardType === "ClozeTyped";
+
     if (cardType === "Basic") {
       if (!front.trim() || !back.trim()) {
         setError("Front and back are required.");
@@ -116,8 +129,12 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
     setError(null);
 
     try {
+      if (cardType === "ClozeTyped") {
+        await ensureClozeTypedModel();
+      }
+
       if (isEdit) {
-        if (cardType === "Cloze") {
+        if (isClozeForm) {
           await ankiFetch("updateNoteFields", {
             note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
           });
@@ -140,20 +157,25 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
           });
         }
       } else {
-        const noteData =
-          cardType === "Cloze"
-            ? {
-                deckName,
-                modelName: "Cloze",
-                fields: { Text: clozeText, "Back Extra": backExtra },
-                tags,
-              }
-            : {
-                deckName,
-                modelName: "Basic",
-                fields: { Front: front, Back: back },
-                tags,
-              };
+        const modelName =
+          cardType === "ClozeTyped"
+            ? CLOZE_TYPED_MODEL
+            : cardType === "Cloze"
+              ? "Cloze"
+              : "Basic";
+        const noteData = isClozeForm
+          ? {
+              deckName,
+              modelName,
+              fields: { Text: clozeText, "Back Extra": backExtra },
+              tags,
+            }
+          : {
+              deckName,
+              modelName,
+              fields: { Front: front, Back: back },
+              tags,
+            };
 
         const noteId = await ankiFetch<number>("addNote", { note: noteData });
         if (tags.length > 0 && noteId) {
@@ -232,6 +254,18 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
                 }`}
               >
                 Cloze
+              </button>
+              <button
+                type="button"
+                onClick={() => setCardType("ClozeTyped")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  cardType === "ClozeTyped"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-foreground/50 hover:text-foreground/70"
+                }`}
+                title="Cloze with a typed answer"
+              >
+                Cloze (typed)
               </button>
             </div>
           )}

@@ -23,6 +23,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Electron integration: hidden-inset title bar on macOS. The header becomes
@@ -102,4 +104,16 @@ summary {
 
 :root.dark .cloze {
   color: #fbbf24; /* amber-400 */
+}
+
+/* Card answer dividers: unify the hairline across React-rendered <hr>,
+   Anki's <hr id=answer>, and any prose default — Tailwind Typography styles
+   hr via :where() (zero specificity) plus utility ordering quirks otherwise
+   give us inconsistent rules between the two hrs in a typed-cloze answer. */
+.study-answer hr,
+.study-answer hr#answer {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 5%, transparent);
+  margin: 1.5rem 0;
+  height: 0;
 }

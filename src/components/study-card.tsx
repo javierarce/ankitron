@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { Ease } from "@/lib/types";
 
@@ -14,6 +14,22 @@ interface StudyCardProps {
   answering: boolean;
 }
 
+const TYPE_CLOZE_RE = /\[\[type:cloze:[^\]]+\]\]/g;
+
+function hasTypeCloze(html: string): boolean {
+  return /\[\[type:cloze:[^\]]+\]\]/.test(html);
+}
+
+function stripTypeCloze(html: string): string {
+  return html.replace(TYPE_CLOZE_RE, "");
+}
+
+function splitOnTypeCloze(html: string): [string, string] {
+  const match = html.match(/\[\[type:cloze:[^\]]+\]\]/);
+  if (!match || match.index === undefined) return [html, ""];
+  return [html.slice(0, match.index), html.slice(match.index + match[0].length)];
+}
+
 export function StudyCard({
   question,
   answer,
@@ -23,19 +39,40 @@ export function StudyCard({
   onEdit,
   answering,
 }: StudyCardProps) {
+  const typed = useMemo(() => hasTypeCloze(question), [question]);
+  const [typedValue, setTypedValue] = useState("");
+  const [submittedValue, setSubmittedValue] = useState("");
+  const [prevQuestion, setPrevQuestion] = useState(question);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  if (prevQuestion !== question) {
+    setPrevQuestion(question);
+    setTypedValue("");
+    setSubmittedValue("");
+  }
+
+  useEffect(() => {
+    if (typed && !isRevealed) {
+      inputRef.current?.focus();
+    }
+  }, [typed, isRevealed, question]);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (answering) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      const inEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
 
       if (!isRevealed) {
+        if (inEditable) return;
         if (e.key === " " || e.key === "1" || e.key === "2") {
           e.preventDefault();
           onReveal();
         }
       } else {
+        // Allow grading keys even if the (now-disabled) input was last focused.
+        if (inEditable && tag !== "INPUT") return;
         if (e.key === "1") {
           e.preventDefault();
           onAnswer(1);
@@ -51,12 +88,28 @@ export function StudyCard({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isRevealed, answering, onReveal, onAnswer]);
 
+  function handleSubmitTyped() {
+    setSubmittedValue(typedValue);
+    inputRef.current?.blur();
+    onReveal();
+  }
+
+  const [questionBefore, questionAfter] = useMemo(
+    () => (typed ? splitOnTypeCloze(question) : [question, ""]),
+    [typed, question]
+  );
+
+  const cleanedAnswer = useMemo(
+    () => (typed ? stripTypeCloze(answer) : answer),
+    [typed, answer]
+  );
+
   return (
     <div className="w-full max-w-2xl">
       <div
-        onClick={!isRevealed ? onReveal : undefined}
+        onClick={!isRevealed && !typed ? onReveal : undefined}
         className={`group relative rounded-xl border border-foreground/10 px-8 pt-9 pb-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
-          !isRevealed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
+          !isRevealed && !typed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >
         {isRevealed && (
@@ -73,15 +126,43 @@ export function StudyCard({
         )}
 
         {!isRevealed ? (
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: question }}
-          />
+          typed ? (
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <div dangerouslySetInnerHTML={{ __html: questionBefore }} />
+              <input
+                ref={inputRef}
+                value={typedValue}
+                onChange={(e) => setTypedValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSubmitTyped();
+                  }
+                }}
+                placeholder="Type your answer…"
+                className="my-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+              />
+              <div dangerouslySetInnerHTML={{ __html: questionAfter }} />
+            </div>
+          ) : (
+            <div
+              className="prose prose-sm dark:prose-invert max-w-none"
+              dangerouslySetInnerHTML={{ __html: question }}
+            />
+          )
         ) : (
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none [&_hr#answer]:my-6 [&_hr#answer]:border-foreground/10"
-            dangerouslySetInnerHTML={{ __html: answer }}
-          />
+          <div className="study-answer prose prose-sm dark:prose-invert max-w-none">
+            {typed && (
+              <>
+                <div className="text-sm">
+                  <span className="text-foreground/40">You typed: </span>
+                  <span className="text-foreground/70">{submittedValue || <em className="text-foreground/30">(nothing)</em>}</span>
+                </div>
+                <hr />
+              </>
+            )}
+            <div dangerouslySetInnerHTML={{ __html: cleanedAnswer }} />
+          </div>
         )}
       </div>
 

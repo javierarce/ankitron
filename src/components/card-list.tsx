@@ -38,7 +38,11 @@ function stripCloze(text: string): string {
 }
 
 function isClozeNote(note: Note): boolean {
-  return note.modelName === "Cloze" || "Text" in note.fields;
+  return (
+    note.modelName === "Cloze" ||
+    note.modelName === "Cloze (typed)" ||
+    "Text" in note.fields
+  );
 }
 
 function CardMenu({
