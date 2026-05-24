@@ -9,12 +9,16 @@ A desktop and web interface for managing and studying [Anki](https://apps.ankiwe
 - Create, edit, and delete cards (Basic and Cloze note types)
 - Tag management per card
 - Spaced repetition study mode driven by Anki's scheduler
+- Undo the last review with `z` (or `Cmd`/`Ctrl-Z`) during study
+- Launches Anki silently in the background on startup (packaged desktop build)
 - Light/dark theme toggle with system preference detection
 
 ## Prerequisites
 
-1. [Anki desktop](https://apps.ankiweb.net/) must be installed and running.
+1. [Anki desktop](https://apps.ankiweb.net/) must be installed. The packaged AnkiTron app launches it for you on startup; if you run the dev server (`pnpm dev`), start Anki yourself.
 2. The [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on must be installed. The app talks to it at `http://localhost:8765`.
+
+On macOS, the first time AnkiTron launches Anki it will ask permission for AnkiTron to control **System Events** — this is used to keep Anki's window hidden once it's up. Grant it once.
 
 ## Install (macOS)
 
@@ -41,7 +45,7 @@ pnpm dev
 
 Then open [http://localhost:3000](http://localhost:3000).
 
-With Anki running, the homepage lists your decks. Without it, you will see a connection error — launch Anki and reload.
+In dev mode, Anki must already be running — only the packaged desktop build auto-launches it. If AnkiConnect isn't reachable, you will see a connection error.
 
 ## Scripts
 
