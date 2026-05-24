@@ -8,6 +8,7 @@ import { ankiFetch } from "@/lib/anki-fetch";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import type { DueCounts } from "@/lib/types";
 import { DueCountsBadges } from "./deck-list";
+import { DecksImportExport } from "./decks-import-export";
 
 interface DeckTreeNode {
   name: string;
@@ -103,15 +104,18 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">All decks</h2>
-        <button
-          onClick={openDialog}
-          className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
-        >
-          <Plus size={14} weight="bold" />
-          New Deck
-        </button>
+        <div className="flex items-center gap-2">
+          <DecksImportExport decks={decks} />
+          <button
+            onClick={openDialog}
+            className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
+          >
+            <Plus size={14} weight="bold" />
+            New Deck
+          </button>
+        </div>
       </div>
 
       {tree.length === 0 ? (
