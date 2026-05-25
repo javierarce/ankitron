@@ -27,6 +27,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Hide the native browser selection highlight inside study cards;
+   StudyCard renders its own yellow overlay rectangles. */
+.study-answer ::selection,
+.study-answer *::selection,
+.prose ::selection,
+.prose *::selection {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+
 /* Electron integration: hidden-inset title bar on macOS. The header becomes
    the draggable region; interactive children opt out via .app-no-drag. */
 html.electron .app-header {
