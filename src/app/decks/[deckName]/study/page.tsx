@@ -111,13 +111,13 @@ export default function StudyPage() {
       if (editingNote || showAddForm) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
-      if (e.key === "a") {
+      if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setShowAddForm(true);
-      } else if (e.key === "h") {
+      } else if (e.key === "h" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         router.push(`/decks/${encodeURIComponent(deckName)}`);
-      } else if (e.key === "z" || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) {
+      } else if ((e.key === "z" && !e.metaKey && !e.ctrlKey && !e.altKey) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) {
         e.preventDefault();
         handleUndo();
       }

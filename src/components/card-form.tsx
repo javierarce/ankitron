@@ -53,6 +53,20 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
 
   const [cardType, setCardType] = useState<CardType>(initialType);
 
+  function changeCardType(newType: CardType) {
+    if (newType === cardType) return;
+    const wasCloze = cardType === "Cloze" || cardType === "ClozeTyped";
+    const willBeCloze = newType === "Cloze" || newType === "ClozeTyped";
+    if (!wasCloze && willBeCloze) {
+      if (front.trim() && !clozeText.trim()) setClozeText(front);
+      if (back.trim() && !backExtra.trim()) setBackExtra(back);
+    } else if (wasCloze && !willBeCloze) {
+      if (clozeText.trim() && !front.trim()) setFront(clozeText);
+      if (backExtra.trim() && !back.trim()) setBack(backExtra);
+    }
+    setCardType(newType);
+  }
+
   // Basic fields
   const frontField = noteFields["Front"] ?? Object.values(noteFields)[0];
   const backField = noteFields["Back"] ?? Object.values(noteFields)[1];
@@ -199,12 +213,16 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         ref={modalRef}
         tabIndex={-1}
         className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg outline-none"
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between gap-4">
           <h3 className="text-lg font-semibold">
@@ -245,7 +263,7 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
           <div className="flex gap-1 rounded-lg bg-foreground/5 p-1">
             <button
               type="button"
-              onClick={() => setCardType("Basic")}
+              onClick={() => changeCardType("Basic")}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 cardType === "Basic"
                   ? "bg-background text-foreground shadow-sm"
@@ -256,7 +274,7 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
             </button>
             <button
               type="button"
-              onClick={() => setCardType("Cloze")}
+              onClick={() => changeCardType("Cloze")}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 cardType === "Cloze"
                   ? "bg-background text-foreground shadow-sm"
@@ -267,7 +285,7 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
             </button>
             <button
               type="button"
-              onClick={() => setCardType("ClozeTyped")}
+              onClick={() => changeCardType("ClozeTyped")}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 cardType === "ClozeTyped"
                   ? "bg-background text-foreground shadow-sm"

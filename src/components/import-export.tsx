@@ -161,11 +161,12 @@ export function ImportResultModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-2 text-lg font-semibold">
           {error ? "Import failed" : "Import complete"}

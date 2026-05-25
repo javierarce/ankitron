@@ -137,11 +137,12 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
       {showDialog && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={closeDialog}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeDialog();
+          }}
         >
           <div
             className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-4 text-lg font-semibold">Create New Deck</h3>
             <form onSubmit={handleCreateDeck}>

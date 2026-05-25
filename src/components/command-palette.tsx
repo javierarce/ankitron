@@ -139,11 +139,12 @@ export function CommandPalette() {
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[15vh] backdrop-blur-sm"
-          onClick={close}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) close();
+          }}
         >
           <div
             className="mx-4 w-full max-w-xl overflow-hidden rounded-xl border border-foreground/10 bg-background shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 border-b border-foreground/10 px-4">
               <MagnifyingGlass
