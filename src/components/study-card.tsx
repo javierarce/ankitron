@@ -309,7 +309,7 @@ export function StudyCard({
               }
             : undefined
         }
-        className={`group relative rounded-xl border border-foreground/10 px-8 pt-9 pb-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+        className={`study-card-body group relative rounded-xl border border-foreground/10 px-8 pt-9 pb-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
           !isRevealed && !typed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >

@@ -34,7 +34,10 @@ function truncate(text: string, max: number): string {
 }
 
 function stripCloze(text: string): string {
-  return text.replace(/\{\{c\d+::(.*?)\}\}/g, "$1");
+  return text.replace(/\{\{c\d+::(.*?)\}\}/g, (_, inner: string) => {
+    const hintIdx = inner.lastIndexOf("::");
+    return hintIdx === -1 ? inner : inner.slice(0, hintIdx);
+  });
 }
 
 function isClozeNote(note: Note): boolean {
@@ -150,7 +153,7 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
         return;
       }
       if (inField) return;
-      if (e.key === "a") {
+      if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setShowAddForm(true);
       }

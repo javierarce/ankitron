@@ -28,11 +28,10 @@ body {
 }
 
 /* Hide the native browser selection highlight inside study cards;
-   StudyCard renders its own yellow overlay rectangles. */
-.study-answer ::selection,
-.study-answer *::selection,
-.prose ::selection,
-.prose *::selection {
+   StudyCard renders its own yellow overlay rectangles. Scoped to the
+   study card body so editor selections elsewhere stay visible. */
+.study-card-body ::selection,
+.study-card-body *::selection {
   background-color: transparent !important;
   color: inherit !important;
 }
@@ -79,6 +78,19 @@ summary {
 [data-nav-item]:focus-visible {
   outline: none;
   background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+/* Native selects render their chevron inconsistently across platforms
+   and at slightly-off positions; replace it with a vertically centered
+   chevron we control. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23808080' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='4 6 8 10 12 6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 0.75rem 0.75rem;
+  padding-right: 2rem;
 }
 
 /* Tiptap editor styles */

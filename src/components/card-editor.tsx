@@ -59,10 +59,15 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
     const n = getNextClozeNumber(currentHtml);
 
     if (selectedText) {
+      const pipeIdx = selectedText.indexOf("|");
+      const body =
+        pipeIdx === -1
+          ? selectedText
+          : `${selectedText.slice(0, pipeIdx)}::${selectedText.slice(pipeIdx + 1)}`;
       editor
         .chain()
         .focus()
-        .insertContentAt({ from, to }, `{{c${n}::${selectedText}}}`)
+        .insertContentAt({ from, to }, `{{c${n}::${body}}}`)
         .run();
     } else {
       editor
@@ -78,8 +83,14 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
 
   if (!editor) return null;
 
+  const doc = editor.state.doc;
+  const isTrulyEmpty =
+    doc.childCount === 1 &&
+    doc.firstChild?.type.name === "paragraph" &&
+    doc.firstChild.content.size === 0;
+
   return (
-    <div className="rounded-lg border border-foreground/15 overflow-hidden">
+    <div className="relative rounded-lg border border-foreground/15 overflow-hidden">
       <div className="flex gap-1 border-b border-foreground/10 px-2 py-1.5 bg-foreground/[0.03]">
         <button
           type="button"
@@ -145,18 +156,20 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
             tabIndex={-1}
             onClick={insertCloze}
             className="rounded px-2 py-1 text-xs font-medium text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
-            title="Wrap selection in cloze deletion (or insert empty cloze)"
+            title="Wrap selection in cloze deletion. Use 'answer|hint' to add a hint."
           >
             [...]
           </button>
         )}
       </div>
-      {placeholder && editor.isEmpty && (
-        <div className="pointer-events-none absolute px-3 py-2 text-sm text-foreground/30">
-          {placeholder}
-        </div>
-      )}
-      <EditorContent editor={editor} />
+      <div className="relative">
+        {placeholder && isTrulyEmpty && (
+          <div className="pointer-events-none absolute left-0 top-0 px-3 py-2 text-sm text-foreground/30">
+            {placeholder}
+          </div>
+        )}
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

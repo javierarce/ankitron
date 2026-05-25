@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Anki Deck Manager",
+  title: "AnkiTron",
   description: "Manage and study your Anki decks",
 };
 

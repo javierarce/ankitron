@@ -95,13 +95,12 @@ export function ImportTargetDialog({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={() => {
-        if (!importing) onCancel();
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !importing) onCancel();
       }}
     >
       <div
         className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-1 text-lg font-semibold">Import into deck</h3>
         <p className="mb-4 text-sm text-foreground/50">
