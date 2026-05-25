@@ -1,6 +1,7 @@
 import { getNotesInDeck, getDueCount, ankiRequest } from "@/lib/anki-client";
 import { CardList } from "@/components/card-list";
 import { DangerZone } from "@/components/danger-zone";
+import { DeckSettings } from "@/components/deck-settings";
 import { ImportExport } from "@/components/import-export";
 import Link from "next/link";
 
@@ -61,6 +62,8 @@ export default async function DeckPage({ params }: DeckPageProps) {
       ) : (
         <CardList deckName={deckName} notes={notes!} suspendedCardIds={suspendedCardIds} />
       )}
+
+      <DeckSettings deckName={deckName} />
 
       <DangerZone deckName={deckName} />
     </div>

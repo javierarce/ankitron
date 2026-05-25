@@ -6,6 +6,7 @@ import { Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
 
 interface CurrentCard {
   cardId: number;
@@ -31,8 +32,16 @@ export default function StudyPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
+  const [languages, setLanguages] = useState<DeckLanguages>({
+    primary: null,
+    secondary: null,
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const cardSlotRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setLanguages(getDeckLanguages(deckName));
+  }, [deckName]);
 
   const loadCurrentCard = useCallback(async () => {
     try {
@@ -242,6 +251,7 @@ export default function StudyPage() {
             onAnswer={handleAnswer}
             onEdit={handleEdit}
             answering={answering}
+            languages={languages}
           />
         </div>
       )}
