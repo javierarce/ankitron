@@ -2,6 +2,7 @@ import { getNotesInDeck, getDueCount, ankiRequest } from "@/lib/anki-client";
 import { CardList } from "@/components/card-list";
 import { DangerZone } from "@/components/danger-zone";
 import { DeckSettings } from "@/components/deck-settings";
+import { ImportExport } from "@/components/import-export";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -35,20 +36,25 @@ export default async function DeckPage({ params }: DeckPageProps) {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{deckName}</h1>
-        {totalDue > 0 ? (
-          <Link
-            href={`/decks/${encodeURIComponent(deckName)}/study`}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors"
-          >
-            Study ({totalDue})
-          </Link>
-        ) : (
-          <span className="rounded-lg border border-foreground/10 px-4 py-2 text-sm font-medium text-foreground/30 cursor-not-allowed">
-            No cards due
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {!error && notes && (
+            <ImportExport deckName={deckName} notes={notes} />
+          )}
+          {totalDue > 0 ? (
+            <Link
+              href={`/decks/${encodeURIComponent(deckName)}/study`}
+              className="rounded-lg border border-foreground/15 px-4 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors"
+            >
+              Study ({totalDue})
+            </Link>
+          ) : (
+            <span className="rounded-lg border border-foreground/10 px-4 py-2 text-sm font-medium text-foreground/30 cursor-not-allowed">
+              No cards due
+            </span>
+          )}
+        </div>
       </div>
 
       {error ? (
