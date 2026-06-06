@@ -123,15 +123,7 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
           No decks found. Create one or check that Anki is running.
         </p>
       ) : (
-        <div className="grid gap-2">
-          {tree.map((node) => (
-            <RootDeckCard
-              key={node.fullName}
-              node={node}
-              dueCounts={dueCounts}
-            />
-          ))}
-        </div>
+        <DeckNodeGrid nodes={tree} dueCounts={dueCounts} />
       )}
 
       {showDialog && (
@@ -180,99 +172,81 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
   );
 }
 
-function RootDeckCard({
+function DeckCard({
   node,
   dueCounts,
+  label,
 }: {
   node: DeckTreeNode;
   dueCounts: Record<string, DueCounts>;
+  label?: string;
 }) {
   const due = dueCounts[node.fullName];
-  const hasChildren = node.children.length > 0;
-
-  if (!hasChildren) {
-    return (
-      <Link
-        data-nav-item
-        href={`/decks/${encodeURIComponent(node.fullName)}`}
-        className="flex items-center justify-between gap-3 rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
-      >
-        <span className="font-medium">{node.name}</span>
-        <DueCountsBadges due={due} />
-      </Link>
-    );
-  }
 
   return (
-    <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      {node.isDeck ? (
-        <Link
-          data-nav-item
-          href={`/decks/${encodeURIComponent(node.fullName)}`}
-          className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/5 px-4 py-3 transition-colors hover:bg-foreground/5"
-        >
-          <span className="font-semibold">{node.name}</span>
-          <DueCountsBadges due={due} />
-        </Link>
-      ) : (
-        <div className="rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-          {node.name}
+    <Link
+      data-nav-item
+      href={`/decks/${encodeURIComponent(node.fullName)}`}
+      className="flex min-h-[5.5rem] flex-col justify-between gap-3 rounded-xl border border-foreground/10 bg-background p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
+    >
+      <span className="font-medium">{label ?? node.name}</span>
+      <span className="self-end">
+        <DueCountsBadges due={due} />
+      </span>
+    </Link>
+  );
+}
+
+function DeckNodeGrid({
+  nodes,
+  dueCounts,
+  leading,
+}: {
+  nodes: DeckTreeNode[];
+  dueCounts: Record<string, DueCounts>;
+  leading?: React.ReactNode;
+}) {
+  const cards = nodes.filter((n) => n.children.length === 0);
+  const groups = nodes.filter((n) => n.children.length > 0);
+
+  return (
+    <div className="grid gap-3">
+      {(leading || cards.length > 0) && (
+        <div className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+          {leading}
+          {cards.map((node) => (
+            <DeckCard key={node.fullName} node={node} dueCounts={dueCounts} />
+          ))}
         </div>
       )}
-      <div className="py-1">
-        {node.children.map((child) => (
-          <NestedDeckRow
-            key={child.fullName}
-            node={child}
-            depth={0}
-            dueCounts={dueCounts}
-          />
-        ))}
-      </div>
+      {groups.map((node) => (
+        <DeckGroup key={node.fullName} node={node} dueCounts={dueCounts} />
+      ))}
     </div>
   );
 }
 
-function NestedDeckRow({
+function DeckGroup({
   node,
-  depth,
   dueCounts,
 }: {
   node: DeckTreeNode;
-  depth: number;
   dueCounts: Record<string, DueCounts>;
 }) {
-  const due = dueCounts[node.fullName];
-  const paddingLeft = `${1 + depth * 1.25}rem`;
-
   return (
-    <>
-      {node.isDeck ? (
-        <Link
-          data-nav-item
-          href={`/decks/${encodeURIComponent(node.fullName)}`}
-          className="flex items-center justify-between gap-3 px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
-          style={{ paddingLeft }}
-        >
-          <span>{node.name}</span>
-          <DueCountsBadges due={due} />
-        </Link>
-      ) : (
-        <div
-          className="px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-foreground/40"
-          style={{ paddingLeft }}
-        >
-          {node.name}
-        </div>
-      )}
-      {node.children.map((child) => (
-        <NestedDeckRow
-          key={child.fullName}
-          node={child}
-          depth={depth + 1}
-          dueCounts={dueCounts}
-        />
-      ))}
-    </>
+    <div className="rounded-xl border border-foreground/10 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+      <div className="mb-4 px-1 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+        {node.name}
+      </div>
+      <DeckNodeGrid
+        nodes={node.children}
+        dueCounts={dueCounts}
+        leading={
+          node.isDeck ? (
+            <DeckCard node={node} dueCounts={dueCounts} label="All decks" />
+          ) : undefined
+        }
+      />
+    </div>
   );
 }
