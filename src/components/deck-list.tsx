@@ -98,6 +98,14 @@ function DueGroupCard({
         {root}
       </div>
       <div className="divide-y divide-foreground/5">
+        <Link
+          data-nav-item
+          href={`/decks/${encodeURIComponent(root)}/study`}
+          className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+        >
+          <span className="font-medium">All decks</span>
+          <DueCountsBadges due={dueCounts[root]} />
+        </Link>
         {decks.map((deck) => {
           const parts = deck.split("::");
           const leaf = parts[parts.length - 1];

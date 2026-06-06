@@ -7,7 +7,10 @@ export function Breadcrumb() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
 
-  if (segments.length === 0) return <div className="h-5" />;
+  // On the decks index the crumb would just say "Decks", which is redundant
+  // with the header nav and the "All decks" heading below — render a spacer.
+  if (segments.length === 0 || (segments.length === 1 && segments[0] === "decks"))
+    return <div className="h-5" />;
 
   const crumbs: { label: string; href: string }[] = [
     { label: "Decks", href: "/decks" },
