@@ -11,7 +11,7 @@ A desktop and web interface for managing and studying [Anki](https://apps.ankiwe
 - Per-deck JSON import/export — edit cards offline and re-import to update existing notes (matched by `noteId`) or add new ones
 - Spaced repetition study mode driven by Anki's scheduler
 - Undo the last review with `z` (or `Cmd`/`Ctrl-Z`) during study
-- Launches Anki silently in the background on startup (packaged desktop build)
+- Launches Anki fully headless in the background on startup (packaged desktop build) — no window, no Dock icon
 - Light/dark theme toggle with system preference detection
 
 ## Prerequisites
@@ -19,7 +19,7 @@ A desktop and web interface for managing and studying [Anki](https://apps.ankiwe
 1. [Anki desktop](https://apps.ankiweb.net/) must be installed. The packaged AnkiTron app launches it for you on startup; if you run the dev server (`pnpm dev`), start Anki yourself.
 2. The [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on must be installed. The app talks to it at `http://localhost:8765`.
 
-On macOS, the first time AnkiTron launches Anki it will ask permission for AnkiTron to control **System Events** — this is used to keep Anki's window hidden once it's up. Grant it once.
+AnkiTron starts Anki headless using Qt's offscreen platform (`QT_QPA_PLATFORM=offscreen`), so Anki runs with no window and no Dock icon while AnkiConnect serves on port 8765. No accessibility/System Events permission is required. When AnkiTron quits it shuts this headless Anki down again (a background watchdog handles force-quits too), so it never leaves port 8765 blocked when you later open Anki normally.
 
 ## Install (macOS)
 
