@@ -2,6 +2,7 @@ const { app, BrowserWindow, nativeTheme, protocol, shell } = require("electron")
 const path = require("node:path");
 const net = require("node:net");
 const fs = require("node:fs");
+const os = require("node:os");
 const { spawn } = require("node:child_process");
 
 app.setName("AnkiTron");
@@ -32,6 +33,8 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow = null;
 let nextServerOrigin = null;
+let spawnedAnki = null;
+let ankiWatchdog = null;
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -65,39 +68,108 @@ async function isAnkiConnectUp(timeoutMs = 500) {
   }
 }
 
+// Locate the real Anki executable. Anki 25.09+ uses a `uv`-based launcher: the
+// .app bundle only contains a bootstrapper, while the actual binary lives in a
+// managed venv under AnkiProgramFiles. Older builds shipped the binary directly
+// inside the .app. We return whichever exists, preferring the newer layout.
+function findAnkiExecutable() {
+  const home = os.homedir();
+  const candidates = [];
+  if (process.platform === "darwin") {
+    candidates.push(
+      path.join(home, "Library/Application Support/AnkiProgramFiles/.venv/bin/anki"),
+      "/Applications/Anki.app/Contents/MacOS/anki"
+    );
+  } else if (process.platform === "linux") {
+    candidates.push(path.join(home, ".local/share/AnkiProgramFiles/.venv/bin/anki"));
+  }
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
 function spawnAnkiHidden() {
   try {
-    if (process.platform === "darwin") {
-      if (!fs.existsSync("/Applications/Anki.app")) return false;
-      // -g: don't activate, -j: launch hidden, -a: by app name
-      const child = spawn("open", ["-gja", "Anki"], { detached: true, stdio: "ignore" });
-      child.on("error", () => {});
-      child.unref();
-      return true;
-    }
-    if (process.platform === "linux") {
-      const child = spawn("anki", [], { detached: true, stdio: "ignore" });
-      child.on("error", () => {});
-      child.unref();
-      return true;
-    }
-    return false;
+    // QT_QPA_PLATFORM=offscreen runs Anki (a Qt app) with no visible window and
+    // no Dock activation, so AnkiConnect's HTTP server comes up on 8765 without
+    // the app ever appearing. This replaces the old macOS approach of
+    // `open -gja Anki` + a System Events "set visible false" AppleScript, which
+    // required the user to grant accessibility control over System Events.
+    //
+    // The GPU flags are essential, not optional: Anki's UI is QtWebEngine, and
+    // its GPU process segfaults within seconds under the offscreen platform on
+    // macOS. Forcing software rendering keeps the headless instance stable.
+    const env = {
+      ...process.env,
+      QT_QPA_PLATFORM: "offscreen",
+      QTWEBENGINE_CHROMIUM_FLAGS:
+        "--disable-gpu --disable-gpu-compositing --disable-software-rasterizer",
+    };
+    const exe = findAnkiExecutable();
+    const child = exe
+      ? spawn(exe, [], { detached: true, stdio: "ignore", env })
+      : // Linux fallback: rely on `anki` being on PATH if the venv layout isn't found.
+        process.platform === "linux"
+        ? spawn("anki", [], { detached: true, stdio: "ignore", env })
+        : null;
+    if (!child) return false;
+    child.on("error", () => {});
+    child.unref();
+    // Remember the instance we launched so we can shut it down on quit. Only set
+    // when WE spawn it — if Anki was already running, ensureAnkiRunning() returns
+    // before reaching here, so we never adopt (or later kill) the user's own Anki.
+    spawnedAnki = child;
+    spawnAnkiWatchdog(child.pid);
+    return true;
   } catch {
     return false;
   }
 }
 
-function hideAnkiApp() {
-  if (process.platform !== "darwin") return;
-  // `open -j` asks for hidden launch, but Anki often un-hides itself once its
-  // main window loads. Send an explicit Hide once AnkiConnect is reachable
-  // (meaning Anki is done initializing) so the hide actually sticks.
-  const child = spawn(
-    "osascript",
-    ["-e", 'tell application "System Events" to set visible of process "Anki" to false'],
-    { stdio: "ignore" }
-  );
-  child.on("error", () => {});
+// Guard against AnkiTron dying WITHOUT running before-quit (force-quit, crash).
+// In that case stopSpawnedAnki() never fires, so the headless Anki would keep
+// holding port 8765 — and the OS won't reap it for us (macOS has no
+// PR_SET_PDEATHSIG; detached children outlive their parent). So we spawn a small
+// detached sh watchdog that polls AnkiTron's pid and, once it disappears, kills
+// the Anki process group. Being detached, the watchdog survives the crash that
+// orphaned Anki and cleans up within a couple of seconds. (A kernel panic needs
+// no watchdog: the reboot frees the port anyway.)
+function spawnAnkiWatchdog(ankiPid) {
+  const script =
+    `while kill -0 ${process.pid} 2>/dev/null; do sleep 2; done; ` +
+    `kill -TERM -${ankiPid} 2>/dev/null`;
+  const wd = spawn("/bin/sh", ["-c", script], { detached: true, stdio: "ignore" });
+  wd.on("error", () => {});
+  wd.unref();
+  ankiWatchdog = wd;
+}
+
+// Terminate the headless Anki we launched so it stops holding port 8765 — without
+// this, opening Anki normally after AnkiTron quits fails with "Failed to listen on
+// port 8765". detached:true made the child a process-group leader, so signalling
+// the negative pid takes down the launcher, the aqt process, and audio helpers
+// together.
+function stopSpawnedAnki() {
+  const child = spawnedAnki;
+  const wd = ankiWatchdog;
+  spawnedAnki = null;
+  ankiWatchdog = null;
+  // Stop the watchdog first so it doesn't also race to kill the same group.
+  if (wd && !wd.killed && wd.pid != null) {
+    try {
+      wd.kill("SIGTERM");
+    } catch {
+      // already gone
+    }
+  }
+  if (!child || child.killed || child.pid == null) return;
+  try {
+    process.kill(-child.pid, "SIGTERM");
+  } catch {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // already gone
+    }
+  }
 }
 
 async function ensureAnkiRunning(maxWaitMs = 15000) {
@@ -106,10 +178,7 @@ async function ensureAnkiRunning(maxWaitMs = 15000) {
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 500));
-    if (await isAnkiConnectUp()) {
-      hideAnkiApp();
-      return true;
-    }
+    if (await isAnkiConnectUp()) return true;
   }
   return false;
 }
@@ -222,6 +291,9 @@ async function createWindow() {
 }
 
 app.whenReady().then(createWindow);
+
+// Shut the headless Anki down when AnkiTron quits so it releases port 8765.
+app.on("before-quit", stopSpawnedAnki);
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
