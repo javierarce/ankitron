@@ -7,6 +7,7 @@ import { ankiFetch } from "@/lib/anki-fetch";
 import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import {
   buildExport,
+  fetchCardDecksByNoteId,
   importDeck,
   isExportedDeck,
   sanitizeFilename,
@@ -28,8 +29,9 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function handleExport() {
-    const payload = buildExport(deckName, notes);
+  async function handleExport() {
+    const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
+    const payload = buildExport(deckName, notes, undefined, cardDecksByNoteId);
     downloadDeckJson(payload, deckName);
   }
 

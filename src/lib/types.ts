@@ -20,6 +20,8 @@ export interface Note {
   fields: Record<string, NoteField>;
   tags: string[];
   cards?: number[];
+  /** Last-modified time in epoch seconds, as reported by AnkiConnect. */
+  mod?: number;
 }
 
 export interface Card {
