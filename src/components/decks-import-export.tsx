@@ -7,6 +7,7 @@ import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { Note } from "@/lib/types";
 import {
   buildExport,
+  fetchCardDecksByNoteId,
   importDeck,
   isExportedDeck,
   type ExportedDeck,
@@ -173,7 +174,8 @@ function ExportPickerDialog({
         noteIds.length === 0
           ? []
           : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
-      const payload = buildExport(selected, notes);
+      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
+      const payload = buildExport(selected, notes, undefined, cardDecksByNoteId);
       downloadDeckJson(payload, selected);
       onDone();
     } catch (err) {

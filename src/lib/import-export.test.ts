@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   buildExport,
+  fetchCardDecksByNoteId,
   flattenFields,
   importDeck,
   isExportedDeck,
+  resolveTargetDeck,
   sanitizeFilename,
   type ExportedDeck,
   type ImportDeps,
@@ -111,6 +113,62 @@ describe("buildExport", () => {
     });
   });
 
+  it("stamps each note's deck when a deck map is provided", () => {
+    const notes: Note[] = [
+      {
+        noteId: 1,
+        modelName: "Basic",
+        fields: { Front: { value: "Q", order: 0 } },
+        tags: [],
+      },
+      {
+        noteId: 2,
+        modelName: "Basic",
+        fields: { Front: { value: "Q2", order: 0 } },
+        tags: [],
+      },
+    ];
+    const cardDecksByNoteId = new Map<number, string[]>([
+      [1, ["Spanish::Verbs"]],
+    ]);
+    const out = buildExport(
+      "Spanish",
+      notes,
+      new Date("2026-01-01T00:00:00Z"),
+      cardDecksByNoteId,
+    );
+    expect(out.notes[0].deck).toBe("Spanish::Verbs");
+    // Single-deck note: no per-card list needed.
+    expect(out.notes[0].cardDecks).toBeUndefined();
+    // Notes absent from the map carry no deck (fall back to root on import).
+    expect(out.notes[1].deck).toBeUndefined();
+  });
+
+  it("records cardDecks only when a note's cards span multiple decks", () => {
+    const notes: Note[] = [
+      {
+        noteId: 1,
+        modelName: "Basic (and reversed card)",
+        fields: { Front: { value: "Q", order: 0 } },
+        tags: [],
+      },
+    ];
+    const cardDecksByNoteId = new Map<number, string[]>([
+      [1, ["Spanish::Verbs", "Spanish::Review"]],
+    ]);
+    const out = buildExport(
+      "Spanish",
+      notes,
+      new Date("2026-01-01T00:00:00Z"),
+      cardDecksByNoteId,
+    );
+    expect(out.notes[0].deck).toBe("Spanish::Verbs");
+    expect(out.notes[0].cardDecks).toEqual([
+      "Spanish::Verbs",
+      "Spanish::Review",
+    ]);
+  });
+
   it("round-trips through JSON and back through isExportedDeck", () => {
     const notes: Note[] = [
       {
@@ -171,6 +229,85 @@ describe("isExportedDeck", () => {
         notes: [{ modelName: "B", fields: {}, tags: "x" }],
       }),
     ).toBe(false);
+  });
+});
+
+describe("resolveTargetDeck", () => {
+  it("maps a subdeck onto the target, preserving the relative path", () => {
+    expect(resolveTargetDeck("Español", "Spanish", "Spanish::Verbs")).toBe(
+      "Español::Verbs",
+    );
+    expect(
+      resolveTargetDeck("Español", "Spanish", "Spanish::Verbs::Irregular"),
+    ).toBe("Español::Verbs::Irregular");
+  });
+
+  it("maps the root note onto the target root", () => {
+    expect(resolveTargetDeck("Español", "Spanish", "Spanish")).toBe("Español");
+    expect(resolveTargetDeck("Español", "Spanish", undefined)).toBe("Español");
+  });
+
+  it("falls back to the root for decks outside the exported subtree", () => {
+    expect(resolveTargetDeck("Español", "Spanish", "French::Verbs")).toBe(
+      "Español",
+    );
+    // A sibling whose name merely shares a prefix is not a subdeck.
+    expect(resolveTargetDeck("Español", "Spanish", "Spanishish")).toBe(
+      "Español",
+    );
+  });
+});
+
+describe("fetchCardDecksByNoteId", () => {
+  it("maps notes to the decks of all their cards, in card order", async () => {
+    const notes: Note[] = [
+      {
+        noteId: 1,
+        modelName: "Basic",
+        fields: {},
+        tags: [],
+        cards: [11],
+      },
+      {
+        // A note whose two cards live in different decks.
+        noteId: 2,
+        modelName: "Basic (and reversed card)",
+        fields: {},
+        tags: [],
+        cards: [22, 23],
+      },
+      // No cards → omitted from the map.
+      { noteId: 3, modelName: "Basic", fields: {}, tags: [] },
+    ];
+    const ankiFetch = vi.fn(async (action: string) => {
+      if (action === "cardsInfo") {
+        return [
+          { cardId: 11, deckName: "Spanish" },
+          { cardId: 22, deckName: "Spanish::Verbs" },
+          { cardId: 23, deckName: "Spanish::Review" },
+        ];
+      }
+      return null;
+    });
+
+    const map = await fetchCardDecksByNoteId(notes, ankiFetch as never);
+    expect(map.get(1)).toEqual(["Spanish"]);
+    expect(map.get(2)).toEqual(["Spanish::Verbs", "Spanish::Review"]);
+    expect(map.has(3)).toBe(false);
+    // All card IDs across all notes go in one cardsInfo call.
+    expect(ankiFetch).toHaveBeenCalledWith("cardsInfo", {
+      cards: [11, 22, 23],
+    });
+  });
+
+  it("makes no card lookup when no notes have cards", async () => {
+    const ankiFetch = vi.fn(async () => null);
+    const map = await fetchCardDecksByNoteId(
+      [{ noteId: 1, modelName: "Basic", fields: {}, tags: [] }],
+      ankiFetch as never,
+    );
+    expect(map.size).toBe(0);
+    expect(ankiFetch).not.toHaveBeenCalled();
   });
 });
 
@@ -271,28 +408,17 @@ describe("importDeck", () => {
     expect(deps.ensureClozeTypedModel).not.toHaveBeenCalled();
   });
 
-  it("updates an existing note (matched by noteId) and replaces its tags", async () => {
-    const deps = makeDeps((action, params) => {
+  it("updates an existing note (matched by noteId) and merges its tags", async () => {
+    const deps = makeDeps((action) => {
       if (action === "notesInfo") {
-        const ids = (params as { notes: number[] }).notes;
-        if (ids.length === 1 && ids[0] === 5) {
-          return [
-            {
-              noteId: 5,
-              modelName: "Basic",
-              fields: {
-                Front: { value: "old-q", order: 0 },
-                Back: { value: "old-a", order: 1 },
-              },
-              tags: ["old1", "old2"],
-            },
-          ];
-        }
         return [
           {
             noteId: 5,
             modelName: "Basic",
-            fields: {},
+            fields: {
+              Front: { value: "old-q", order: 0 },
+              Back: { value: "old-a", order: 1 },
+            },
             tags: ["old1", "old2"],
           },
         ];
@@ -318,17 +444,122 @@ describe("importDeck", () => {
     expect(deps.ankiFetch).toHaveBeenCalledWith("updateNoteFields", {
       note: { id: 5, fields: { Front: "new-q", Back: "new-a" } },
     });
-    expect(deps.ankiFetch).toHaveBeenCalledWith("removeTags", {
-      notes: [5],
-      tags: "old1",
-    });
-    expect(deps.ankiFetch).toHaveBeenCalledWith("removeTags", {
-      notes: [5],
-      tags: "old2",
-    });
+    // Existing tags are preserved; only the genuinely new tag is added.
     expect(deps.ankiFetch).toHaveBeenCalledWith("addTags", {
       notes: [5],
       tags: "new1",
+    });
+    const calls = deps.ankiFetch.mock.calls.map((c) => c[0]);
+    expect(calls).not.toContain("removeTags");
+  });
+
+  it("preserves Anki-managed tags (e.g. leech) on re-import", async () => {
+    const deps = makeDeps((action) => {
+      if (action === "notesInfo") {
+        return [{ noteId: 5, modelName: "Basic", fields: {}, tags: ["leech"] }];
+      }
+      return null;
+    });
+
+    const parsed: ExportedDeck = {
+      deckName: "D",
+      exportedAt: "x",
+      notes: [
+        {
+          noteId: 5,
+          modelName: "Basic",
+          fields: { Front: "q", Back: "a" },
+          tags: ["vocab"],
+        },
+      ],
+    };
+    await importDeck("D", parsed, deps);
+    // `leech` is never removed; `vocab` is added alongside it.
+    expect(deps.ankiFetch).toHaveBeenCalledWith("addTags", {
+      notes: [5],
+      tags: "vocab",
+    });
+    const calls = deps.ankiFetch.mock.calls.map((c) => c[0]);
+    expect(calls).not.toContain("removeTags");
+  });
+
+  it("does not re-add tags that already exist on the note", async () => {
+    const deps = makeDeps((action) => {
+      if (action === "notesInfo")
+        return [{ noteId: 5, modelName: "Basic", fields: {}, tags: ["t"] }];
+      return null;
+    });
+
+    const parsed: ExportedDeck = {
+      deckName: "D",
+      exportedAt: "x",
+      notes: [
+        { noteId: 5, modelName: "Basic", fields: { Front: "q" }, tags: ["t"] },
+      ],
+    };
+    await importDeck("D", parsed, deps);
+    const calls = deps.ankiFetch.mock.calls.map((c) => c[0]);
+    expect(calls).not.toContain("addTags");
+    expect(calls).not.toContain("removeTags");
+  });
+
+  it("skips overwriting a note edited in Anki since the export (newer mod)", async () => {
+    const deps = makeDeps((action) => {
+      if (action === "notesInfo") {
+        return [
+          { noteId: 5, modelName: "Basic", fields: {}, tags: [], mod: 2000 },
+        ];
+      }
+      return null;
+    });
+
+    const parsed: ExportedDeck = {
+      deckName: "D",
+      exportedAt: "x",
+      notes: [
+        {
+          noteId: 5,
+          modelName: "Basic",
+          fields: { Front: "stale" },
+          tags: ["stale-tag"],
+          mod: 1000, // exported before the live note's last edit
+        },
+      ],
+    };
+    const result = await importDeck("D", parsed, deps);
+    expect(result).toMatchObject({ updated: 0, added: 0, skipped: 1 });
+    const calls = deps.ankiFetch.mock.calls.map((c) => c[0]);
+    expect(calls).not.toContain("updateNoteFields");
+    expect(calls).not.toContain("addTags");
+  });
+
+  it("overwrites when the export is newer than (or same age as) the live note", async () => {
+    const deps = makeDeps((action) => {
+      if (action === "notesInfo") {
+        return [
+          { noteId: 5, modelName: "Basic", fields: {}, tags: [], mod: 1000 },
+        ];
+      }
+      return null;
+    });
+
+    const parsed: ExportedDeck = {
+      deckName: "D",
+      exportedAt: "x",
+      notes: [
+        {
+          noteId: 5,
+          modelName: "Basic",
+          fields: { Front: "fresh" },
+          tags: [],
+          mod: 2000,
+        },
+      ],
+    };
+    const result = await importDeck("D", parsed, deps);
+    expect(result).toMatchObject({ updated: 1, skipped: 0 });
+    expect(deps.ankiFetch).toHaveBeenCalledWith("updateNoteFields", {
+      note: { id: 5, fields: { Front: "fresh" } },
     });
   });
 
@@ -464,6 +695,130 @@ describe("importDeck", () => {
       (c) => (c[1] as { note: { deckName: string } }).note.deckName,
     );
     expect(targetedDecks).toEqual(["Target", "Target", "Target"]);
+  });
+
+  it("recreates subdecks and places each note in its mapped deck", async () => {
+    const created: string[] = [];
+    const deps = makeDeps((action, params) => {
+      if (action === "createDeck") {
+        created.push((params as { deck: string }).deck);
+        return 1;
+      }
+      if (action === "addNote") return Math.floor(Math.random() * 1000) + 10;
+      return null;
+    });
+
+    const parsed: ExportedDeck = {
+      deckName: "Spanish",
+      exportedAt: "x",
+      notes: [
+        { modelName: "Basic", fields: { Front: "root" }, tags: [], deck: "Spanish" },
+        {
+          modelName: "Basic",
+          fields: { Front: "verb" },
+          tags: [],
+          deck: "Spanish::Verbs",
+        },
+        {
+          modelName: "Basic",
+          fields: { Front: "irr" },
+          tags: [],
+          deck: "Spanish::Verbs::Irregular",
+        },
+      ],
+    };
+
+    // Round-trip into the same deck name.
+    const result = await importDeck("Spanish", parsed, deps);
+    expect(result).toMatchObject({ added: 3, errors: [] });
+
+    // Subdecks created (root is left to the caller / already exists).
+    expect(created).toEqual(
+      expect.arrayContaining(["Spanish::Verbs", "Spanish::Verbs::Irregular"]),
+    );
+    expect(created).not.toContain("Spanish");
+
+    const addCalls = deps.ankiFetch.mock.calls.filter((c) => c[0] === "addNote");
+    const decks = addCalls.map(
+      (c) => (c[1] as { note: { deckName: string } }).note.deckName,
+    );
+    expect(decks).toEqual([
+      "Spanish",
+      "Spanish::Verbs",
+      "Spanish::Verbs::Irregular",
+    ]);
+  });
+
+  it("files each card of a multi-deck note into its own deck after adding", async () => {
+    const changeDeckCalls: Array<{ cards: number[]; deck: string }> = [];
+    const deps = makeDeps((action, params) => {
+      if (action === "addNote") return 500;
+      if (action === "notesInfo") {
+        // The freshly added note exposes its two card IDs in ordinal order.
+        return [{ noteId: 500, modelName: "Basic", fields: {}, tags: [], cards: [70, 71] }];
+      }
+      if (action === "changeDeck") {
+        changeDeckCalls.push(params as { cards: number[]; deck: string });
+        return null;
+      }
+      return null;
+    });
+
+    const parsed: ExportedDeck = {
+      deckName: "Spanish",
+      exportedAt: "x",
+      notes: [
+        {
+          modelName: "Basic (and reversed card)",
+          fields: { Front: "a", Back: "b" },
+          tags: [],
+          deck: "Spanish::Verbs",
+          cardDecks: ["Spanish::Verbs", "Spanish::Review"],
+        },
+      ],
+    };
+
+    const result = await importDeck("Spanish", parsed, deps);
+    expect(result).toMatchObject({ added: 1, errors: [] });
+
+    // First card stays in the primary deck (addNote already placed it there);
+    // only the second card is moved.
+    expect(changeDeckCalls).toEqual([
+      { cards: [71], deck: "Spanish::Review" },
+    ]);
+    // Both card decks were pre-created.
+    expect(deps.ankiFetch).toHaveBeenCalledWith("createDeck", {
+      deck: "Spanish::Verbs",
+    });
+    expect(deps.ankiFetch).toHaveBeenCalledWith("createDeck", {
+      deck: "Spanish::Review",
+    });
+  });
+
+  it("remaps subdecks under a new target root on a cross-deck import", async () => {
+    const deps = makeDeps((action) => (action === "addNote" ? 1 : null));
+    const parsed: ExportedDeck = {
+      deckName: "Spanish",
+      exportedAt: "x",
+      notes: [
+        {
+          modelName: "Basic",
+          fields: { Front: "verb" },
+          tags: [],
+          deck: "Spanish::Verbs",
+        },
+      ],
+    };
+
+    await importDeck("Español", parsed, deps, { addOnly: true });
+
+    const addCall = deps.ankiFetch.mock.calls.find((c) => c[0] === "addNote");
+    expect(
+      (addCall![1] as { note: { deckName: string } }).note.deckName,
+    ).toBe("Español::Verbs");
+    expect(deps.ankiFetch).toHaveBeenCalledWith("createDeck", {
+      deck: "Español::Verbs",
+    });
   });
 
   it("returns zeros and makes no Anki calls for an empty notes array", async () => {
