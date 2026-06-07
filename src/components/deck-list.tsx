@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import type { DueCounts } from "@/lib/types";
@@ -83,7 +81,7 @@ function DueGroupCard({
     return (
       <Link
         data-nav-item
-        href={`/decks/${encodeURIComponent(root)}/study`}
+        to={`/decks/${encodeURIComponent(root)}/study`}
         className="flex items-center justify-between gap-3 rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
       >
         <span className="font-medium">{root}</span>
@@ -100,7 +98,7 @@ function DueGroupCard({
       <div className="divide-y divide-foreground/5">
         <Link
           data-nav-item
-          href={`/decks/${encodeURIComponent(root)}/study`}
+          to={`/decks/${encodeURIComponent(root)}/study`}
           className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
         >
           <span className="font-medium">All decks</span>
@@ -115,7 +113,7 @@ function DueGroupCard({
             <Link
               key={deck}
               data-nav-item
-              href={`/decks/${encodeURIComponent(deck)}/study`}
+              to={`/decks/${encodeURIComponent(deck)}/study`}
               className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
             >
               <span className="font-medium">

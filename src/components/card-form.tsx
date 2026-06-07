@@ -1,12 +1,9 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
-import { useRouter } from "next/navigation";
 
 type CardType = "Basic" | "Cloze" | "ClozeTyped";
 
@@ -30,7 +27,6 @@ function hasClozePattern(html: string): boolean {
 }
 
 export function CardForm({ deckName, note, onClose }: CardFormProps) {
-  const router = useRouter();
   const noteFields = note?.fields ?? {};
 
   function extractValue(field: unknown): string {
@@ -203,8 +199,8 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
           await ankiFetch("deleteNotes", { notes: [note.noteId] });
         }
       }
-      router.refresh();
       onClose();
+      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save card");
     } finally {

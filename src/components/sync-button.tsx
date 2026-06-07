@@ -1,12 +1,8 @@
-"use client";
-
 import { useState } from "react";
 import { ArrowsClockwise } from "@phosphor-icons/react/dist/ssr/ArrowsClockwise";
-import { useRouter } from "next/navigation";
 import { ankiFetch } from "@/lib/anki-fetch";
 
 export function SyncButton() {
-  const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,7 +12,7 @@ export function SyncButton() {
     setError(null);
     try {
       await ankiFetch("sync");
-      router.refresh();
+      window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed");
     } finally {

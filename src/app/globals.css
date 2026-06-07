@@ -15,8 +15,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 body {
@@ -37,20 +37,20 @@ body {
 }
 
 
-/* Electron integration: hidden-inset title bar on macOS. The header becomes
+/* Tauri integration: hidden-inset title bar on macOS. The header becomes
    the draggable region; interactive children opt out via .app-no-drag. */
-html.electron .app-header {
+html.tauri .app-header {
   -webkit-app-region: drag;
   user-select: none;
 }
 
-html.electron .app-no-drag,
-html.electron .app-no-drag * {
+html.tauri .app-no-drag,
+html.tauri .app-no-drag * {
   -webkit-app-region: no-drag;
 }
 
 /* Shared horizontal layout for the header, breadcrumb, and main rows so
-   they line up at exactly the same left edge. On Electron macOS the left
+   they line up at exactly the same left edge. On Tauri macOS the left
    padding grows to clear the traffic-light cluster. */
 .app-row {
   width: 100%;
@@ -59,7 +59,7 @@ html.electron .app-no-drag * {
   padding-inline: 1.5rem;
 }
 
-html.electron-mac .app-row {
+html.tauri-mac .app-row {
   padding-left: 5.75rem; /* 92px clears the traffic lights */
 }
 

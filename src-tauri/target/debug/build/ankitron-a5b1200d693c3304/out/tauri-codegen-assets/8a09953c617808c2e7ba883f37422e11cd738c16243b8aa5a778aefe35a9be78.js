@@ -1,0 +1,1 @@
+/€async function e(e,t={},n){return window.__TAURI_INTERNALS__.invoke(e,t,n)}export{e as invoke};

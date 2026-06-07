@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
 import type { ExportedDeck } from "@/lib/import-export";

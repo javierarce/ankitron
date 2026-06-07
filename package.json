@@ -4,83 +4,42 @@
   "private": true,
   "license": "GPL-3.0-or-later",
   "author": "javierarce",
-  "main": "electron/main.js",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "vite",
+    "dev:tauri": "tauri dev",
+    "build": "vite build",
+    "build:tauri": "tauri build",
+    "preview": "vite preview",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "electron": "electron .",
-    "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "next build && node scripts/stage-electron.mjs && electron-builder",
-    "electron:release": "next build && node scripts/stage-electron.mjs && electron-builder --publish always",
     "icons": "node scripts/generate-icon.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-os": "^2.3.2",
+    "@tauri-apps/plugin-shell": "^2.3.5",
     "@tiptap/extension-image": "^3.20.0",
     "@tiptap/pm": "^3.20.0",
     "@tiptap/react": "^3.20.0",
     "@tiptap/starter-kit": "^3.20.0",
-    "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-router-dom": "^7.17.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.11.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "concurrently": "^9.2.1",
-    "cross-env": "^10.1.0",
-    "electron": "^41.2.1",
-    "electron-builder": "^26.8.1",
+    "@vitejs/plugin-react": "^6.0.2",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.7",
-    "wait-on": "^9.0.5"
-  },
-  "build": {
-    "appId": "com.ankitron.app",
-    "productName": "AnkiTron",
-    "publish": {
-      "provider": "github",
-      "owner": "javierarce",
-      "repo": "ankitron"
-    },
-    "files": [
-      "electron/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": ".electron-stage/standalone",
-        "to": "standalone"
-      }
-    ],
-    "afterPack": "./scripts/after-pack.cjs",
-    "asar": true,
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "mac": {
-      "category": "public.app-category.education",
-      "target": "dmg",
-      "icon": "build/icon.png"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "build/icon.png"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "build/icon.png"
-    }
+    "vite": "^8.0.16",
+    "vitest": "^4.1.7"
   }
 }

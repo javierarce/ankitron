@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 
@@ -10,7 +8,7 @@ interface DangerZoneProps {
 }
 
 export function DangerZone({ deckName }: DangerZoneProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -18,7 +16,7 @@ export function DangerZone({ deckName }: DangerZoneProps) {
     setDeleting(true);
     try {
       await ankiFetch("deleteDecks", { decks: [deckName], cardsToo: true });
-      router.push("/");
+      navigate("/");
     } catch {
       setDeleting(false);
       setShowConfirm(false);

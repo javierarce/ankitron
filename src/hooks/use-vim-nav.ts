@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 
 interface UseVimNavOptions {
   back?: string;
@@ -9,7 +7,7 @@ interface UseVimNavOptions {
 }
 
 export function useVimNav({ back, enabled = true }: UseVimNavOptions = {}) {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!enabled) return;
@@ -73,7 +71,7 @@ export function useVimNav({ back, enabled = true }: UseVimNavOptions = {}) {
       } else if (e.key === "h" && back !== undefined) {
         e.preventDefault();
         clearGPending();
-        router.push(back);
+        navigate(back);
       } else {
         clearGPending();
       }
@@ -84,5 +82,5 @@ export function useVimNav({ back, enabled = true }: UseVimNavOptions = {}) {
       window.removeEventListener("keydown", handleKey);
       clearGPending();
     };
-  }, [router, back, enabled]);
+  }, [navigate, back, enabled]);
 }

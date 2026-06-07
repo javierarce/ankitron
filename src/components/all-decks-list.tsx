@@ -1,8 +1,5 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { useVimNav } from "@/hooks/use-vim-nav";
@@ -48,7 +45,7 @@ interface AllDecksListProps {
 }
 
 export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -92,7 +89,7 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
     try {
       await ankiFetch("createDeck", { deck: name });
       closeDialog();
-      router.push(`/decks/${encodeURIComponent(name)}`);
+      navigate(`/decks/${encodeURIComponent(name)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create deck");
     } finally {
@@ -186,7 +183,7 @@ function DeckCard({
   return (
     <Link
       data-nav-item
-      href={`/decks/${encodeURIComponent(node.fullName)}`}
+      to={`/decks/${encodeURIComponent(node.fullName)}`}
       className="flex min-h-[5.5rem] flex-col justify-between gap-3 rounded-xl border border-foreground/10 bg-background p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
     >
       <span className="font-medium">{label ?? node.name}</span>

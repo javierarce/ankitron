@@ -1,7 +1,4 @@
-"use client";
-
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
@@ -22,7 +19,6 @@ interface ImportExportProps {
 }
 
 export function ImportExport({ deckName, notes }: ImportExportProps) {
-  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<ExportedDeck | null>(null);
   const [importing, setImporting] = useState(false);
@@ -75,7 +71,7 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
       );
       setResult(runResult);
       setPending(null);
-      router.refresh();
+      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed.");
       setPending(null);

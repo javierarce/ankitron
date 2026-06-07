@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { CircleHalf } from "@phosphor-icons/react/dist/ssr/CircleHalf";
 import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";

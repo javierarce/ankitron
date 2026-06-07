@@ -1,10 +1,7 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 
 export function Breadcrumb() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const segments = pathname.split("/").filter(Boolean);
 
   // On the decks index the crumb would just say "Decks", which is redundant
@@ -47,7 +44,7 @@ export function Breadcrumb() {
               <span className="font-medium">{crumb.label}</span>
             ) : (
               <Link
-                href={crumb.href}
+                to={crumb.href}
                 className="text-foreground/50 hover:text-foreground transition-colors"
               >
                 {crumb.label}

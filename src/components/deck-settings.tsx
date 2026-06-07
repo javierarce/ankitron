@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { SpeakerHigh } from "@phosphor-icons/react/dist/ssr/SpeakerHigh";
 import {

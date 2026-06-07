@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { SpeakerHigh } from "@phosphor-icons/react/dist/ssr/SpeakerHigh";

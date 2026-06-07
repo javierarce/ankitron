@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { ArrowElbowDownLeft } from "@phosphor-icons/react/dist/ssr/ArrowElbowDownLeft";
 import { ArrowUp } from "@phosphor-icons/react/dist/ssr/ArrowUp";
 import { ArrowDown } from "@phosphor-icons/react/dist/ssr/ArrowDown";
@@ -17,7 +15,7 @@ type Item =
   | { kind: "deck"; label: string; deck: string };
 
 export function CommandPalette() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
@@ -108,7 +106,7 @@ export function CommandPalette() {
       setMode("search");
       setSelected(0);
     } else {
-      router.push(`/decks/${encodeURIComponent(item.deck)}`);
+      navigate(`/decks/${encodeURIComponent(item.deck)}`);
       close();
     }
   }

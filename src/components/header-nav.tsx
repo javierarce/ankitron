@@ -1,10 +1,7 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 
 export function HeaderNav() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const isStudy = pathname === "/";
   const isDecks = pathname === "/decks" || pathname.startsWith("/decks/");
 
@@ -31,7 +28,7 @@ function NavLink({
 }) {
   return (
     <Link
-      href={href}
+      to={href}
       className={`transition-colors ${
         active
           ? "text-foreground font-medium"

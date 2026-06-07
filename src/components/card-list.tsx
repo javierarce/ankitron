@@ -1,12 +1,9 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { useRouter } from "next/navigation";
 import { useVimNav } from "@/hooks/use-vim-nav";
 
 function decodeHtml(html: string): string {
@@ -121,7 +118,6 @@ interface CardListProps {
 }
 
 export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
-  const router = useRouter();
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
@@ -209,7 +205,7 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
     try {
       await ankiFetch("deleteNotes", { notes: [deletingNote.noteId] });
       setDeletingNote(null);
-      router.refresh();
+      window.location.reload();
     } catch {
       setDeletingNote(null);
     } finally {
