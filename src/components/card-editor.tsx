@@ -160,7 +160,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
           </button>
         )}
       </div>
-      <div className="relative">
+      <div className="relative max-h-[160px] overflow-y-auto">
         {placeholder && isTrulyEmpty && (
           <div className="pointer-events-none absolute left-0 top-0 px-3 py-2 text-sm text-foreground/30">
             {placeholder}
