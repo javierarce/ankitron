@@ -17,9 +17,14 @@
 /.next/
 /out/
 
-# electron-builder
+# build output
 /dist
-/.electron-stage
+
+# rust / tauri
+/src-tauri/target
+
+# npm (project uses pnpm)
+package-lock.json
 
 # misc
 .DS_Store
