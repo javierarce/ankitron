@@ -1,6 +1,3 @@
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
-onlyBuiltDependencies:
-  - electron
-  - electron-winstaller
