@@ -80,7 +80,13 @@ jobs:
             --wait
           xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG"
-          gh release upload "${{ github.ref_name }}" "$DMG" --clobber
+          # Publish under a clean, stable name (AnkiTron.dmg) so the
+          # releases/latest/download/AnkiTron.dmg URL always resolves. Remove the
+          # versioned dmg tauri-action uploaded, then upload the stapled copy.
+          CLEAN="$(dirname "$DMG")/AnkiTron.dmg"
+          mv "$DMG" "$CLEAN"
+          gh release delete-asset "${{ github.ref_name }}" "$(basename "$DMG")" --yes || true
+          gh release upload "${{ github.ref_name }}" "$CLEAN" --clobber
 
       # Everything signed + notarized: flip the draft to a public release.
       - name: Publish release

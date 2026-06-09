@@ -1,5 +1,7 @@
 # AnkiTron
 
+[![Latest release](https://img.shields.io/github/v/release/javierarce/ankitron?label=latest%20release)](https://github.com/javierarce/ankitron/releases/latest)
+
 A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Browse decks, create and edit cards, and run study sessions in a simple and clean interface.
 
 ## Features
@@ -18,8 +20,14 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 
 ## Install (macOS)
 
-1. Download the latest `AnkiTron_*_universal.dmg` from the [Releases page](https://github.com/javierarce/ankitron/releases). 
+1. Download **[AnkiTron.dmg](https://github.com/javierarce/ankitron/releases/latest/download/AnkiTron.dmg)** — this link always points to the latest release. (Or browse every version on the [Releases page](https://github.com/javierarce/ankitron/releases).)
 2. Mount the DMG, drag AnkiTron to **Applications**, and launch it.
+
+The app is signed and notarized by Apple, so it opens normally — no security warnings.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, project structure, and the release process.
 
 ## License
 
