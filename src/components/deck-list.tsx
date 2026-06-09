@@ -138,9 +138,10 @@ export function DueCountsBadges({ due }: { due: DueCounts | undefined }) {
     );
   }
   return (
-    // Equal-width columns (1fr each) make every pill the same width — sized to
-    // the widest count — like fixed table cells, instead of shrinking to content.
-    <span className="grid grid-cols-3 gap-1 text-xs font-medium tabular-nums">
+    // Fixed-width columns make every pill identical — both within a group and
+    // across decks — so a row with "0" lines up with a row containing "12".
+    // 2rem fits up to ~3 tabular digits; tabular-nums keeps digits monospaced.
+    <span className="grid grid-cols-[repeat(3,2rem)] gap-1 text-xs font-medium tabular-nums">
       <CountPill value={due.new} label="New" tone="sky" />
       <CountPill value={due.learn} label="Learning" tone="rose" />
       <CountPill value={due.review} label="To review" tone="emerald" />
@@ -170,7 +171,7 @@ function CountPill({
   return (
     <span className="group/pill relative inline-flex w-full">
       <span
-        className={`inline-flex w-full min-w-[1.75rem] items-center justify-center rounded-full px-2 py-0.5 leading-none ${palette}`}
+        className={`inline-flex w-full items-center justify-center rounded-full px-1 py-0.5 leading-none ${palette}`}
       >
         {value}
       </span>

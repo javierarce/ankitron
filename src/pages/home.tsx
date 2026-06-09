@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DeckList } from "@/components/deck-list";
-import { ankiFetch, fetchAllDueCounts } from "@/lib/anki-fetch";
-import type { DueCounts } from "@/lib/types";
+import { StudySummary } from "@/components/study-summary";
+import {
+  ankiFetch,
+  fetchAllDueCounts,
+  fetchTodayStudyStats,
+} from "@/lib/anki-fetch";
+import type { DueCounts, StudyStats } from "@/lib/types";
 
 export function HomePage() {
   const [decks, setDecks] = useState<string[]>([]);
   const [dueCounts, setDueCounts] = useState<Record<string, DueCounts>>({});
+  const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -20,9 +26,14 @@ export function HomePage() {
         setDecks(deckNames);
 
         if (deckNames.length > 0) {
-          const counts = await fetchAllDueCounts(deckNames);
+          const [counts, stats] = await Promise.all([
+            fetchAllDueCounts(deckNames),
+            // Stats are non-critical — never fail the page over them.
+            fetchTodayStudyStats(deckNames).catch(() => null),
+          ]);
           if (cancelled) return;
           setDueCounts(counts);
+          setStudyStats(stats);
         }
       } catch (err) {
         console.error("Home page load failed:", err);
@@ -45,7 +56,12 @@ export function HomePage() {
   }
 
   if (hasError) return <AnkiNotConnected />;
-  return <DeckList decks={decks} dueCounts={dueCounts} />;
+  return (
+    <>
+      <DeckList decks={decks} dueCounts={dueCounts} />
+      <StudySummary stats={studyStats} />
+    </>
+  );
 }
 
 function AnkiNotConnected() {
