@@ -25,6 +25,15 @@ async fn wait_for_anki() -> Result<bool, String> {
     }
 }
 
+/// (Re)launch Anki in the background if it isn't reachable, then wait for it.
+/// Called by the frontend's "Try again" — Anki may have been closed after
+/// startup, in which case nothing else would restart it.
+#[tauri::command]
+async fn ensure_anki(state: tauri::State<'_, Arc<AnkiState>>) -> Result<bool, String> {
+    let state = state.inner().clone();
+    Ok(ensure_anki_running(&state).await)
+}
+
 /// Proxy a request to AnkiConnect, bypassing CORS restrictions.
 /// The frontend calls this via `invoke("anki_request", { body })`.
 #[tauri::command]
@@ -50,15 +59,15 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
+        // Managed so the `ensure_anki` command can reach the same state and
+        // keep the spawned Anki process alive for the app's lifetime.
+        .manage(anki_state)
         .setup(move |_app| {
             // Spawn Anki in background during startup
-            let state = startup_state.clone();
             tauri::async_runtime::spawn(async move {
-                if !ensure_anki_running(&state).await {
+                if !ensure_anki_running(&startup_state).await {
                     eprintln!("Warning: Could not start Anki. Make sure Anki is installed.");
                 }
-                // Leak the state so the Drop guard keeps Anki alive.
-                Box::leak(Box::new(state));
             });
 
             Ok(())
@@ -68,7 +77,11 @@ fn main() {
                 stop_spawned_anki(&cleanup_state);
             }
         })
-        .invoke_handler(tauri::generate_handler![wait_for_anki, anki_request])
+        .invoke_handler(tauri::generate_handler![
+            wait_for_anki,
+            ensure_anki,
+            anki_request
+        ])
         .run(tauri::generate_context!())
         .expect("error while running AnkiTron");
 }
