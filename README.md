@@ -20,10 +20,8 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 
 ## Install (macOS)
 
-1. Download **[AnkiTron.dmg](https://github.com/javierarce/ankitron/releases/latest/download/AnkiTron.dmg)** — this link always points to the latest release. (Or browse every version on the [Releases page](https://github.com/javierarce/ankitron/releases).)
+1. Download **[AnkiTron.dmg](https://github.com/javierarce/ankitron/releases/latest/download/AnkiTron.dmg)** or browse every version on the [Releases page](https://github.com/javierarce/ankitron/releases).
 2. Mount the DMG, drag AnkiTron to **Applications**, and launch it.
-
-The app is signed and notarized by Apple, so it opens normally — no security warnings.
 
 ## Contributing
 
