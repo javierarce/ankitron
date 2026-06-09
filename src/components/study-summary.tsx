@@ -15,8 +15,8 @@ export function StudySummary({ stats }: { stats: StudyStats | null }) {
   if (!stats) return null;
 
   return (
-    <p className="mb-4 text-center text-sm text-foreground/50 tabular-nums">
+    <footer className="pt-4 text-center text-sm text-foreground/50 tabular-nums">
       {stats.cards === 0 ? "No cards studied yet today." : formatToday(stats)}
-    </p>
+    </footer>
   );
 }

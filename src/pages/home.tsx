@@ -58,8 +58,8 @@ export function HomePage() {
   if (hasError) return <AnkiNotConnected />;
   return (
     <>
-      <StudySummary stats={studyStats} />
       <DeckList decks={decks} dueCounts={dueCounts} />
+      <StudySummary stats={studyStats} />
     </>
   );
 }
