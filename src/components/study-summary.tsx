@@ -1,14 +1,14 @@
 import type { StudyStats } from "@/lib/types";
 
-/** Mirror Anki's wording: "Studied 53 cards in 6.27 minutes today (7.1s/card)". */
+/** e.g. "Studied 27 cards in 2.3 minutes today (5.1 seconds per card)". */
 function formatToday({ cards, seconds }: StudyStats): string {
   const time =
     seconds < 60
       ? `${Math.round(seconds)} seconds`
-      : `${(seconds / 60).toFixed(2)} minutes`;
+      : `${(seconds / 60).toFixed(1)} minutes`;
   const perCard = (seconds / cards).toFixed(1);
   const noun = cards === 1 ? "card" : "cards";
-  return `Studied ${cards} ${noun} in ${time} today (${perCard}s/card)`;
+  return `Studied ${cards} ${noun} in ${time} today (${perCard} seconds per card)`;
 }
 
 export function StudySummary({ stats }: { stats: StudyStats | null }) {
