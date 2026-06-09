@@ -41,3 +41,11 @@ export interface DueCounts {
   learn: number;
   review: number;
 }
+
+/** Today's study totals, mirroring Anki's "Studied N cards in M minutes" line. */
+export interface StudyStats {
+  /** Number of reviews logged today (respects Anki's day-rollover hour). */
+  cards: number;
+  /** Total time spent reviewing today, in seconds. */
+  seconds: number;
+}
