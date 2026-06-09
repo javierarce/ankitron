@@ -78,6 +78,21 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
   );
 }
 
+// Group header with the deck name and NEW / LEARN / DUE column labels aligned
+// over the badge columns below (same 3-column 2rem grid as DueCountsBadges).
+function GroupHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+      <span>{title}</span>
+      <span className="grid grid-cols-[repeat(3,2rem)] gap-1 text-center text-[10px] tracking-normal text-foreground/40">
+        <span>New</span>
+        <span>Learn</span>
+        <span>Due</span>
+      </span>
+    </div>
+  );
+}
+
 function SingleDecksCard({
   decks,
   dueCounts,
@@ -87,9 +102,7 @@ function SingleDecksCard({
 }) {
   return (
     <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      <div className="rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-        Single decks
-      </div>
+      <GroupHeader title="Single decks" />
       <div className="divide-y divide-foreground/5">
         {decks.map((deck) => (
           <Link
@@ -118,9 +131,7 @@ function DueGroupCard({
 }) {
   return (
     <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      <div className="rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-        {root}
-      </div>
+      <GroupHeader title={root} />
       <div className="divide-y divide-foreground/5">
         <Link
           data-nav-item
