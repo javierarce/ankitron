@@ -1,3 +1,5 @@
+# Contributing
+
 ## Getting Started
 
 Install dependencies and start the Vite dev server (browser UI):
