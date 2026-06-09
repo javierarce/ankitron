@@ -52,16 +52,68 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
     );
   }
 
+  // Top-level decks with no due subdecks get collected into one "Single decks"
+  // group; decks that have due subdecks keep their own named group.
+  const isSingle = (g: { root: string; decks: string[] }) =>
+    g.decks.length === 1 && g.decks[0] === g.root;
+  const singleDecks = dueGroups.filter(isSingle).map((g) => g.root);
+  const subdeckGroups = dueGroups.filter((g) => !isSingle(g));
+
   return (
     <div className="flex flex-1 items-center justify-center pb-[6rem]">
-      <div className="grid w-full gap-2">
-        {dueGroups.map((group) => (
+      <div className="grid w-full gap-4">
+        {singleDecks.length > 0 && (
+          <SingleDecksCard decks={singleDecks} dueCounts={dueCounts} />
+        )}
+        {subdeckGroups.map((group) => (
           <DueGroupCard
             key={group.root}
             root={group.root}
             decks={group.decks}
             dueCounts={dueCounts}
           />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Group header with the deck name and NEW / LEARN / DUE column labels aligned
+// over the badge columns below (same 3-column 2rem grid as DueCountsBadges).
+function GroupHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+      <span>{title}</span>
+      <span className="grid grid-cols-[repeat(3,2rem)] gap-1 text-center text-[10px] tracking-normal text-foreground/40">
+        <span>New</span>
+        <span>Learn</span>
+        <span>Due</span>
+      </span>
+    </div>
+  );
+}
+
+function SingleDecksCard({
+  decks,
+  dueCounts,
+}: {
+  decks: string[];
+  dueCounts: Record<string, DueCounts>;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+      <GroupHeader title="Single decks" />
+      <div className="divide-y divide-foreground/5">
+        {decks.map((deck) => (
+          <Link
+            key={deck}
+            data-nav-item
+            to={`/decks/${encodeURIComponent(deck)}/study`}
+            className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+          >
+            <span className="font-medium">{deck}</span>
+            <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
+          </Link>
         ))}
       </div>
     </div>
@@ -77,24 +129,9 @@ function DueGroupCard({
   decks: string[];
   dueCounts: Record<string, DueCounts>;
 }) {
-  if (decks.length === 1 && decks[0] === root) {
-    return (
-      <Link
-        data-nav-item
-        to={`/decks/${encodeURIComponent(root)}/study`}
-        className="flex items-center justify-between gap-3 rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
-      >
-        <span className="font-medium">{root}</span>
-        <DueCountsBadges due={dueCounts[root]} />
-      </Link>
-    );
-  }
-
   return (
-    <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      <div className="rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-        {root}
-      </div>
+    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+      <GroupHeader title={root} />
       <div className="divide-y divide-foreground/5">
         <Link
           data-nav-item
@@ -102,7 +139,7 @@ function DueGroupCard({
           className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
         >
           <span className="font-medium">All decks</span>
-          <DueCountsBadges due={dueCounts[root]} />
+          <DueCountsBadges due={dueCounts[root]} showTooltip={false} />
         </Link>
         {decks.map((deck) => {
           const parts = deck.split("::");
@@ -114,7 +151,7 @@ function DueGroupCard({
               key={deck}
               data-nav-item
               to={`/decks/${encodeURIComponent(deck)}/study`}
-              className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+              className="flex items-center justify-between gap-3 py-3 pl-8 pr-4 transition-colors hover:bg-foreground/5"
             >
               <span className="font-medium">
                 {subPrefix && (
@@ -122,7 +159,7 @@ function DueGroupCard({
                 )}
                 {leaf}
               </span>
-              <DueCountsBadges due={dueCounts[deck]} />
+              <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
             </Link>
           );
         })}
@@ -131,7 +168,13 @@ function DueGroupCard({
   );
 }
 
-export function DueCountsBadges({ due }: { due: DueCounts | undefined }) {
+export function DueCountsBadges({
+  due,
+  showTooltip = true,
+}: {
+  due: DueCounts | undefined;
+  showTooltip?: boolean;
+}) {
   if (!due || totalOf(due) === 0) {
     return (
       <CaretRight size={14} weight="bold" className="text-foreground/30" />
@@ -142,9 +185,9 @@ export function DueCountsBadges({ due }: { due: DueCounts | undefined }) {
     // across decks — so a row with "0" lines up with a row containing "12".
     // 2rem fits up to ~3 tabular digits; tabular-nums keeps digits monospaced.
     <span className="grid grid-cols-[repeat(3,2rem)] gap-1 text-xs font-medium tabular-nums">
-      <CountPill value={due.new} label="New" tone="sky" />
-      <CountPill value={due.learn} label="Learning" tone="rose" />
-      <CountPill value={due.review} label="To review" tone="emerald" />
+      <CountPill value={due.new} label="New" tone="sky" showTooltip={showTooltip} />
+      <CountPill value={due.learn} label="Learning" tone="rose" showTooltip={showTooltip} />
+      <CountPill value={due.review} label="Due" tone="emerald" showTooltip={showTooltip} />
     </span>
   );
 }
@@ -159,10 +202,12 @@ function CountPill({
   value,
   label,
   tone,
+  showTooltip,
 }: {
   value: number;
   label: string;
   tone: keyof typeof TONE_STYLES;
+  showTooltip: boolean;
 }) {
   const isZero = value === 0;
   const palette = isZero
@@ -175,12 +220,14 @@ function CountPill({
       >
         {value}
       </span>
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background opacity-0 shadow-md transition-opacity duration-100 group-hover/pill:opacity-100"
-      >
-        {label}: {value}
-      </span>
+      {showTooltip && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background opacity-0 shadow-md transition-opacity duration-100 group-hover/pill:opacity-100"
+        >
+          {label}: {value}
+        </span>
+      )}
     </span>
   );
 }
