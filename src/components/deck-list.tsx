@@ -61,7 +61,7 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
 
   return (
     <div className="flex flex-1 items-center justify-center pb-[6rem]">
-      <div className="grid w-full gap-2">
+      <div className="grid w-full gap-4">
         {singleDecks.length > 0 && (
           <SingleDecksCard decks={singleDecks} dueCounts={dueCounts} />
         )}
@@ -101,7 +101,7 @@ function SingleDecksCard({
   dueCounts: Record<string, DueCounts>;
 }) {
   return (
-    <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title="Single decks" />
       <div className="divide-y divide-foreground/5">
         {decks.map((deck) => (
@@ -112,7 +112,7 @@ function SingleDecksCard({
             className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
           >
             <span className="font-medium">{deck}</span>
-            <DueCountsBadges due={dueCounts[deck]} />
+            <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
           </Link>
         ))}
       </div>
@@ -130,7 +130,7 @@ function DueGroupCard({
   dueCounts: Record<string, DueCounts>;
 }) {
   return (
-    <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title={root} />
       <div className="divide-y divide-foreground/5">
         <Link
@@ -139,7 +139,7 @@ function DueGroupCard({
           className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
         >
           <span className="font-medium">All decks</span>
-          <DueCountsBadges due={dueCounts[root]} />
+          <DueCountsBadges due={dueCounts[root]} showTooltip={false} />
         </Link>
         {decks.map((deck) => {
           const parts = deck.split("::");
@@ -151,7 +151,7 @@ function DueGroupCard({
               key={deck}
               data-nav-item
               to={`/decks/${encodeURIComponent(deck)}/study`}
-              className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+              className="flex items-center justify-between gap-3 py-3 pl-8 pr-4 transition-colors hover:bg-foreground/5"
             >
               <span className="font-medium">
                 {subPrefix && (
@@ -159,7 +159,7 @@ function DueGroupCard({
                 )}
                 {leaf}
               </span>
-              <DueCountsBadges due={dueCounts[deck]} />
+              <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
             </Link>
           );
         })}
@@ -168,7 +168,13 @@ function DueGroupCard({
   );
 }
 
-export function DueCountsBadges({ due }: { due: DueCounts | undefined }) {
+export function DueCountsBadges({
+  due,
+  showTooltip = true,
+}: {
+  due: DueCounts | undefined;
+  showTooltip?: boolean;
+}) {
   if (!due || totalOf(due) === 0) {
     return (
       <CaretRight size={14} weight="bold" className="text-foreground/30" />
@@ -179,9 +185,9 @@ export function DueCountsBadges({ due }: { due: DueCounts | undefined }) {
     // across decks — so a row with "0" lines up with a row containing "12".
     // 2rem fits up to ~3 tabular digits; tabular-nums keeps digits monospaced.
     <span className="grid grid-cols-[repeat(3,2rem)] gap-1 text-xs font-medium tabular-nums">
-      <CountPill value={due.new} label="New" tone="sky" />
-      <CountPill value={due.learn} label="Learning" tone="rose" />
-      <CountPill value={due.review} label="To review" tone="emerald" />
+      <CountPill value={due.new} label="New" tone="sky" showTooltip={showTooltip} />
+      <CountPill value={due.learn} label="Learning" tone="rose" showTooltip={showTooltip} />
+      <CountPill value={due.review} label="Due" tone="emerald" showTooltip={showTooltip} />
     </span>
   );
 }
@@ -196,10 +202,12 @@ function CountPill({
   value,
   label,
   tone,
+  showTooltip,
 }: {
   value: number;
   label: string;
   tone: keyof typeof TONE_STYLES;
+  showTooltip: boolean;
 }) {
   const isZero = value === 0;
   const palette = isZero
@@ -212,12 +220,14 @@ function CountPill({
       >
         {value}
       </span>
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background opacity-0 shadow-md transition-opacity duration-100 group-hover/pill:opacity-100"
-      >
-        {label}: {value}
-      </span>
+      {showTooltip && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background opacity-0 shadow-md transition-opacity duration-100 group-hover/pill:opacity-100"
+        >
+          {label}: {value}
+        </span>
+      )}
     </span>
   );
 }
