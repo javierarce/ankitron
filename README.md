@@ -4,6 +4,8 @@
 
 A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Browse decks, create and edit cards, and run study sessions in a simple and clean interface.
 
+<img width="2800" height="2048" alt="image" src="https://github.com/user-attachments/assets/c013f2b1-c6bf-4f9c-87f3-4c2f40b8bdce" />
+
 ## Features
 
 - Browse all decks with due-card counts
