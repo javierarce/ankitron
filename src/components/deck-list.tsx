@@ -52,16 +52,55 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
     );
   }
 
+  // Top-level decks with no due subdecks get collected into one "Single decks"
+  // group; decks that have due subdecks keep their own named group.
+  const isSingle = (g: { root: string; decks: string[] }) =>
+    g.decks.length === 1 && g.decks[0] === g.root;
+  const singleDecks = dueGroups.filter(isSingle).map((g) => g.root);
+  const subdeckGroups = dueGroups.filter((g) => !isSingle(g));
+
   return (
     <div className="flex flex-1 items-center justify-center pb-[6rem]">
       <div className="grid w-full gap-2">
-        {dueGroups.map((group) => (
+        {singleDecks.length > 0 && (
+          <SingleDecksCard decks={singleDecks} dueCounts={dueCounts} />
+        )}
+        {subdeckGroups.map((group) => (
           <DueGroupCard
             key={group.root}
             root={group.root}
             decks={group.decks}
             dueCounts={dueCounts}
           />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SingleDecksCard({
+  decks,
+  dueCounts,
+}: {
+  decks: string[];
+  dueCounts: Record<string, DueCounts>;
+}) {
+  return (
+    <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+      <div className="rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+        Single decks
+      </div>
+      <div className="divide-y divide-foreground/5">
+        {decks.map((deck) => (
+          <Link
+            key={deck}
+            data-nav-item
+            to={`/decks/${encodeURIComponent(deck)}/study`}
+            className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+          >
+            <span className="font-medium">{deck}</span>
+            <DueCountsBadges due={dueCounts[deck]} />
+          </Link>
         ))}
       </div>
     </div>
@@ -77,19 +116,6 @@ function DueGroupCard({
   decks: string[];
   dueCounts: Record<string, DueCounts>;
 }) {
-  if (decks.length === 1 && decks[0] === root) {
-    return (
-      <Link
-        data-nav-item
-        to={`/decks/${encodeURIComponent(root)}/study`}
-        className="flex items-center justify-between gap-3 rounded-xl border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
-      >
-        <span className="font-medium">{root}</span>
-        <DueCountsBadges due={dueCounts[root]} />
-      </Link>
-    );
-  }
-
   return (
     <div className="rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <div className="rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
