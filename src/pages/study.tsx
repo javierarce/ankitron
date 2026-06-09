@@ -5,12 +5,14 @@ import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
+import { isCardInDeck } from "@/lib/deck";
 
 interface CurrentCard {
   cardId: number;
   noteId: number;
   question: string;
   answer: string;
+  deckName: string;
 }
 
 export function StudyPage() {
@@ -44,7 +46,9 @@ export function StudyPage() {
   const loadCurrentCard = useCallback(async () => {
     try {
       const result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
-      if (!result) {
+      // Anki's "current card" is collection-wide; never show a card that
+      // belongs to another deck (or its breadcrumb would mismatch the card).
+      if (!result || (result.deckName && !isCardInDeck(result.deckName, deckName))) {
         setCompleted(true);
         setCard(null);
       } else {
@@ -57,7 +61,7 @@ export function StudyPage() {
       setCompleted(true);
       setCard(null);
     }
-  }, []);
+  }, [deckName]);
 
   useEffect(() => {
     async function startReview() {
@@ -93,6 +97,10 @@ export function StudyPage() {
   }, [deckName, loadCurrentCard]);
 
   const handleUndo = useCallback(async () => {
+    // Only undo reviews made in this deck's session. Anki's undo is global, so
+    // undoing with nothing reviewed here would reach back into a previously
+    // studied deck and load one of its cards.
+    if (reviewed <= 0) return;
     try {
       await ankiFetch("guiUndo");
     } catch {
@@ -102,7 +110,7 @@ export function StudyPage() {
     setCompleted(false);
     setSyncStatus("idle");
     await loadCurrentCard();
-  }, [loadCurrentCard]);
+  }, [reviewed, loadCurrentCard]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
