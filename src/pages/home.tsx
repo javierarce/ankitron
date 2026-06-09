@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { DeckList } from "@/components/deck-list";
 import { StudySummary } from "@/components/study-summary";
 import {
@@ -8,6 +7,9 @@ import {
   fetchTodayStudyStats,
 } from "@/lib/anki-fetch";
 import type { DueCounts, StudyStats } from "@/lib/types";
+
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function HomePage() {
   const [decks, setDecks] = useState<string[]>([]);
@@ -44,7 +46,9 @@ export function HomePage() {
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (loading) {
@@ -65,9 +69,28 @@ export function HomePage() {
 }
 
 function AnkiNotConnected() {
+  const [retrying, setRetrying] = useState(false);
+
+  async function retry() {
+    setRetrying(true);
+    // Anki may have been closed after startup — ask the backend to (re)launch
+    // it headless, then reload the app now that it should be reachable.
+    if (isTauri) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("ensure_anki");
+      } catch (err) {
+        console.error("Could not start Anki:", err);
+      }
+    }
+    window.location.reload();
+  }
+
+  // Full-screen overlay so the header (nav, sync) is covered and inert while
+  // disconnected, and the message stays centered.
   return (
-    <div className="mx-auto max-w-md py-16 text-center">
-      <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background px-6 text-center">
+      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -84,64 +107,32 @@ function AnkiNotConnected() {
       </div>
       <h2 className="text-xl font-semibold">Anki isn&apos;t connected</h2>
       <p className="mt-2 text-sm text-foreground/60">
-        This app talks to Anki through the AnkiConnect add-on on{" "}
-        <code className="rounded bg-foreground/10 px-1 py-0.5 text-xs">
-          localhost:8765
-        </code>
-        .
+        AnkiTron can&apos;t reach Anki right now.
       </p>
-      <ol className="mx-auto mt-6 max-w-sm space-y-2 text-left text-sm text-foreground/80">
-        <li className="flex gap-3">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-xs font-medium">
-            1
-          </span>
-          <span>Launch the Anki desktop app.</span>
-        </li>
-        <li className="flex gap-3">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-xs font-medium">
-            2
-          </span>
-          <span>
-            Install the{" "}
-            <a
-              href="https://ankiweb.net/shared/info/2055492159"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              AnkiConnect
-            </a>{" "}
-            add-on (code <code className="text-xs">2055492159</code>) and
-            restart Anki.
-          </span>
-        </li>
-        <li className="flex gap-3">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-xs font-medium">
-            3
-          </span>
-          <span>Reload this page.</span>
-        </li>
-      </ol>
-      <Link
-        to="/"
-        onClick={() => window.location.reload()}
-        className="mt-8 inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90"
+      <button
+        onClick={retry}
+        disabled={retrying}
+        className="mt-8 inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-60"
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-4 w-4"
-          aria-hidden="true"
-        >
-          <path d="M21 12a9 9 0 1 1-3-6.7" />
-          <path d="M21 4v5h-5" />
-        </svg>
-        Try again
-      </Link>
+        {retrying ? (
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-background/40 border-t-background" />
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-3-6.7" />
+            <path d="M21 4v5h-5" />
+          </svg>
+        )}
+        {retrying ? "Reconnecting…" : "Try again"}
+      </button>
     </div>
   );
 }
