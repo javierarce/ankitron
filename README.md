@@ -24,16 +24,9 @@ AnkiTron starts Anki headless using Qt's offscreen platform (`QT_QPA_PLATFORM=of
 ## Install (macOS)
 
 1. Download the latest `AnkiTron_*_universal.dmg` from the [Releases page](https://github.com/javierarce/ankitron/releases). The build is universal — it runs natively on both Apple Silicon and Intel Macs.
-2. Mount the DMG and drag AnkiTron to **Applications**.
-3. The first time you launch it, macOS will say "Apple could not verify AnkiTron is free of malware…" — that's expected because the build isn't notarized (no paid Apple Developer cert). To get past it: open **System Settings → Privacy & Security**, scroll to "AnkiTron was blocked from use…" and click **Open Anyway**, then re-launch and click **Open** on the next prompt.
+2. Mount the DMG, drag AnkiTron to **Applications**, and launch it.
 
-   Or, in one terminal command:
-
-   ```bash
-   xattr -cr /Applications/AnkiTron.app
-   ```
-
-   macOS will only nag once.
+The app is signed with a Developer ID certificate and notarized by Apple, so it opens normally — no Gatekeeper warnings or security-settings detour.
 
 ## Getting Started
 
@@ -100,14 +93,14 @@ Requests to AnkiConnect are proxied through the Rust `anki_request` command (inv
 
 ## Releasing
 
-Releases are produced by a GitHub Actions workflow on tag push (`.github/workflows/release.yml`). To cut a release, bump the version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`, then:
+Releases are produced by a GitHub Actions workflow on tag push (`.github/workflows/release.yml`). To cut a release, bump the version in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`, then:
 
 ```bash
 git tag -a vX.Y.Z -m "vX.Y.Z"
 git push --follow-tags
 ```
 
-The workflow uses [`tauri-action`](https://github.com/tauri-apps/tauri-action) on a macOS runner to build a universal `.dmg` and publish it to a GitHub Release. The build is unsigned, so first-time users need the Gatekeeper bypass described in [Install](#install-macos).
+The workflow uses [`tauri-action`](https://github.com/tauri-apps/tauri-action) on a macOS runner to build a universal `.dmg`, sign it with the Developer ID certificate, notarize it with Apple (both the app and the dmg), and publish it to a GitHub Release. The signing certificate and App Store Connect API key are stored as repository secrets.
 
 ## License
 
