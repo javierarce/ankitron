@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { AllDecksList } from "@/components/all-decks-list";
-import { ankiFetch, fetchAllDueCounts } from "@/lib/anki-fetch";
-import type { DueCounts } from "@/lib/types";
+import { ankiFetch, fetchAllCardCounts } from "@/lib/anki-fetch";
 
 export function DecksPage() {
   const [decks, setDecks] = useState<string[]>([]);
-  const [dueCounts, setDueCounts] = useState<Record<string, DueCounts>>({});
+  const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -19,9 +18,9 @@ export function DecksPage() {
         setDecks(deckNames);
 
         if (deckNames.length > 0) {
-          const counts = await fetchAllDueCounts(deckNames);
+          const counts = await fetchAllCardCounts(deckNames);
           if (cancelled) return;
-          setDueCounts(counts);
+          setCardCounts(counts);
         }
       } catch {
         if (!cancelled) setHasError(true);
@@ -50,5 +49,5 @@ export function DecksPage() {
     );
   }
 
-  return <AllDecksList decks={decks} dueCounts={dueCounts} />;
+  return <AllDecksList decks={decks} cardCounts={cardCounts} />;
 }

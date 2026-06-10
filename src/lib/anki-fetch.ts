@@ -95,6 +95,32 @@ export async function fetchTodayStudyStats(
   return { cards, seconds: totalMs / 1000 };
 }
 
+/**
+ * Total number of cards in each deck, including its subdecks (Anki's `deck:`
+ * search matches descendants), fetched in parallel.
+ */
+export async function fetchAllCardCounts(
+  deckNames: string[],
+): Promise<Record<string, number>> {
+  const results = await Promise.all(
+    deckNames.map(async (deck) => {
+      try {
+        const ids = await ankiFetch<number[]>("findCards", {
+          query: `deck:"${deck}"`,
+        });
+        return { deck, count: ids.length };
+      } catch {
+        return { deck, count: 0 };
+      }
+    }),
+  );
+  const counts: Record<string, number> = {};
+  for (const { deck, count } of results) {
+    counts[deck] = count;
+  }
+  return counts;
+}
+
 /** Fetch due counts for multiple decks in parallel. */
 export async function fetchAllDueCounts(
   deckNames: string[],

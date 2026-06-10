@@ -3,8 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { useVimNav } from "@/hooks/use-vim-nav";
-import type { DueCounts } from "@/lib/types";
-import { DueCountsBadges } from "./deck-list";
 import { DecksImportExport } from "./decks-import-export";
 
 interface DeckTreeNode {
@@ -41,10 +39,10 @@ function buildDeckTree(decks: string[]): DeckTreeNode[] {
 
 interface AllDecksListProps {
   decks: string[];
-  dueCounts: Record<string, DueCounts>;
+  cardCounts: Record<string, number>;
 }
 
-export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
+export function AllDecksList({ decks, cardCounts }: AllDecksListProps) {
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
@@ -110,7 +108,7 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
             className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
           >
             <Plus size={14} weight="bold" />
-            New Deck
+            Add deck
           </button>
         </div>
       </div>
@@ -120,7 +118,7 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
           No decks found. Create one or check that Anki is running.
         </p>
       ) : (
-        <AllDecksTree tree={tree} dueCounts={dueCounts} />
+        <AllDecksTree tree={tree} cardCounts={cardCounts} />
       )}
 
       {showDialog && (
@@ -192,10 +190,10 @@ function GroupShell({
 // decks with subdecks each get their own named group.
 function AllDecksTree({
   tree,
-  dueCounts,
+  cardCounts,
 }: {
   tree: DeckTreeNode[];
-  dueCounts: Record<string, DueCounts>;
+  cardCounts: Record<string, number>;
 }) {
   const singles = tree.filter((n) => n.children.length === 0);
   const groups = tree.filter((n) => n.children.length > 0);
@@ -204,11 +202,11 @@ function AllDecksTree({
     <div className="grid gap-4">
       {singles.length > 0 && (
         <GroupShell title="Single decks">
-          <DeckNodeGrid nodes={singles} dueCounts={dueCounts} />
+          <DeckNodeGrid nodes={singles} cardCounts={cardCounts} />
         </GroupShell>
       )}
       {groups.map((node) => (
-        <DeckGroup key={node.fullName} node={node} dueCounts={dueCounts} />
+        <DeckGroup key={node.fullName} node={node} cardCounts={cardCounts} />
       ))}
     </div>
   );
@@ -216,14 +214,14 @@ function AllDecksTree({
 
 function DeckCard({
   node,
-  dueCounts,
+  cardCounts,
   label,
 }: {
   node: DeckTreeNode;
-  dueCounts: Record<string, DueCounts>;
+  cardCounts: Record<string, number>;
   label?: string;
 }) {
-  const due = dueCounts[node.fullName];
+  const count = cardCounts[node.fullName] ?? 0;
 
   return (
     <Link
@@ -232,8 +230,8 @@ function DeckCard({
       className="flex min-h-[5.5rem] flex-col justify-between gap-3 rounded-xl border border-foreground/10 bg-background p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
     >
       <span className="font-medium">{label ?? node.name}</span>
-      <span className="self-end">
-        <DueCountsBadges due={due} />
+      <span className="self-end text-sm tabular-nums text-foreground/50">
+        {count} {count === 1 ? "card" : "cards"}
       </span>
     </Link>
   );
@@ -241,11 +239,11 @@ function DeckCard({
 
 function DeckNodeGrid({
   nodes,
-  dueCounts,
+  cardCounts,
   leading,
 }: {
   nodes: DeckTreeNode[];
-  dueCounts: Record<string, DueCounts>;
+  cardCounts: Record<string, number>;
   leading?: React.ReactNode;
 }) {
   const cards = nodes.filter((n) => n.children.length === 0);
@@ -257,12 +255,12 @@ function DeckNodeGrid({
         <div className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
           {leading}
           {cards.map((node) => (
-            <DeckCard key={node.fullName} node={node} dueCounts={dueCounts} />
+            <DeckCard key={node.fullName} node={node} cardCounts={cardCounts} />
           ))}
         </div>
       )}
       {groups.map((node) => (
-        <DeckGroup key={node.fullName} node={node} dueCounts={dueCounts} />
+        <DeckGroup key={node.fullName} node={node} cardCounts={cardCounts} />
       ))}
     </div>
   );
@@ -270,19 +268,19 @@ function DeckNodeGrid({
 
 function DeckGroup({
   node,
-  dueCounts,
+  cardCounts,
 }: {
   node: DeckTreeNode;
-  dueCounts: Record<string, DueCounts>;
+  cardCounts: Record<string, number>;
 }) {
   return (
     <GroupShell title={node.name}>
       <DeckNodeGrid
         nodes={node.children}
-        dueCounts={dueCounts}
+        cardCounts={cardCounts}
         leading={
           node.isDeck ? (
-            <DeckCard node={node} dueCounts={dueCounts} label="All decks" />
+            <DeckCard node={node} cardCounts={cardCounts} label="All decks" />
           ) : undefined
         }
       />
