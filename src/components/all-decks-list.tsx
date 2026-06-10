@@ -231,7 +231,7 @@ function DeckCard({
     >
       <span className="font-medium">{label ?? node.name}</span>
       <span className="self-end text-sm tabular-nums text-foreground/50">
-        {count} {count === 1 ? "card" : "cards"}
+        {count === 0 ? "Empty" : `${count} ${count === 1 ? "card" : "cards"}`}
       </span>
     </Link>
   );
