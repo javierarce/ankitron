@@ -26,6 +26,15 @@ function hasClozePattern(html: string): boolean {
   return /\{\{c\d+::.*?\}\}/.test(text);
 }
 
+/** Anki's field position, from the `order` property on a notesInfo field. */
+function fieldOrder(field: unknown): number {
+  if (field && typeof field === "object" && "order" in field) {
+    const o = (field as { order: unknown }).order;
+    return typeof o === "number" ? o : 0;
+  }
+  return 0;
+}
+
 export function CardForm({ deckName, note, onClose }: CardFormProps) {
   const noteFields = note?.fields ?? {};
 
@@ -63,11 +72,17 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
     setCardType(newType);
   }
 
-  // Basic fields
-  const frontField = noteFields["Front"] ?? Object.values(noteFields)[0];
-  const backField = noteFields["Back"] ?? Object.values(noteFields)[1];
-  const [front, setFront] = useState(extractValue(frontField));
-  const [back, setBack] = useState(extractValue(backField));
+  // Basic fields. Resolve the front/back field names by Anki's field `order`,
+  // not by object key position: the Tauri proxy round-trips responses through
+  // serde_json, which sorts object keys alphabetically — so {Front, Back} can
+  // arrive as {Back, Front}. Using `order` keeps the read and write consistent.
+  const orderedFieldNames = Object.entries(noteFields)
+    .sort(([, a], [, b]) => fieldOrder(a) - fieldOrder(b))
+    .map(([name]) => name);
+  const frontKey = orderedFieldNames[0] ?? "Front";
+  const backKey = orderedFieldNames[1] ?? "Back";
+  const [front, setFront] = useState(extractValue(noteFields[frontKey]));
+  const [back, setBack] = useState(extractValue(noteFields[backKey]));
 
   // Cloze fields
   const textField = noteFields["Text"];
@@ -156,9 +171,6 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
             note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
           });
         } else {
-          const fieldNames = Object.keys(note.fields ?? {});
-          const frontKey = fieldNames[0] ?? "Front";
-          const backKey = fieldNames[1] ?? "Back";
           await ankiFetch("updateNoteFields", {
             note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
           });
