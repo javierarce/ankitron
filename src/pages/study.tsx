@@ -97,20 +97,20 @@ export function StudyPage() {
   }, [deckName, loadCurrentCard]);
 
   const handleUndo = useCallback(async () => {
-    // Only undo reviews made in this deck's session. Anki's undo is global, so
-    // undoing with nothing reviewed here would reach back into a previously
-    // studied deck and load one of its cards.
-    if (reviewed <= 0) return;
+    // Don't undo once the session is complete (there's no card to step back
+    // into, so it would silently revert a review off-screen), or with nothing
+    // reviewed in this deck's session — Anki's undo is global, so undoing then
+    // would reach back into a previously studied deck and load one of its cards.
+    if (completed || reviewed <= 0) return;
     try {
       await ankiFetch("guiUndo");
     } catch {
       return;
     }
     setReviewed((r) => Math.max(0, r - 1));
-    setCompleted(false);
     setSyncStatus("idle");
     await loadCurrentCard();
-  }, [reviewed, loadCurrentCard]);
+  }, [completed, reviewed, loadCurrentCard]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
