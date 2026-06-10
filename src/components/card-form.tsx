@@ -3,6 +3,7 @@ import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { basicFieldKeys } from "@/lib/note-fields";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 
 type CardType = "Basic" | "Cloze" | "ClozeTyped";
@@ -24,15 +25,6 @@ function isClozeNote(note: Note): boolean {
 function hasClozePattern(html: string): boolean {
   const text = html.replace(/<[^>]*>/g, "");
   return /\{\{c\d+::.*?\}\}/.test(text);
-}
-
-/** Anki's field position, from the `order` property on a notesInfo field. */
-function fieldOrder(field: unknown): number {
-  if (field && typeof field === "object" && "order" in field) {
-    const o = (field as { order: unknown }).order;
-    return typeof o === "number" ? o : 0;
-  }
-  return 0;
 }
 
 export function CardForm({ deckName, note, onClose }: CardFormProps) {
@@ -72,15 +64,8 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
     setCardType(newType);
   }
 
-  // Basic fields. Resolve the front/back field names by Anki's field `order`,
-  // not by object key position: the Tauri proxy round-trips responses through
-  // serde_json, which sorts object keys alphabetically — so {Front, Back} can
-  // arrive as {Back, Front}. Using `order` keeps the read and write consistent.
-  const orderedFieldNames = Object.entries(noteFields)
-    .sort(([, a], [, b]) => fieldOrder(a) - fieldOrder(b))
-    .map(([name]) => name);
-  const frontKey = orderedFieldNames[0] ?? "Front";
-  const backKey = orderedFieldNames[1] ?? "Back";
+  // Basic fields, keyed by Anki's field `order` (see basicFieldKeys).
+  const { frontKey, backKey } = basicFieldKeys(noteFields);
   const [front, setFront] = useState(extractValue(noteFields[frontKey]));
   const [back, setBack] = useState(extractValue(noteFields[backKey]));
 

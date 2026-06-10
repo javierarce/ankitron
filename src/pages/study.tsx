@@ -6,6 +6,7 @@ import { CardForm } from "@/components/card-form";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
 import { isCardInDeck } from "@/lib/deck";
+import { canUndo } from "@/lib/study";
 
 interface CurrentCard {
   cardId: number;
@@ -97,11 +98,10 @@ export function StudyPage() {
   }, [deckName, loadCurrentCard]);
 
   const handleUndo = useCallback(async () => {
-    // Don't undo once the session is complete (there's no card to step back
-    // into, so it would silently revert a review off-screen), or with nothing
-    // reviewed in this deck's session — Anki's undo is global, so undoing then
-    // would reach back into a previously studied deck and load one of its cards.
-    if (completed || reviewed <= 0) return;
+    // Undo only steps back through this session's reviews (see canUndo): not
+    // once complete (no card to return to), and not before anything is reviewed
+    // — Anki's undo is global, so it would otherwise reach into another deck.
+    if (!canUndo({ completed, reviewed })) return;
     try {
       await ankiFetch("guiUndo");
     } catch {
