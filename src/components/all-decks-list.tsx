@@ -120,7 +120,7 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
           No decks found. Create one or check that Anki is running.
         </p>
       ) : (
-        <DeckNodeGrid nodes={tree} dueCounts={dueCounts} />
+        <AllDecksTree tree={tree} dueCounts={dueCounts} />
       )}
 
       {showDialog && (
@@ -165,6 +165,51 @@ export function AllDecksList({ decks, dueCounts }: AllDecksListProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// A titled group card with a header bar matching the home/study page (minus
+// the NEW/LEARN/DUE column labels).
+function GroupShell({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+      <div className="border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+        {title}
+      </div>
+      <div className="p-3">{children}</div>
+    </div>
+  );
+}
+
+// Top level: collect single decks (no subdecks) into one "Single decks" group;
+// decks with subdecks each get their own named group.
+function AllDecksTree({
+  tree,
+  dueCounts,
+}: {
+  tree: DeckTreeNode[];
+  dueCounts: Record<string, DueCounts>;
+}) {
+  const singles = tree.filter((n) => n.children.length === 0);
+  const groups = tree.filter((n) => n.children.length > 0);
+
+  return (
+    <div className="grid gap-4">
+      {singles.length > 0 && (
+        <GroupShell title="Single decks">
+          <DeckNodeGrid nodes={singles} dueCounts={dueCounts} />
+        </GroupShell>
+      )}
+      {groups.map((node) => (
+        <DeckGroup key={node.fullName} node={node} dueCounts={dueCounts} />
+      ))}
     </div>
   );
 }
@@ -231,10 +276,7 @@ function DeckGroup({
   dueCounts: Record<string, DueCounts>;
 }) {
   return (
-    <div className="rounded-xl border border-foreground/10 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      <div className="mb-4 px-1 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-        {node.name}
-      </div>
+    <GroupShell title={node.name}>
       <DeckNodeGrid
         nodes={node.children}
         dueCounts={dueCounts}
@@ -244,6 +286,6 @@ function DeckGroup({
           ) : undefined
         }
       />
-    </div>
+    </GroupShell>
   );
 }
