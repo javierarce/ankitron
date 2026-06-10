@@ -236,10 +236,10 @@ export function StudyPage() {
             </p>
           )}
           <a
-            href={`/decks/${encodeURIComponent(deckName)}`}
+            href="/"
             className="rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background inline-block"
           >
-            Back to Deck
+            Back to Study
           </a>
         </div>
       )}
