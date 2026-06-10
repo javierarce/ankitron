@@ -49,9 +49,8 @@ html.tauri .app-no-drag * {
   -webkit-app-region: no-drag;
 }
 
-/* Shared horizontal layout for the header, breadcrumb, and main rows so
-   they line up at exactly the same left edge. On Tauri macOS the left
-   padding grows to clear the traffic-light cluster. */
+/* Shared horizontal layout for the header, breadcrumb, and main rows: a
+   centered column capped at 64rem with 1.5rem side padding. */
 .app-row {
   width: 100%;
   margin-inline: auto;
@@ -59,8 +58,14 @@ html.tauri .app-no-drag * {
   padding-inline: 1.5rem;
 }
 
-html.tauri-mac .app-row {
-  padding-left: 5.75rem; /* 92px clears the traffic lights */
+/* On Tauri macOS the header nav lines up with the centered content's left edge
+   when there's room, and only shifts right to clear the traffic-light cluster
+   once the window is too narrow for both. 5.75rem (92px) is the clearance;
+   64rem / 1.5rem mirror .app-row's max-width and side padding, so when the
+   window is wide the header padding collapses back to 1.5rem and matches the
+   content. */
+html.tauri-mac .app-header .app-row {
+  padding-left: max(1.5rem, calc(5.75rem - max(0px, (100vw - 64rem) / 2)));
 }
 
 a,
