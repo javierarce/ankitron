@@ -9,6 +9,7 @@
     "os:default",
     "updater:default",
     "process:default",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "dialog:allow-ask"
   ]
 }

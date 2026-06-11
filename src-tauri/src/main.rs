@@ -51,6 +51,36 @@ async fn anki_request(body: serde_json::Value) -> Result<serde_json::Value, Stri
         .map_err(|e| format!("Failed to parse AnkiConnect response: {}", e))
 }
 
+/// Stop the headless Anki we spawned and wait for AnkiConnect to actually go
+/// down before the app relaunches for an update. Without this, the relaunched
+/// process can latch onto the dying instance (briefly still answering on :8765)
+/// and skip spawning its own, leaving the app with no Anki. Only waits when we
+/// were the ones who spawned Anki — a user's own Anki is left untouched and the
+/// relaunched app simply reuses it.
+#[tauri::command]
+async fn stop_anki_for_update(state: tauri::State<'_, Arc<AnkiState>>) -> Result<(), String> {
+    let state = state.inner().clone();
+    let we_spawned = state
+        .child
+        .lock()
+        .map(|g| g.is_some())
+        .unwrap_or(false);
+
+    stop_spawned_anki(&state);
+
+    if we_spawned {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(8);
+        while is_ankiconnect_up().await {
+            if tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    }
+
+    Ok(())
+}
+
 /// Write text to an absolute path the user chose via the native save dialog.
 /// Lets the deck export land wherever the user picks (folder + filename)
 /// instead of being dumped into ~/Downloads by a browser-style download.
@@ -92,7 +122,8 @@ fn main() {
             wait_for_anki,
             ensure_anki,
             anki_request,
-            save_text_file
+            save_text_file,
+            stop_anki_for_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running AnkiTron");
