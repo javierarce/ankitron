@@ -82,7 +82,7 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
 // over the badge columns below (same 3-column 2rem grid as DueCountsBadges).
 function GroupHeader({ title }: { title: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/10 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
       <span>{title}</span>
       <span className="grid w-[6.5rem] grid-cols-3 text-center text-[10px] tracking-normal text-foreground/40">
         <span>New</span>
@@ -205,7 +205,7 @@ function CountSegment({
   return (
     <span className="group/pill relative inline-flex w-full">
       <span
-        className={`inline-flex w-full -translate-y-px items-center justify-center px-1 py-1 leading-none ${
+        className={`inline-flex w-full items-center justify-center px-1 py-1 leading-none ${
           value === 0 ? "text-foreground/30" : "text-foreground/70"
         }`}
       >
