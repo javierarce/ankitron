@@ -26,9 +26,14 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
   const [error, setError] = useState<string | null>(null);
 
   async function handleExport() {
-    const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
-    const payload = buildExport(deckName, notes, undefined, cardDecksByNoteId);
-    await downloadDeckJson(payload, deckName);
+    setError(null);
+    try {
+      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
+      const payload = buildExport(deckName, notes, undefined, cardDecksByNoteId);
+      await downloadDeckJson(payload, deckName);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export failed.");
+    }
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
