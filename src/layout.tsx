@@ -5,15 +5,13 @@ import { CommandPalette } from "@/components/command-palette";
 import { HeaderNav } from "@/components/header-nav";
 import { SyncButton } from "@/components/sync-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useUpdater } from "@/hooks/use-updater";
+import { UpdatePrompt } from "@/components/update-prompt";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function Layout() {
   const [ankiReady, setAnkiReady] = useState(!isTauri);
-
-  useUpdater();
 
   useEffect(() => {
     if (!isTauri) return;
@@ -50,12 +48,15 @@ export function Layout() {
 
   if (!ankiReady) {
     return (
-      <div className="flex min-h-dvh items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-          <p className="text-sm text-foreground/50">Starting Anki&hellip;</p>
+      <>
+        <div className="flex min-h-dvh items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+            <p className="text-sm text-foreground/50">Starting Anki&hellip;</p>
+          </div>
         </div>
-      </div>
+        <UpdatePrompt />
+      </>
     );
   }
 
@@ -82,6 +83,7 @@ export function Layout() {
         <Outlet />
       </main>
       <CommandPalette />
+      <UpdatePrompt />
     </>
   );
 }
