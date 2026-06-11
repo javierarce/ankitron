@@ -83,7 +83,7 @@ function CardMenu({
         onClick={() => setOpen((o) => !o)}
         className="rounded-md p-1 text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 transition-all"
       >
-        <DotsThreeVertical size={16} weight="bold" />
+        <DotsThreeVertical size={24} weight="bold" />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg">

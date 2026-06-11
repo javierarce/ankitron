@@ -157,6 +157,16 @@ select {
   font-weight: 500;
 }
 
+/* Collapse leading/trailing margins on rendered card HTML so single-line
+   content sits vertically centered within the card's symmetric padding
+   (Anki notes often carry a stray bottom margin on the last element). */
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
 .tiptap em {
   font-style: italic;
 }

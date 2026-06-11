@@ -98,21 +98,33 @@ jobs:
           gh release delete-asset "${{ github.ref_name }}" "$(basename "$DMG")" --yes || true
           gh release upload "${{ github.ref_name }}" "$CLEAN" --clobber
 
-      # Build release notes from the commit subjects since the previous tag and
-      # write them to BOTH the GitHub release body and latest.json's `notes`
-      # field, so the in-app updater (Update.body) shows what changed. Version-
-      # bump commits (e.g. "0.15.0") are filtered out.
+      # Attach release notes to BOTH the GitHub release body and latest.json's
+      # `notes` field, so the in-app updater (Update.body) shows what changed.
+      # Prefer hand-written notes from the annotated tag's message body — cut a
+      # release with e.g. `git tag -a v0.17.0 -m "Title" -m "- Fixed X"`. When
+      # the tag is lightweight (no body), fall back to commit subjects since the
+      # previous tag, with version-bump commits (e.g. "0.15.0") filtered out.
       - name: Generate and attach release notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
-          RANGE="${TAG}"
-          [ -n "$PREV" ] && RANGE="${PREV}..${TAG}"
-          NOTES=$(git log --no-merges --pretty='- %s' "$RANGE" \
-            | grep -vE '^- [0-9]+\.[0-9]+\.[0-9]+$' || true)
-          [ -z "$NOTES" ] && NOTES="- Maintenance release."
+          # Annotated tag? Use its message (subject + body, which omits any GPG
+          # signature). Lightweight tags resolve to a commit, so skip them here.
+          NOTES=""
+          if [ "$(git cat-file -t "$TAG" 2>/dev/null)" = "tag" ]; then
+            NOTES=$(git tag -l --format='%(contents:subject)%0a%(contents:body)' "$TAG")
+          fi
+          # No hand-written notes — fall back to commit subjects since the
+          # previous tag, with version-bump commits (e.g. "0.15.0") filtered out.
+          if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
+            PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+            RANGE="${TAG}"
+            [ -n "$PREV" ] && RANGE="${PREV}..${TAG}"
+            NOTES=$(git log --no-merges --pretty='- %s' "$RANGE" \
+              | grep -vE '^- [0-9]+\.[0-9]+\.[0-9]+$' || true)
+          fi
+          [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ] && NOTES="- Maintenance release."
           printf '%s\n' "$NOTES" > notes.md
           echo "---- release notes ----"; cat notes.md
           # GitHub release body

@@ -51,6 +51,13 @@ function splitOnTypeCloze(html: string): [string, string] {
   return [html.slice(0, match.index), html.slice(match.index + match[0].length)];
 }
 
+// The typed-cloze front template ends the cloze line with a <br> before the
+// input (see FRONT_TEMPLATE). On reveal there's no input, so that trailing
+// break would leave a dangling empty line — strip trailing breaks/whitespace.
+function trimTrailingBreaks(html: string): string {
+  return html.replace(/(?:\s|&nbsp;|<br\s*\/?>)+$/i, "");
+}
+
 const ANKI_ANSWER_HR_RE = /<hr\b[^>]*\bid=["']?answer["']?[^>]*>/i;
 
 function splitAnkiAnswer(html: string): { front: string; back: string } {
@@ -307,7 +314,7 @@ export function StudyCard({
               }
             : undefined
         }
-        className={`study-card-body group relative rounded-xl border border-foreground/10 px-8 pt-9 pb-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+        className={`study-card-body group relative rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
           !isRevealed && !typed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >
@@ -324,7 +331,7 @@ export function StudyCard({
               className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 rounded-md p-1.5 text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 transition-all"
               title="Edit card"
             >
-              <PencilSimple size={14} weight="regular" />
+              <PencilSimple size={18} weight="regular" />
             </button>
           )}
         </div>
@@ -411,33 +418,41 @@ export function StudyCard({
         </div>
 
         {!isRevealed ? (
-          typed ? (
-            <div key="content" className="prose prose-sm dark:prose-invert max-w-none">
-              <HtmlContent html={questionBefore} />
-              <input
-                ref={inputRef}
-                value={typedValue}
-                onChange={(e) => setTypedValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSubmitTyped();
-                  }
-                }}
-                placeholder="Type your answer…"
-                className="my-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+          <div key="content" className="px-8 py-6">
+            {typed ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <HtmlContent html={questionBefore} />
+                <input
+                  ref={inputRef}
+                  value={typedValue}
+                  onChange={(e) => setTypedValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSubmitTyped();
+                    }
+                  }}
+                  placeholder="Type your answer…"
+                  className="my-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+                />
+                <HtmlContent html={questionAfter} />
+              </div>
+            ) : (
+              <HtmlContent
+                html={question}
+                className="prose prose-sm dark:prose-invert max-w-none"
               />
-              <HtmlContent html={questionAfter} />
-            </div>
-          ) : (
-            <HtmlContent
-              key="content"
-              html={question}
-              className="prose prose-sm dark:prose-invert max-w-none"
-            />
-          )
+            )}
+          </div>
         ) : (
-          <div key="content" className="study-answer prose prose-sm dark:prose-invert max-w-none">
+          <div key="content">
+            <div className="rounded-t-xl border-b border-foreground/10 bg-foreground/[0.03] px-8 py-6">
+              <HtmlContent
+                html={typed ? trimTrailingBreaks(questionBefore + questionAfter) : question}
+                className="prose prose-sm dark:prose-invert max-w-none"
+              />
+            </div>
+            <div className="study-answer prose prose-sm dark:prose-invert max-w-none px-8 py-6">
             {typed && (
               <>
                 {typedDiff ? (
@@ -491,15 +506,8 @@ export function StudyCard({
                 <hr />
               </>
             )}
-            {splitAnswer.front ? (
-              <>
-                <HtmlContent html={splitAnswer.front} />
-                <hr />
-                <HtmlContent html={splitAnswer.back} />
-              </>
-            ) : (
-              <HtmlContent html={splitAnswer.back} />
-            )}
+            <HtmlContent html={splitAnswer.back} />
+            </div>
           </div>
         )}
       </div>
