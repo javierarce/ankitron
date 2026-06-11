@@ -25,6 +25,12 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
   const [showExportPicker, setShowExportPicker] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Kept after a successful import so "Overwrite anyway" can re-run it, and as
+  // the signal that Anki changed and the page needs a reload on dismiss.
+  const [lastImport, setLastImport] = useState<{
+    target: string;
+    parsed: ExportedDeck;
+  } | null>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -65,8 +71,8 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
         { addOnly },
       );
       setResult(r);
+      setLastImport({ target, parsed: pending });
       setPending(null);
-      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed.");
       setPending(null);
@@ -75,7 +81,33 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
     }
   }
 
+  async function runOverwrite() {
+    if (!lastImport) return;
+    setImporting(true);
+    try {
+      const addOnly = lastImport.target !== lastImport.parsed.deckName;
+      const r = await importDeck(
+        lastImport.target,
+        lastImport.parsed,
+        { ankiFetch, ensureClozeTypedModel },
+        { addOnly, overwriteStale: true },
+      );
+      setResult(r);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function dismissResult() {
+    // Reload only when an import actually ran, so the page reflects the new
+    // cards; a parse/validation error changed nothing.
+    if (lastImport) {
+      window.location.reload();
+      return;
+    }
     setResult(null);
     setError(null);
   }
@@ -131,6 +163,8 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
         <ImportResultModal
           result={result}
           error={error}
+          importing={importing}
+          onOverwriteStale={runOverwrite}
           onClose={dismissResult}
         />
       )}
