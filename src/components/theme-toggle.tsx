@@ -17,36 +17,29 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("system");
-  const [mounted, setMounted] = useState(false);
+  // index.html applies the saved theme before React loads, so reading
+  // localStorage during the initial render can't cause a flash.
+  const [theme, setTheme] = useState<Theme>(
+    () => (localStorage.getItem("theme") as Theme | null) ?? "system"
+  );
 
+  // Sync the DOM with the selected theme, and while following the system
+  // theme, track OS-level changes.
   useEffect(() => {
-    const saved = localStorage.getItem("theme") as Theme | null;
-    const initial = saved ?? "system";
-    setTheme(initial);
-    applyTheme(initial);
-    setMounted(true);
-
+    applyTheme(theme);
+    if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    function handleChange() {
-      const current = localStorage.getItem("theme") as Theme | null;
-      if (!current || current === "system") {
-        applyTheme("system");
-      }
-    }
+    const handleChange = () => applyTheme("system");
     mq.addEventListener("change", handleChange);
     return () => mq.removeEventListener("change", handleChange);
-  }, []);
+  }, [theme]);
 
   function cycle() {
     const order: Theme[] = ["light", "dark", "system"];
     const next = order[(order.indexOf(theme) + 1) % order.length];
     setTheme(next);
     localStorage.setItem("theme", next);
-    applyTheme(next);
   }
-
-  if (!mounted) return <div className="w-7 h-7" />;
 
   return (
     <button

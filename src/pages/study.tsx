@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
@@ -33,16 +33,12 @@ export function StudyPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
-  const [languages, setLanguages] = useState<DeckLanguages>({
-    primary: null,
-    secondary: null,
-  });
+  const languages = useMemo<DeckLanguages>(
+    () => getDeckLanguages(deckName),
+    [deckName]
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const cardSlotRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setLanguages(getDeckLanguages(deckName));
-  }, [deckName]);
 
   const loadCurrentCard = useCallback(async () => {
     try {
@@ -154,6 +150,7 @@ export function StudyPage() {
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- this effect owns the sync state machine; the transition to "syncing" belongs with the request it starts
     setSyncStatus("syncing");
     (async () => {
       try {

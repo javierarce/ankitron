@@ -59,28 +59,31 @@ function sampleFor(lang: string): string {
 }
 
 export function DeckSettings({ deckName }: DeckSettingsProps) {
-  const [mounted, setMounted] = useState(false);
-  const [languages, setLanguages] = useState<DeckLanguages>({
-    primary: null,
-    secondary: null,
-  });
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [languages, setLanguages] = useState<DeckLanguages>(() =>
+    getDeckLanguages(deckName)
+  );
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>(() =>
+    "speechSynthesis" in window ? window.speechSynthesis.getVoices() : []
+  );
 
-  useEffect(() => {
-    setMounted(true);
+  // Route param changes swap the deck without remounting; reload its settings.
+  const [prevDeckName, setPrevDeckName] = useState(deckName);
+  if (prevDeckName !== deckName) {
+    setPrevDeckName(deckName);
     setLanguages(getDeckLanguages(deckName));
+  }
 
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  // Voices often load asynchronously; refresh the list when they arrive.
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
     const synth = window.speechSynthesis;
     const update = () => setVoices(synth.getVoices());
-    update();
     synth.addEventListener("voiceschanged", update);
     return () => synth.removeEventListener("voiceschanged", update);
-  }, [deckName]);
+  }, []);
 
   const options = useMemo(() => buildOptions(voices), [voices]);
-  const supported =
-    typeof window !== "undefined" && "speechSynthesis" in window;
+  const supported = "speechSynthesis" in window;
 
   function handleChange(slot: "primary" | "secondary", value: string) {
     const lang = value || null;
@@ -93,8 +96,6 @@ export function DeckSettings({ deckName }: DeckSettingsProps) {
     if (!lang) return;
     speak(sampleFor(lang), lang);
   }
-
-  if (!mounted) return <div className="mt-16 h-32" />;
 
   return (
     <section className="mt-16 border-t border-foreground/10 pt-6">

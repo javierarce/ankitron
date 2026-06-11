@@ -19,12 +19,6 @@ export default defineConfig([
       ecmaVersion: 2022,
       globals: globals.browser,
     },
-    rules: {
-      // Pre-existing patterns from the Next.js era (mounted flags, localStorage
-      // reads in effects); keep visible as warnings rather than failing lint.
-      "react-hooks/set-state-in-effect": "warn",
-      "react-refresh/only-export-components": "warn",
-    },
   },
   {
     // Node-side scripts (icon generation, configs).
