@@ -51,6 +51,14 @@ async fn anki_request(body: serde_json::Value) -> Result<serde_json::Value, Stri
         .map_err(|e| format!("Failed to parse AnkiConnect response: {}", e))
 }
 
+/// Write text to an absolute path the user chose via the native save dialog.
+/// Lets the deck export land wherever the user picks (folder + filename)
+/// instead of being dumped into ~/Downloads by a browser-style download.
+#[tauri::command]
+async fn save_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|e| format!("Failed to write {}: {}", path, e))
+}
+
 fn main() {
     let anki_state = Arc::new(AnkiState::default());
     let startup_state = anki_state.clone();
@@ -61,6 +69,7 @@ fn main() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         // Managed so the `ensure_anki` command can reach the same state and
         // keep the spawned Anki process alive for the app's lifetime.
         .manage(anki_state)
@@ -82,7 +91,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             wait_for_anki,
             ensure_anki,
-            anki_request
+            anki_request,
+            save_text_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running AnkiTron");
