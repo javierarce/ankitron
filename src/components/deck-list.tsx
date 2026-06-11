@@ -82,9 +82,9 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
 // over the badge columns below (same 3-column 2rem grid as DueCountsBadges).
 function GroupHeader({ title }: { title: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/10 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
       <span>{title}</span>
-      <span className="grid grid-cols-[repeat(3,2rem)] gap-1 text-center text-[10px] tracking-normal text-foreground/40">
+      <span className="grid w-[6.5rem] grid-cols-3 text-center text-[10px] tracking-normal text-foreground/40">
         <span>New</span>
         <span>Learn</span>
         <span>Due</span>
@@ -103,13 +103,13 @@ function SingleDecksCard({
   return (
     <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title="Single decks" />
-      <div className="divide-y divide-foreground/5">
+      <div className="divide-y divide-foreground/10">
         {decks.map((deck) => (
           <Link
             key={deck}
             data-nav-item
             to={`/decks/${encodeURIComponent(deck)}/study`}
-            className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+            className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
           >
             <span className="font-medium">{deck}</span>
             <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
@@ -132,11 +132,11 @@ function DueGroupCard({
   return (
     <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title={root} />
-      <div className="divide-y divide-foreground/5">
+      <div className="divide-y divide-foreground/10">
         <Link
           data-nav-item
           to={`/decks/${encodeURIComponent(root)}/study`}
-          className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+          className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
         >
           <span className="font-medium">All decks</span>
           <DueCountsBadges due={dueCounts[root]} showTooltip={false} />
@@ -151,7 +151,7 @@ function DueGroupCard({
               key={deck}
               data-nav-item
               to={`/decks/${encodeURIComponent(deck)}/study`}
-              className="flex items-center justify-between gap-3 py-3 pl-8 pr-4 transition-colors hover:bg-foreground/5"
+              className="flex items-center justify-between gap-3 py-3 pl-8 pr-4 bg-clip-padding transition-colors hover:bg-foreground/5"
             >
               <span className="font-medium">
                 {subPrefix && (
@@ -181,42 +181,33 @@ export function DueCountsBadges({
     );
   }
   return (
-    // Fixed-width columns make every pill identical — both within a group and
-    // across decks — so a row with "0" lines up with a row containing "12".
-    // 2rem fits up to ~3 tabular digits; tabular-nums keeps digits monospaced.
-    <span className="grid grid-cols-[repeat(3,2rem)] gap-1 text-xs font-medium tabular-nums">
-      <CountPill value={due.new} label="New" tone="sky" showTooltip={showTooltip} />
-      <CountPill value={due.learn} label="Learning" tone="rose" showTooltip={showTooltip} />
-      <CountPill value={due.review} label="Due" tone="emerald" showTooltip={showTooltip} />
+    // One neutral segmented pill: three equal columns over a fixed 6.5rem so the
+    // counts line up under the New/Learn/Due header labels (same width + grid),
+    // and a row with "0" stays aligned with one containing "12". An outer border
+    // wraps the pill; divide-x draws the hairlines between each number.
+    <span className="grid w-[6.5rem] grid-cols-3 divide-x divide-foreground/5 overflow-hidden rounded-full border border-foreground/10 bg-foreground/[0.02] text-[11px] font-medium tabular-nums">
+      <CountSegment value={due.new} label="New" showTooltip={showTooltip} />
+      <CountSegment value={due.learn} label="Learning" showTooltip={showTooltip} />
+      <CountSegment value={due.review} label="Due" showTooltip={showTooltip} />
     </span>
   );
 }
 
-const TONE_STYLES = {
-  sky: "bg-sky-500/20 text-sky-900 dark:text-sky-200",
-  rose: "bg-rose-500/20 text-rose-900 dark:text-rose-200",
-  emerald: "bg-emerald-500/20 text-emerald-900 dark:text-emerald-200",
-} as const;
-
-function CountPill({
+function CountSegment({
   value,
   label,
-  tone,
   showTooltip,
 }: {
   value: number;
   label: string;
-  tone: keyof typeof TONE_STYLES;
   showTooltip: boolean;
 }) {
-  const isZero = value === 0;
-  const palette = isZero
-    ? "bg-foreground/5 text-foreground/40"
-    : TONE_STYLES[tone];
   return (
     <span className="group/pill relative inline-flex w-full">
       <span
-        className={`inline-flex w-full items-center justify-center rounded-full px-1 py-0.5 leading-none ${palette}`}
+        className={`inline-flex w-full items-center justify-center px-1 py-1 leading-none ${
+          value === 0 ? "text-foreground/30" : "text-foreground/70"
+        }`}
       >
         {value}
       </span>
