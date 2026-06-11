@@ -8,6 +8,7 @@
     "shell:allow-open",
     "os:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "dialog:allow-save"
   ]
 }

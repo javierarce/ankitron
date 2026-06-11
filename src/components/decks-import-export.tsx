@@ -172,7 +172,7 @@ function ExportPickerDialog({
           : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
       const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
       const payload = buildExport(selected, notes, undefined, cardDecksByNoteId);
-      downloadDeckJson(payload, selected);
+      await downloadDeckJson(payload, selected);
       onDone();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Export failed.");
