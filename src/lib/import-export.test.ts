@@ -336,7 +336,13 @@ describe("importDeck", () => {
       ],
     };
     const result = await importDeck("D", parsed, deps);
-    expect(result).toEqual({ updated: 0, added: 1, skipped: 0, errors: [] });
+    expect(result).toEqual({
+      updated: 0,
+      added: 1,
+      skipped: 0,
+      staleSkipped: 0,
+      errors: [],
+    });
     expect(deps.ankiFetch).toHaveBeenCalledWith("addNote", {
       note: {
         deckName: "D",
@@ -527,10 +533,47 @@ describe("importDeck", () => {
       ],
     };
     const result = await importDeck("D", parsed, deps);
-    expect(result).toMatchObject({ updated: 0, added: 0, skipped: 1 });
+    expect(result).toMatchObject({
+      updated: 0,
+      added: 0,
+      skipped: 0,
+      staleSkipped: 1,
+    });
     const calls = deps.ankiFetch.mock.calls.map((c) => c[0]);
     expect(calls).not.toContain("updateNoteFields");
     expect(calls).not.toContain("addTags");
+  });
+
+  it("overwrites a stale note when overwriteStale is set", async () => {
+    const deps = makeDeps((action) => {
+      if (action === "notesInfo") {
+        return [
+          { noteId: 5, modelName: "Basic", fields: {}, tags: [], mod: 2000 },
+        ];
+      }
+      return null;
+    });
+
+    const parsed: ExportedDeck = {
+      deckName: "D",
+      exportedAt: "x",
+      notes: [
+        {
+          noteId: 5,
+          modelName: "Basic",
+          fields: { Front: "stale" },
+          tags: [],
+          mod: 1000,
+        },
+      ],
+    };
+    const result = await importDeck("D", parsed, deps, {
+      overwriteStale: true,
+    });
+    expect(result).toMatchObject({ updated: 1, skipped: 0, staleSkipped: 0 });
+    expect(deps.ankiFetch).toHaveBeenCalledWith("updateNoteFields", {
+      note: { id: 5, fields: { Front: "stale" } },
+    });
   });
 
   it("overwrites when the export is newer than (or same age as) the live note", async () => {
@@ -827,7 +870,13 @@ describe("importDeck", () => {
     });
     const parsed: ExportedDeck = { deckName: "D", exportedAt: "x", notes: [] };
     const result = await importDeck("D", parsed, deps);
-    expect(result).toEqual({ updated: 0, added: 0, skipped: 0, errors: [] });
+    expect(result).toEqual({
+      updated: 0,
+      added: 0,
+      skipped: 0,
+      staleSkipped: 0,
+      errors: [],
+    });
     expect(deps.ankiFetch).not.toHaveBeenCalled();
   });
 
