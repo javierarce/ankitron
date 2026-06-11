@@ -8,6 +8,10 @@ import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
 import { isCardInDeck } from "@/lib/deck";
 import { canUndo } from "@/lib/study";
 
+// Duration of the card fade transitions (must match the CSS transition below).
+const FADE_MS = 180;
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 interface CurrentCard {
   cardId: number;
   noteId: number;
@@ -31,14 +35,14 @@ export function StudyPage() {
   const [initialTotal, setInitialTotal] = useState(0);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [pinnedTop, setPinnedTop] = useState<number | null>(null);
+  const [cardVisible, setCardVisible] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   const languages = useMemo<DeckLanguages>(
     () => getDeckLanguages(deckName),
     [deckName]
   );
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cardSlotRef = useRef<HTMLDivElement>(null);
+  // Guards against overlapping reveal/answer transitions (e.g. mashing space).
+  const transitioningRef = useRef(false);
 
   const loadCurrentCard = useCallback(async () => {
     try {
@@ -60,7 +64,6 @@ export function StudyPage() {
       } else {
         setCard(result);
         setIsRevealed(false);
-        setPinnedTop(null);
         await ankiFetch("guiStartCardTimer");
       }
     } catch {
@@ -168,17 +171,19 @@ export function StudyPage() {
   }, [completed, reviewed, syncStatus]);
 
   async function handleReveal() {
-    const cardRect = cardSlotRef.current?.getBoundingClientRect();
-    const containerRect = containerRef.current?.getBoundingClientRect();
-    if (cardRect && containerRect) {
-      setPinnedTop(cardRect.top - containerRect.top);
-    }
+    if (transitioningRef.current) return;
+    transitioningRef.current = true;
+    // Fade the question out, swap in the answer while hidden, then fade in.
+    setCardVisible(false);
+    await delay(FADE_MS);
     try {
       await ankiFetch("guiShowAnswer");
-      setIsRevealed(true);
     } catch {
-      setIsRevealed(true);
+      // Showing the answer in Anki is best-effort; reveal locally regardless.
     }
+    setIsRevealed(true);
+    setCardVisible(true);
+    transitioningRef.current = false;
   }
 
   async function handleEdit() {
@@ -219,7 +224,12 @@ export function StudyPage() {
   }
 
   async function handleAnswer(ease: Ease) {
+    if (transitioningRef.current) return;
+    transitioningRef.current = true;
     setAnswering(true);
+    // Fade the answered card out, load the next card while hidden, then fade in.
+    setCardVisible(false);
+    await delay(FADE_MS);
     try {
       const success = await ankiFetch<boolean>("guiAnswerCard", { ease });
       if (success) {
@@ -230,17 +240,13 @@ export function StudyPage() {
       setError("Failed to record answer. Try again.");
     } finally {
       setAnswering(false);
+      setCardVisible(true);
+      transitioningRef.current = false;
     }
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`flex flex-1 flex-col items-center pb-[6rem] ${
-        pinnedTop === null ? "justify-center" : ""
-      }`}
-      style={pinnedTop !== null ? { paddingTop: pinnedTop } : undefined}
-    >
+    <div className="flex flex-1 flex-col items-center justify-center pb-[6rem]">
       {loading && (
         <p className="text-foreground/50">Loading cards...</p>
       )}
@@ -272,7 +278,10 @@ export function StudyPage() {
       )}
 
       {!loading && !error && card && (
-        <div ref={cardSlotRef} className="w-full max-w-2xl">
+        <div
+          className="w-full max-w-2xl transition-opacity ease-out"
+          style={{ opacity: cardVisible ? 1 : 0, transitionDuration: `${FADE_MS}ms` }}
+        >
           <StudyCard
             question={card.question}
             answer={card.answer}
