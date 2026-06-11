@@ -47,13 +47,11 @@ function isClozeNote(note: Note): boolean {
 }
 
 function CardMenu({
-  note,
   isSuspended,
   onToggleSuspend,
   onMove,
   onDelete,
 }: {
-  note: Note;
   isSuspended: boolean;
   onToggleSuspend: () => void;
   onMove: () => void;
@@ -329,7 +327,6 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
                 </div>
                 <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                   <CardMenu
-                    note={note}
                     isSuspended={noteSuspended}
                     onToggleSuspend={() => handleToggleSuspend(note)}
                     onMove={() => setMovingNote(note)}

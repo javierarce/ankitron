@@ -4,13 +4,14 @@ import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { Note } from "@/lib/types";
 import {
   buildExport,
+  downloadDeckJson,
   fetchCardDecksByNoteId,
   importDeck,
   isExportedDeck,
   type ExportedDeck,
   type ImportResult,
 } from "@/lib/import-export";
-import { downloadDeckJson, ImportResultModal } from "./import-export";
+import { ImportResultModal } from "./import-export";
 import { ImportTargetDialog } from "./import-target-dialog";
 
 interface DecksImportExportProps {

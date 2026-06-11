@@ -4,10 +4,10 @@ import { ankiFetch } from "@/lib/anki-fetch";
 import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import {
   buildExport,
+  downloadDeckJson,
   fetchCardDecksByNoteId,
   importDeck,
   isExportedDeck,
-  sanitizeFilename,
   type ExportedDeck,
   type ImportResult,
 } from "@/lib/import-export";
@@ -135,47 +135,6 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
       )}
     </>
   );
-}
-
-const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-/**
- * Save a deck export to disk. In the Tauri app this opens a native save dialog
- * so the user picks the destination folder and filename; in the browser it
- * falls back to a plain anchor download into the default Downloads folder.
- * Resolves to false if the user cancels the dialog, true otherwise.
- */
-export async function downloadDeckJson(
-  payload: ExportedDeck,
-  name: string,
-): Promise<boolean> {
-  const json = JSON.stringify(payload, null, 2);
-  const date = new Date().toISOString().slice(0, 10);
-  const defaultName = `${sanitizeFilename(name)}-${date}.json`;
-
-  if (isTauri) {
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const path = await save({
-      defaultPath: defaultName,
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (!path) return false; // user cancelled
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("save_text_file", { path, contents: json });
-    return true;
-  }
-
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = defaultName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  return true;
 }
 
 export function ImportResultModal({
