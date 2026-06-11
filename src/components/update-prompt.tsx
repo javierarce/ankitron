@@ -45,6 +45,18 @@ export function UpdatePrompt() {
     };
   }, []);
 
+  // While the dialog is up, lock the page behind it so the scroll wheel only
+  // scrolls the release notes (which have their own overflow) instead of the
+  // content showing through the backdrop.
+  useEffect(() => {
+    if (phase === "idle") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [phase]);
+
   async function install() {
     if (!update) return;
     setPhase("installing");
@@ -90,7 +102,7 @@ export function UpdatePrompt() {
               {update?.currentVersion}).
             </p>
             {update?.body ? (
-              <div className="mb-4 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-foreground/10 bg-foreground/5 p-3 text-sm text-foreground/70">
+              <div className="mb-4 max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap rounded-lg border border-foreground/10 bg-foreground/5 p-3 text-sm text-foreground/70">
                 {update.body}
               </div>
             ) : null}
