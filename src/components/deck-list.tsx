@@ -103,7 +103,7 @@ function SingleDecksCard({
   return (
     <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title="Single decks" />
-      <div className="divide-y divide-foreground/5">
+      <div className="divide-y divide-foreground/10">
         {decks.map((deck) => (
           <Link
             key={deck}
@@ -132,7 +132,7 @@ function DueGroupCard({
   return (
     <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title={root} />
-      <div className="divide-y divide-foreground/5">
+      <div className="divide-y divide-foreground/10">
         <Link
           data-nav-item
           to={`/decks/${encodeURIComponent(root)}/study`}
