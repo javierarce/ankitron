@@ -109,7 +109,7 @@ function SingleDecksCard({
             key={deck}
             data-nav-item
             to={`/decks/${encodeURIComponent(deck)}/study`}
-            className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+            className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
           >
             <span className="font-medium">{deck}</span>
             <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
@@ -136,7 +136,7 @@ function DueGroupCard({
         <Link
           data-nav-item
           to={`/decks/${encodeURIComponent(root)}/study`}
-          className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5"
+          className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
         >
           <span className="font-medium">All decks</span>
           <DueCountsBadges due={dueCounts[root]} showTooltip={false} />
@@ -151,7 +151,7 @@ function DueGroupCard({
               key={deck}
               data-nav-item
               to={`/decks/${encodeURIComponent(deck)}/study`}
-              className="flex items-center justify-between gap-3 py-3 pl-8 pr-4 transition-colors hover:bg-foreground/5"
+              className="flex items-center justify-between gap-3 py-3 pl-8 pr-4 bg-clip-padding transition-colors hover:bg-foreground/5"
             >
               <span className="font-medium">
                 {subPrefix && (
