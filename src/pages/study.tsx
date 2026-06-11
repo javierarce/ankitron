@@ -123,7 +123,7 @@ export function StudyPage() {
       } else if (e.key === "h" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         navigate(`/decks/${encodeURIComponent(deckName)}`);
-      } else if ((e.key === "z" && !e.metaKey && !e.ctrlKey && !e.altKey) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) {
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         handleUndo();
       }

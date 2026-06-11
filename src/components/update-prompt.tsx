@@ -87,10 +87,10 @@ export function UpdatePrompt() {
             <h3 className="mb-2 text-lg font-semibold">Update available</h3>
             <p className="mb-3 text-sm text-foreground/70">
               AnkiTron {update?.version} is available (you have{" "}
-              {update?.currentVersion}). Install it now? The app will restart.
+              {update?.currentVersion}).
             </p>
             {update?.body ? (
-              <div className="mb-4 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-foreground/10 bg-foreground/5 p-3 text-xs text-foreground/70">
+              <div className="mb-4 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-foreground/10 bg-foreground/5 p-3 text-sm text-foreground/70">
                 {update.body}
               </div>
             ) : null}
