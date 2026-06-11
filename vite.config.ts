@@ -27,6 +27,11 @@ export default defineConfig({
     ],
   },
   server: {
+    // Tauri's devUrl is hardcoded to :5173. Fail loudly if it's taken (e.g. a
+    // stale dev server from another checkout) instead of silently falling back
+    // to another port — otherwise the Tauri window loads the wrong app.
+    port: 5173,
+    strictPort: true,
     proxy: {
       "/api/anki": {
         target: "http://127.0.0.1:8765",
