@@ -29,6 +29,12 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, project structure, and the release process.
 
+## Disclaimer
+
+AnkiTron is an unofficial third-party app and is not affiliated with the official Anki project or Ankitects Pty Ltd.
+
+Use at your own risk. The developer is not responsible for any data loss or synchronization errors with your AnkiWeb account.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).

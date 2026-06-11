@@ -46,7 +46,16 @@ export function StudyPage() {
 
   const loadCurrentCard = useCallback(async () => {
     try {
-      const result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+      let result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+      // A foreign card here usually means the reviewer queue is stale —
+      // changeDeck writes raw SQL, so moving the current card to another deck
+      // leaves it queued. Rebuild the queues and re-enter review once before
+      // concluding the session is over.
+      if (result?.deckName && !isCardInDeck(result.deckName, deckName)) {
+        await ankiFetch("reloadCollection").catch(() => {});
+        await ankiFetch("guiDeckReview", { name: deckName });
+        result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+      }
       // Anki's "current card" is collection-wide; never show a card that
       // belongs to another deck (or its breadcrumb would mismatch the card).
       if (!result || (result.deckName && !isCardInDeck(result.deckName, deckName))) {
@@ -191,6 +200,17 @@ export function StudyPage() {
     await loadCurrentCard();
   }
 
+  async function handleAddSaved() {
+    setShowAddForm(false);
+    // Re-enter review so the freshly added card can join this session's queue.
+    try {
+      await ankiFetch("guiDeckReview", { name: deckName });
+    } catch {
+      // ignore
+    }
+    await loadCurrentCard();
+  }
+
   async function handleAnswer(ease: Ease) {
     setAnswering(true);
     try {
@@ -263,6 +283,7 @@ export function StudyPage() {
         <CardForm
           deckName={deckName}
           onClose={() => setShowAddForm(false)}
+          onSaved={handleAddSaved}
         />
       )}
 
@@ -271,6 +292,7 @@ export function StudyPage() {
           deckName={deckName}
           note={editingNote}
           onClose={handleEditClose}
+          onSaved={handleEditClose}
         />
       )}
 
