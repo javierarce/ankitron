@@ -118,8 +118,18 @@ export function StudyPage() {
     }
     setReviewed((r) => Math.max(0, r - 1));
     setSyncStatus("idle");
+    // The undo reverts the collection, but the (hidden) reviewer defers its
+    // own refresh until focused — guiCurrentCard would keep returning the
+    // already-advanced card. Re-enter review to rebuild the queue; the
+    // collection is back in its pre-answer state, so the undone card is
+    // served again.
+    try {
+      await ankiFetch("guiDeckReview", { name: deckName });
+    } catch {
+      // ignore — loadCurrentCard will surface any real failure
+    }
     await loadCurrentCard();
-  }, [completed, reviewed, loadCurrentCard]);
+  }, [completed, reviewed, deckName, loadCurrentCard]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
