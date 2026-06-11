@@ -103,7 +103,27 @@ fn main() {
         // Managed so the `ensure_anki` command can reach the same state and
         // keep the spawned Anki process alive for the app's lifetime.
         .manage(anki_state)
-        .setup(move |_app| {
+        .setup(move |app| {
+            // Replace the native About panel with an in-app dialog so it can
+            // show credits with a clickable link. macOS only — other
+            // platforms have no default menu bar.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, MenuItem, MenuItemKind};
+
+                let handle = app.handle();
+                let menu = Menu::default(handle)?;
+                if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.first() {
+                    let about =
+                        MenuItem::with_id(handle, "about", "About AnkiTron", true, None::<&str>)?;
+                    if let Some(native_about) = app_menu.items()?.first() {
+                        app_menu.remove(native_about)?;
+                    }
+                    app_menu.prepend(&about)?;
+                }
+                app.set_menu(menu)?;
+            }
+
             // Spawn Anki in background during startup
             tauri::async_runtime::spawn(async move {
                 if !ensure_anki_running(&startup_state).await {
@@ -112,6 +132,12 @@ fn main() {
             });
 
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "about" {
+                use tauri::Emitter;
+                let _ = app.emit("show-about", ());
+            }
         })
         .on_window_event(move |_window, event| {
             if let tauri::WindowEvent::Destroyed = event {

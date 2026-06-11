@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
+import { AboutDialog } from "@/components/about-dialog";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { HeaderNav } from "@/components/header-nav";
@@ -56,6 +57,7 @@ export function Layout() {
           </div>
         </div>
         <UpdatePrompt />
+        <AboutDialog />
       </>
     );
   }
@@ -84,6 +86,7 @@ export function Layout() {
       </main>
       <CommandPalette />
       <UpdatePrompt />
+      <AboutDialog />
     </>
   );
 }

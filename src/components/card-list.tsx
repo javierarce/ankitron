@@ -3,6 +3,7 @@ import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVerti
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
+import { MoveCardDialog } from "./move-card-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { useVimNav } from "@/hooks/use-vim-nav";
 
@@ -49,11 +50,13 @@ function CardMenu({
   note,
   isSuspended,
   onToggleSuspend,
+  onMove,
   onDelete,
 }: {
   note: Note;
   isSuspended: boolean;
   onToggleSuspend: () => void;
+  onMove: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -99,6 +102,15 @@ function CardMenu({
           <button
             onClick={() => {
               setOpen(false);
+              onMove();
+            }}
+            className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
+          >
+            Move to deck&hellip;
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false);
               onDelete();
             }}
             className="w-full px-3 py-1.5 text-left text-sm text-red-500 hover:bg-foreground/5 transition-colors"
@@ -115,18 +127,21 @@ interface CardListProps {
   deckName: string;
   notes: Note[];
   suspendedCardIds?: number[];
+  /** Called after cards are suspended or unsuspended, so the parent can refresh due counts. */
+  onSuspendChange?: () => void;
 }
 
-export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
+export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }: CardListProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [movingNote, setMovingNote] = useState<Note | null>(null);
   const [suspended, setSuspended] = useState<Set<number>>(() => new Set(suspendedCardIds ?? []));
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const hasDialog = showAddForm || !!editingNote || !!deletingNote;
+  const hasDialog = showAddForm || !!editingNote || !!deletingNote || !!movingNote;
 
   useVimNav({ back: "/", enabled: !hasDialog });
 
@@ -194,6 +209,7 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
         }
         return next;
       });
+      onSuspendChange?.();
     } catch {
       // silently fail
     }
@@ -316,6 +332,7 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
                     note={note}
                     isSuspended={noteSuspended}
                     onToggleSuspend={() => handleToggleSuspend(note)}
+                    onMove={() => setMovingNote(note)}
                     onDelete={() => setDeletingNote(note)}
                   />
                 </div>
@@ -334,6 +351,14 @@ export function CardList({ deckName, notes, suspendedCardIds }: CardListProps) {
           deckName={deckName}
           note={editingNote}
           onClose={() => setEditingNote(null)}
+        />
+      )}
+
+      {movingNote && (
+        <MoveCardDialog
+          note={movingNote}
+          currentDeck={deckName}
+          onClose={() => setMovingNote(null)}
         />
       )}
 

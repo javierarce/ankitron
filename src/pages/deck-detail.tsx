@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { DangerZone } from "@/components/danger-zone";
@@ -16,6 +16,24 @@ export function DeckDetailPage() {
   const [due, setDue] = useState<DueCounts>({ new: 0, learn: 0, review: 0 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshDue = useCallback(async () => {
+    try {
+      const stats = await ankiFetch<
+        Record<string, { name: string; new_count: number; learn_count: number; review_count: number }>
+      >("getDeckStats", { decks: [deckName] });
+      const deckStats = Object.values(stats)[0];
+      if (deckStats) {
+        setDue({
+          new: deckStats.new_count ?? 0,
+          learn: deckStats.learn_count ?? 0,
+          review: deckStats.review_count ?? 0,
+        });
+      }
+    } catch {
+      // keep the previous counts
+    }
+  }, [deckName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,18 +61,8 @@ export function DeckDetailPage() {
           setSuspendedCardIds(allCardIds.filter((_, i) => results[i]));
         }
 
-        const stats = await ankiFetch<
-          Record<string, { name: string; new_count: number; learn_count: number; review_count: number }>
-        >("getDeckStats", { decks: [deckName] });
         if (cancelled) return;
-        const deckStats = Object.values(stats)[0];
-        if (deckStats) {
-          setDue({
-            new: deckStats.new_count ?? 0,
-            learn: deckStats.learn_count ?? 0,
-            review: deckStats.review_count ?? 0,
-          });
-        }
+        await refreshDue();
       } catch {
         if (!cancelled) setError("Could not load cards. Make sure Anki is running.");
       } finally {
@@ -64,7 +72,7 @@ export function DeckDetailPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [deckName]);
+  }, [deckName, refreshDue]);
 
   if (loading) {
     return (
@@ -102,7 +110,12 @@ export function DeckDetailPage() {
       {error ? (
         <p className="text-red-500">{error}</p>
       ) : (
-        <CardList deckName={deckName} notes={notes} suspendedCardIds={suspendedCardIds} />
+        <CardList
+          deckName={deckName}
+          notes={notes}
+          suspendedCardIds={suspendedCardIds}
+          onSuspendChange={refreshDue}
+        />
       )}
 
       <DeckSettings deckName={deckName} />

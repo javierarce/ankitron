@@ -315,6 +315,8 @@ export function StudyCard({
             : undefined
         }
         className={`study-card-body group relative rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+          availableLanguages.length > 0 ? "has-voice-selection " : ""
+        }${
           !isRevealed && !typed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >

@@ -12,6 +12,11 @@ interface CardFormProps {
   deckName: string;
   note?: Note;
   onClose: () => void;
+  /**
+   * Called after a successful save instead of reloading the page. The
+   * callback owns closing the form and refreshing whatever is on screen.
+   */
+  onSaved?: () => void;
 }
 
 function isClozeNote(note: Note): boolean {
@@ -27,7 +32,7 @@ function hasClozePattern(html: string): boolean {
   return /\{\{c\d+::.*?\}\}/.test(text);
 }
 
-export function CardForm({ deckName, note, onClose }: CardFormProps) {
+export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
   const noteFields = note?.fields ?? {};
 
   function extractValue(field: unknown): string {
@@ -79,7 +84,24 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [decks, setDecks] = useState<string[]>([deckName]);
+  const [targetDeck, setTargetDeck] = useState(deckName);
+
   const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    let cancelled = false;
+    ankiFetch<string[]>("deckNames")
+      .then((names) => {
+        if (cancelled) return;
+        setDecks(names.includes(deckName) ? names : [deckName, ...names]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, deckName]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -170,16 +192,30 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
             tags: tags.join(" "),
           });
         }
+        if (targetDeck !== deckName) {
+          let cardIds = note.cards ?? [];
+          if (cardIds.length === 0) {
+            cardIds = await ankiFetch<number[]>("findCards", {
+              query: `nid:${note.noteId}`,
+            });
+          }
+          if (cardIds.length > 0) {
+            await ankiFetch("changeDeck", { cards: cardIds, deck: targetDeck });
+            // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
+            // active reviewer doesn't keep serving the moved card.
+            await ankiFetch("reloadCollection").catch(() => {});
+          }
+        }
       } else {
         const noteData = isClozeForm
           ? {
-              deckName,
+              deckName: targetDeck,
               modelName,
               fields: { Text: clozeText, "Back Extra": backExtra },
               tags,
             }
           : {
-              deckName,
+              deckName: targetDeck,
               modelName,
               fields: { Front: front, Back: back },
               tags,
@@ -196,8 +232,12 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
           await ankiFetch("deleteNotes", { notes: [note.noteId] });
         }
       }
-      onClose();
-      window.location.reload();
+      if (onSaved) {
+        onSaved();
+      } else {
+        onClose();
+        window.location.reload();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save card");
     } finally {
@@ -333,6 +373,30 @@ export function CardForm({ deckName, note, onClose }: CardFormProps) {
             </label>
             <TagInput tags={tags} onChange={setTags} />
           </div>
+
+          {isEdit && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                Deck
+              </label>
+              <select
+                value={targetDeck}
+                onChange={(e) => setTargetDeck(e.target.value)}
+                className="w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+              >
+                {decks.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+              {targetDeck !== deckName && (
+                <p className="mt-1 text-xs text-foreground/50">
+                  The card will be moved to {targetDeck} when you save.
+                </p>
+              )}
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
