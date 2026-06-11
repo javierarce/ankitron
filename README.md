@@ -10,9 +10,10 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 
 - Browse all decks with due-card counts
 - Create, edit, and delete cards (Basic and Cloze note types)
+- Move cards between decks
 - See and manage card tags
 - JSON import/export — edit decks offline and re-import them to update existing notes or add new ones
-- Undo the last review with `z` (or `Cmd`/`Ctrl-Z`) during study
+- Undo the last review with `Cmd`/`Ctrl-Z` during study
 - Light/dark theme toggle with system preference detection
 
 ## Prerequisites
