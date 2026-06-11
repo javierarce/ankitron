@@ -11,7 +11,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Full history + tags so the release-notes step can diff against the
+      # previous tag.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: pnpm/action-setup@v4
         with:
@@ -92,6 +97,31 @@ jobs:
           mv "$DMG" "$CLEAN"
           gh release delete-asset "${{ github.ref_name }}" "$(basename "$DMG")" --yes || true
           gh release upload "${{ github.ref_name }}" "$CLEAN" --clobber
+
+      # Build release notes from the commit subjects since the previous tag and
+      # write them to BOTH the GitHub release body and latest.json's `notes`
+      # field, so the in-app updater (Update.body) shows what changed. Version-
+      # bump commits (e.g. "0.15.0") are filtered out.
+      - name: Generate and attach release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          RANGE="${TAG}"
+          [ -n "$PREV" ] && RANGE="${PREV}..${TAG}"
+          NOTES=$(git log --no-merges --pretty='- %s' "$RANGE" \
+            | grep -vE '^- [0-9]+\.[0-9]+\.[0-9]+$' || true)
+          [ -z "$NOTES" ] && NOTES="- Maintenance release."
+          printf '%s\n' "$NOTES" > notes.md
+          echo "---- release notes ----"; cat notes.md
+          # GitHub release body
+          gh release edit "$TAG" --notes-file notes.md
+          # latest.json `notes` so the updater can display them
+          gh release download "$TAG" -p latest.json -O latest.json --clobber
+          jq --rawfile n notes.md '.notes = $n' latest.json > latest.tmp
+          mv latest.tmp latest.json
+          gh release upload "$TAG" latest.json --clobber
 
       # Everything signed + notarized: flip the draft to a public release.
       - name: Publish release
