@@ -55,6 +55,11 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
           # APPLE_API_KEY_PATH is exported by the previous step.
+          # Tauri updater signing (minisign): signs the .app.tar.gz so installed
+          # apps can verify an update is genuinely ours. With these set,
+          # tauri-action also generates and uploads latest.json to the release.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}

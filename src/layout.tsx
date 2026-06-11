@@ -5,12 +5,15 @@ import { CommandPalette } from "@/components/command-palette";
 import { HeaderNav } from "@/components/header-nav";
 import { SyncButton } from "@/components/sync-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useUpdater } from "@/hooks/use-updater";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function Layout() {
   const [ankiReady, setAnkiReady] = useState(!isTauri);
+
+  useUpdater();
 
   useEffect(() => {
     if (!isTauri) return;

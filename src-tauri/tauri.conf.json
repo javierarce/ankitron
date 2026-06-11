@@ -30,6 +30,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,6 +46,12 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU5MDM2MTQ3MjUzM0MzRUYKUldUdnd6TWxSMkVEV1JPN1dRajVmeEJSNjBiZVFJR2JUdUVwS0kzTXA1c3ZJcWtKalphajM5QTEK",
+      "endpoints": [
+        "https://github.com/javierarce/ankitron/releases/latest/download/latest.json"
+      ]
     }
   }
 }

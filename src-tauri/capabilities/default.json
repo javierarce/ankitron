@@ -6,6 +6,8 @@
     "core:default",
     "core:window:allow-start-dragging",
     "shell:allow-open",
-    "os:default"
+    "os:default",
+    "updater:default",
+    "process:default"
   ]
 }
