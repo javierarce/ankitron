@@ -1,7 +1,8 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
+import { storeAudioFile } from "@/lib/audio";
 
 interface CardEditorProps {
   content: string;
@@ -48,6 +49,42 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       editor.chain().focus().setImage({ src: url }).run();
     }
   }, [editor]);
+
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const [attachingAudio, setAttachingAudio] = useState(false);
+
+  const handleAudioFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      // Reset so picking the same file again re-triggers onChange.
+      e.target.value = "";
+      if (!file || !editor) return;
+      setAttachingAudio(true);
+      try {
+        // The file lands in Anki's media folder, so it syncs to AnkiWeb and
+        // mobile along with the note.
+        const filename = await storeAudioFile(file);
+        // insertContent routes text through tr.insertText, which applies the
+        // marks active at the cursor — attaching right after formatted text
+        // would wrap the tag in <strong>/<em>. Empty storedMarks ([], not
+        // null) override that lookup for this transaction.
+        editor
+          .chain()
+          .focus()
+          .command(({ tr }) => {
+            tr.setStoredMarks([]);
+            return true;
+          })
+          .insertContent(`[sound:${filename}] `)
+          .run();
+      } catch {
+        window.alert("Could not attach the audio file. Make sure Anki is running.");
+      } finally {
+        setAttachingAudio(false);
+      }
+    },
+    [editor]
+  );
 
   const insertCloze = useCallback(() => {
     if (!editor) return;
@@ -148,6 +185,23 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         >
           IMG
         </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => audioInputRef.current?.click()}
+          disabled={attachingAudio}
+          className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
+          title="Attach an audio file"
+        >
+          {attachingAudio ? "…" : "AUD"}
+        </button>
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={handleAudioFile}
+        />
         {clozeMode && (
           <button
             type="button"

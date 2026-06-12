@@ -12,10 +12,17 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 - Create, edit, and delete cards (Basic and Cloze note types)
 - Move cards between decks
 - See and manage card tags
+- Card audio: `[sound:…]` files play during study (automatically and via inline play buttons, `R` to replay), and audio files can be attached from the editor
 - JSON import/export — edit decks offline and re-import them to update existing notes or add new ones (see the [deck file format](docs/deck-file-format.md))
 - Undo the last review with `Cmd`/`Ctrl-Z` during study
 - Light/dark theme toggle with system preference detection
 - Navigate between decks using the command palette with `Cmd`/`Ctrl-K`
+
+## Why only two answer buttons?
+
+Anki shows four answer buttons (Again, Hard, Good, Easy), but AnkiTron deliberately shows two: **Fail** and **Pass**, mapped to Anki's Again and Good. Pass/fail grading is a long-standing practice among experienced Anki users, and the data supports it: an [analysis by an FSRS researcher](https://forums.ankiweb.net/t/pass-fail-grading-as-default/34147/120) across thousands of collections found no statistically significant difference in scheduling accuracy between two-button and four-button users.
+
+Two buttons also remove the most common grading mistake: pressing Hard when you actually forgot. Anki's schedulers treat Hard as a *pass* (recalled with hesitation), so misusing it inflates intervals — a [known enough problem](https://github.com/open-spaced-repetition/fsrs4anki/wiki) that the FSRS Helper add-on ships a remedy for it. With pass/fail, that mistake can't happen, and you spend your time recalling instead of deciding how well you recalled.
 
 ## Prerequisites
 

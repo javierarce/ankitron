@@ -39,6 +39,30 @@ body {
 }
 
 
+/* Inline play button rendered in place of Anki's [anki:play:…] markers
+   (see src/lib/audio.ts). Lives inside prose content, so it sizes off the
+   surrounding text. */
+.audio-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em;
+  height: 1.7em;
+  margin: 0 0.2em;
+  vertical-align: middle;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 9999px;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.audio-tag:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
 /* Tauri integration: hidden-inset title bar on macOS. The header becomes
    the draggable region; interactive children opt out via .app-no-drag. */
 html.tauri .app-header {
