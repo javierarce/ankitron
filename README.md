@@ -15,6 +15,7 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 - JSON import/export — edit decks offline and re-import them to update existing notes or add new ones
 - Undo the last review with `Cmd`/`Ctrl-Z` during study
 - Light/dark theme toggle with system preference detection
+- Navigate between decks using the command palette with `Cmd`/`Ctrl-K`
 
 ## Prerequisites
 
