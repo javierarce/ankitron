@@ -7,7 +7,12 @@ on:
 
 jobs:
   release:
-    runs-on: macos-latest
+    # macos-26 so the binary links against SDK 26: on macOS 26 hosts, apps
+    # built with older SDKs get the legacy title-bar appearance, where the
+    # traffic lights drift ~5px down after a system theme change (the
+    # trafficLightPosition inset is re-applied against a relaid-out title
+    # bar). New-SDK builds are immune.
+    runs-on: macos-26
     permissions:
       contents: write
     steps:
