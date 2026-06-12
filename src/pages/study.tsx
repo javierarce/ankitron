@@ -261,11 +261,9 @@ export function StudyPage() {
               ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
               : "No cards are due for review."}
           </p>
-          {reviewed > 0 && (
+          {reviewed > 0 && syncStatus === "error" && (
             <p className="mb-4 text-xs text-foreground/40">
-              {syncStatus === "syncing" && "Syncing with AnkiWeb\u2026"}
-              {syncStatus === "ok" && "Synced with AnkiWeb."}
-              {syncStatus === "error" && "Sync failed \u2014 try the Sync button."}
+              Sync failed &mdash; try the Sync button.
             </p>
           )}
           <a
