@@ -20,7 +20,7 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 ## Prerequisites
 
 1. [Anki desktop](https://apps.ankiweb.net).
-2. The [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on must be installed.
+2. [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on.
 
 ## Install (macOS)
 
