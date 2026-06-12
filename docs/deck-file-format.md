@@ -150,7 +150,7 @@ Save this as something like `spanish.json` and import it from AnkiTron.
 
 - **New notes** (no `noteId`) are always added.
 - **Notes with a `noteId`** that already exists in Anki are updated in place.
-  When you create cards by hand or with an LLM, leave `noteId` out so every note
+  When you create cards by hand, leave `noteId` out so every note
   is treated as new.
 - **Tags are merged**, not replaced — importing never removes tags a note
   already has in Anki.
