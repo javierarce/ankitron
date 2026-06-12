@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Ease, Note } from "@/lib/types";
+import { Ease, Note, NoteField } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { extractSoundFilenames } from "@/lib/audio";
 import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
 import { isCardInDeck } from "@/lib/deck";
 import { canUndo } from "@/lib/study";
@@ -18,6 +19,7 @@ interface CurrentCard {
   question: string;
   answer: string;
   deckName: string;
+  fields: Record<string, NoteField>;
 }
 
 export function StudyPage() {
@@ -43,6 +45,13 @@ export function StudyPage() {
   );
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
+
+  // The rendered HTML only carries [anki:play:…] placeholders; the filenames
+  // behind them live in the raw fields (see resolveCardAudio).
+  const sounds = useMemo(
+    () => (card ? extractSoundFilenames(card.fields ?? {}) : []),
+    [card]
+  );
 
   const loadCurrentCard = useCallback(async () => {
     try {
@@ -289,6 +298,7 @@ export function StudyPage() {
             onEdit={handleEdit}
             answering={answering}
             languages={languages}
+            sounds={sounds}
           />
         </div>
       )}

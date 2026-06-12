@@ -5,6 +5,7 @@ import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { stripSoundTags } from "@/lib/audio";
 import { useVimNav } from "@/hooks/use-vim-nav";
 
 function decodeHtml(html: string): string {
@@ -23,7 +24,7 @@ function decodeHtml(html: string): string {
 }
 
 function stripHtml(html: string): string {
-  return decodeHtml(html.replace(/<[^>]*>/g, "")).trim();
+  return decodeHtml(stripSoundTags(html).replace(/<[^>]*>/g, "")).trim();
 }
 
 function truncate(text: string, max: number): string {

@@ -6,6 +6,7 @@ import {
   setDeckLanguage,
   speak,
 } from "@/lib/deck-settings";
+import { getDeckAutoplay, setDeckAutoplay } from "@/lib/audio";
 
 interface DeckSettingsProps {
   deckName: string;
@@ -73,6 +74,30 @@ export function DeckSettings({ deckName }: DeckSettingsProps) {
     setLanguages(getDeckLanguages(deckName));
   }
 
+  // null while loading or when Anki is unreachable — the toggle stays disabled.
+  const [autoplay, setAutoplay] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDeckAutoplay(deckName).then((value) => {
+      if (!cancelled) setAutoplay(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deckName]);
+
+  async function handleAutoplayToggle() {
+    if (autoplay === null) return;
+    const next = !autoplay;
+    setAutoplay(next);
+    try {
+      await setDeckAutoplay(deckName, next);
+    } catch {
+      setAutoplay(!next);
+    }
+  }
+
   // Voices often load asynchronously; refresh the list when they arrive.
   useEffect(() => {
     if (!("speechSynthesis" in window)) return;
@@ -134,6 +159,25 @@ export function DeckSettings({ deckName }: DeckSettingsProps) {
           )}
         </div>
       )}
+
+      <div className="mt-6">
+        <label className="flex items-center gap-2 text-sm text-foreground/70">
+          <input
+            type="checkbox"
+            checked={autoplay ?? false}
+            disabled={autoplay === null}
+            onChange={handleAutoplayToggle}
+            className="accent-foreground"
+          />
+          Play card audio automatically during study
+        </label>
+        <p className="mt-1 text-xs text-foreground/40">
+          This is Anki&apos;s per-deck audio option, so it also applies when
+          studying in Anki itself and to decks sharing this deck&apos;s options
+          preset. Audio can always be played with the inline buttons or{" "}
+          <kbd>R</kbd>.
+        </p>
+      </div>
     </section>
   );
 }
