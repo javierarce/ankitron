@@ -19,6 +19,9 @@ function getNextClozeNumber(html: string): number {
 }
 
 export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEditorProps) {
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const [attachingAudio, setAttachingAudio] = useState(false);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -39,6 +42,36 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         class:
           "min-h-[100px] px-3 py-2 text-sm focus:outline-none prose prose-sm dark:prose-invert max-w-none",
       },
+      handleDrop: (view, event, _slice, moved) => {
+        // Let ProseMirror handle internal node drags (e.g. moving an image).
+        if (moved) return false;
+        const files = event.dataTransfer?.files;
+        const audio =
+          files && Array.from(files).find((f) => f.type.startsWith("audio/"));
+        if (!audio) return false;
+        event.preventDefault();
+        // Insert at the drop point rather than the cursor.
+        const dropPos =
+          view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ??
+          view.state.selection.from;
+        setAttachingAudio(true);
+        storeAudioFile(audio)
+          .then((filename) => {
+            // schema.text() with no marks keeps the [sound:] tag out of any
+            // bold/italic formatting active at the drop position.
+            const pos = Math.min(dropPos, view.state.doc.content.size);
+            const node = view.state.schema.text(`[sound:${filename}] `);
+            view.dispatch(view.state.tr.insert(pos, node));
+            view.focus();
+          })
+          .catch(() => {
+            window.alert(
+              "Could not attach the audio file. Make sure Anki is running."
+            );
+          })
+          .finally(() => setAttachingAudio(false));
+        return true;
+      },
     },
   });
 
@@ -49,9 +82,6 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       editor.chain().focus().setImage({ src: url }).run();
     }
   }, [editor]);
-
-  const audioInputRef = useRef<HTMLInputElement>(null);
-  const [attachingAudio, setAttachingAudio] = useState(false);
 
   const handleAudioFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
