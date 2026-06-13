@@ -305,6 +305,18 @@ export function StudyCard({
 
   const splitAnswer = useMemo(() => splitAnkiAnswer(cleanedAnswer), [cleanedAnswer]);
 
+  // For a non-typed cloze the part before `<hr id=answer>` is the revealed
+  // sentence (cloze word filled in) — show it as its own section. A Basic
+  // card's front re-renders identically to the question, so skip it there to
+  // avoid duplicating the question section.
+  const isClozeReveal = useMemo(
+    () =>
+      !typed &&
+      splitAnswer.front.trim() !== "" &&
+      splitAnswer.front.trim() !== question.trim(),
+    [typed, splitAnswer.front, question]
+  );
+
   const expectedAnswer = useMemo(
     () => (typed ? extractExpectedClozeAnswer(question, answer) : ""),
     [typed, question, answer]
@@ -496,7 +508,8 @@ export function StudyCard({
           </div>
         ) : (
           <div key="content">
-            <div className="rounded-t-xl border-b border-foreground/10 bg-foreground/[0.03] px-8 py-6">
+            {/* Section 1 — question (gray background) */}
+            <div className="rounded-t-xl bg-foreground/[0.03] px-8 py-6">
               <HtmlContent
                 html={
                   typed
@@ -506,9 +519,12 @@ export function StudyCard({
                 className="prose prose-sm dark:prose-invert max-w-none"
               />
             </div>
-            <div className="study-answer prose prose-sm dark:prose-invert max-w-none px-8 py-6">
-            {typed && (
-              <>
+
+            {/* Section 2 — the revealed word or sentence. Each section after
+               the first carries a full-width top border so the dividers run
+               edge to edge across the card. */}
+            {typed ? (
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-3">
                 {typedDiff ? (
                   typedDiff.correct ? (
                     <div className="flex justify-center">
@@ -557,11 +573,21 @@ export function StudyCard({
                     <span className="text-foreground/70">{submittedValue || <em className="text-foreground/30">(nothing)</em>}</span>
                   </div>
                 )}
-                <hr />
-              </>
+              </div>
+            ) : (
+              isClozeReveal && (
+                <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-6">
+                  <HtmlContent html={splitAnswer.front} />
+                </div>
+              )
             )}
-            <HtmlContent html={splitAnswer.back} />
-            </div>
+
+            {/* Section 3 — back of the card */}
+            {splitAnswer.back.trim() && (
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-6">
+                <HtmlContent html={splitAnswer.back} />
+              </div>
+            )}
           </div>
         )}
       </div>
