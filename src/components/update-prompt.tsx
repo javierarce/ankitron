@@ -45,6 +45,20 @@ export function UpdatePrompt() {
     };
   }, []);
 
+  // The Settings "Check for updates" button does its own check() and hands
+  // any found update here, so the install flow lives in one place.
+  useEffect(() => {
+    function onManual(e: Event) {
+      const found = (e as CustomEvent<Update>).detail;
+      if (found) {
+        setUpdate(found);
+        setPhase("available");
+      }
+    }
+    window.addEventListener("update-available", onManual);
+    return () => window.removeEventListener("update-available", onManual);
+  }, []);
+
   // While the dialog is up, lock the page behind it so the scroll wheel only
   // scrolls the release notes (which have their own overflow) instead of the
   // content showing through the backdrop.

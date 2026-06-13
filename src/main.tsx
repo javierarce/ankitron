@@ -6,19 +6,24 @@ import { HomePage } from "./pages/home";
 import { DecksPage } from "./pages/decks";
 import { DeckDetailPage } from "./pages/deck-detail";
 import { StudyPage } from "./pages/study";
+import { SettingsPage } from "./pages/settings";
+import { ThemeProvider } from "./lib/theme";
 import "./app/globals.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<HomePage />} />
-          <Route path="decks" element={<DecksPage />} />
-          <Route path="decks/:deckName" element={<DeckDetailPage />} />
-          <Route path="decks/:deckName/study" element={<StudyPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<HomePage />} />
+            <Route path="decks" element={<DecksPage />} />
+            <Route path="decks/:deckName" element={<DeckDetailPage />} />
+            <Route path="decks/:deckName/study" element={<StudyPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   </StrictMode>,
 );

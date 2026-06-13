@@ -270,10 +270,19 @@ export function StudyPage() {
               ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
               : "No cards are due for review."}
           </p>
+          {reviewed > 0 && syncStatus === "syncing" && (
+            <p className="mb-4 text-xs text-foreground/40">Syncing&hellip;</p>
+          )}
           {reviewed > 0 && syncStatus === "error" && (
-            <p className="mb-4 text-xs text-foreground/40">
-              Sync failed &mdash; try the Sync button.
-            </p>
+            <div className="mb-4 flex flex-col items-center gap-2">
+              <p className="text-xs text-foreground/40">Sync failed.</p>
+              <button
+                onClick={() => setSyncStatus("idle")}
+                className="rounded-md border border-foreground/15 px-3 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+              >
+                Retry sync
+              </button>
+            </div>
           )}
           <a
             href="/"
