@@ -17,6 +17,23 @@ export function Layout() {
   const [startupMsg, setStartupMsg] = useState("Starting Anki…");
 
   useEffect(() => {
+    // With the webview's native drag-drop disabled, the browser default for a
+    // file dropped anywhere is to navigate to it — replacing the app with a
+    // bare media/file viewer. Suppress that default window-wide. The editor's
+    // own drop handler sits deeper in the DOM and fires first, so we don't stop
+    // propagation — only the default navigation.
+    const prevent = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isTauri) return;
 
     document.documentElement.classList.add("tauri");
