@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTheme, type Theme } from "@/lib/theme-context";
 import { useUpdate } from "@/components/update-context";
+import { ankiFetch } from "@/lib/anki-fetch";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 type CheckState = "idle" | "checking" | "uptodate" | "error";
+type SyncState = "idle" | "syncing" | "ok" | "error";
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -13,6 +15,8 @@ export function SettingsPage() {
   const [version, setVersion] = useState("");
   const [check, setCheck] = useState<CheckState>("idle");
   const [checkError, setCheckError] = useState("");
+  const [sync, setSync] = useState<SyncState>("idle");
+  const [syncError, setSyncError] = useState("");
 
   useEffect(() => {
     if (!isTauri) return;
@@ -20,6 +24,19 @@ export function SettingsPage() {
       getVersion().then(setVersion).catch(() => {})
     );
   }, []);
+
+  async function syncNow() {
+    if (sync === "syncing") return;
+    setSync("syncing");
+    setSyncError("");
+    try {
+      await ankiFetch("sync");
+      setSync("ok");
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : String(e));
+      setSync("error");
+    }
+  }
 
   async function checkForUpdates() {
     if (!isTauri || check === "checking") return;
@@ -64,6 +81,24 @@ export function SettingsPage() {
             <option value="dark">Dark</option>
             <option value="system">System</option>
           </select>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 py-4">
+          <div>
+            <p className="text-sm font-medium">Sync</p>
+            <p className="text-xs text-foreground/50">
+              AnkiTron syncs on launch and after studying.
+              {sync === "ok" && " — synced"}
+              {sync === "error" && ` — ${syncError}`}
+            </p>
+          </div>
+          <button
+            onClick={syncNow}
+            disabled={sync === "syncing"}
+            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-60"
+          >
+            {sync === "syncing" ? "Syncing…" : "Sync now"}
+          </button>
         </div>
 
         {isTauri && (
