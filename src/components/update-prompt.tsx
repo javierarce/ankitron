@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
-import type { Update } from "@tauri-apps/plugin-updater";
+import { useUpdate } from "@/components/update-context";
 
-const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-type Phase = "idle" | "available" | "installing" | "error";
+type Phase = "available" | "installing" | "error";
 
 /**
- * On launch, checks for an app update. If one is available, shows a plain React
- * modal asking the user to install. On confirm: download + install, stop the
- * Anki we spawned cleanly, then relaunch.
+ * The install dialog for a pending update. It only renders once opened (from
+ * the <UpdateBadge /> in the header) — the launch check lives in
+ * <UpdateProvider /> and no longer pops this up on its own. On confirm:
+ * download + install, stop the Anki we spawned cleanly, then relaunch.
  *
  * Deliberately a React modal rather than a native dialog: window.confirm()
  * doesn't work in the webview, and the dialog plugin's ask() depends on a
@@ -18,58 +16,42 @@ type Phase = "idle" | "available" | "installing" | "error";
  * failing silently.
  */
 export function UpdatePrompt() {
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [update, setUpdate] = useState<Update | null>(null);
+  const { update, isDialogOpen, closeDialog } = useUpdate();
+  const [phase, setPhase] = useState<Phase>("available");
   const [errMsg, setErrMsg] = useState("");
 
-  useEffect(() => {
-    if (!isTauri) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { check } = await import("@tauri-apps/plugin-updater");
-        const found = await check();
-        if (!found || cancelled) return;
-        setUpdate(found);
-        setPhase("available");
-      } catch (err) {
-        // Offline, no release yet, or a transient fetch error — never block
-        // startup on the update check.
-        console.warn("Update check failed:", err);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // The Settings "Check for updates" button does its own check() and hands
-  // any found update here, so the install flow lives in one place.
-  useEffect(() => {
-    function onManual(e: Event) {
-      const found = (e as CustomEvent<Update>).detail;
-      if (found) {
-        setUpdate(found);
-        setPhase("available");
-      }
-    }
-    window.addEventListener("update-available", onManual);
-    return () => window.removeEventListener("update-available", onManual);
-  }, []);
+  // Close and reset to the offer view, so a prior install error doesn't linger
+  // when the user taps the badge to reopen the dialog.
+  function dismiss() {
+    closeDialog();
+    setPhase("available");
+  }
 
   // While the dialog is up, lock the page behind it so the scroll wheel only
   // scrolls the release notes (which have their own overflow) instead of the
   // content showing through the backdrop.
   useEffect(() => {
-    if (phase === "idle") return;
+    if (!isDialogOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [phase]);
+  }, [isDialogOpen]);
+
+  // Esc closes the dialog — but not mid-install, where the buttons are disabled
+  // too, since you can't cancel a download/relaunch partway through.
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && phase !== "installing") {
+        closeDialog();
+        setPhase("available");
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isDialogOpen, phase, closeDialog]);
 
   async function install() {
     if (!update) return;
@@ -90,7 +72,7 @@ export function UpdatePrompt() {
     }
   }
 
-  if (phase === "idle") return null;
+  if (!isDialogOpen || !update) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
@@ -101,7 +83,7 @@ export function UpdatePrompt() {
             <p className="mb-4 break-words text-sm text-red-500">{errMsg}</p>
             <div className="flex justify-end">
               <button
-                onClick={() => setPhase("idle")}
+                onClick={dismiss}
                 className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
               >
                 Close
@@ -112,17 +94,17 @@ export function UpdatePrompt() {
           <>
             <h3 className="mb-2 text-lg font-semibold">Update available</h3>
             <p className="mb-3 text-sm text-foreground/70">
-              AnkiTron {update?.version} is available (you have{" "}
-              {update?.currentVersion}).
+              AnkiTron {update.version} is available (you have{" "}
+              {update.currentVersion}).
             </p>
-            {update?.body ? (
+            {update.body ? (
               <div className="mb-4 max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap rounded-lg border border-foreground/10 bg-foreground/5 p-3 text-sm text-foreground/70">
                 {update.body}
               </div>
             ) : null}
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setPhase("idle")}
+                onClick={dismiss}
                 disabled={phase === "installing"}
                 className="rounded-lg px-4 py-2 text-sm text-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
               >
