@@ -5,14 +5,26 @@ import { ArrowUp } from "@phosphor-icons/react/dist/ssr/ArrowUp";
 import { ArrowDown } from "@phosphor-icons/react/dist/ssr/ArrowDown";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
+import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { CardForm } from "./card-form";
 
 type Mode = "search" | "pickDeckForCard";
 
+type ActionId = "new-card" | "settings";
+
 type Item =
-  | { kind: "action"; label: string }
+  | { kind: "action"; id: ActionId; label: string }
   | { kind: "deck"; label: string; deck: string };
+
+const ACTIONS: { id: ActionId; label: string; keywords: string }[] = [
+  { id: "new-card", label: "New card…", keywords: "new card add card" },
+  {
+    id: "settings",
+    label: "Settings",
+    keywords: "settings preferences theme appearance dark light update version",
+  },
+];
 
 export function CommandPalette() {
   const navigate = useNavigate();
@@ -78,11 +90,20 @@ export function CommandPalette() {
     ? decks.filter((d) => d.toLowerCase().includes(q))
     : decks;
 
-  const showAction =
-    mode === "search" && (q === "" || "new card".includes(q) || "add card".includes(q));
+  const filteredActions =
+    mode === "search"
+      ? ACTIONS.filter(
+          (a) =>
+            q === "" || a.label.toLowerCase().includes(q) || a.keywords.includes(q)
+        )
+      : [];
 
   const items: Item[] = [
-    ...(showAction ? [{ kind: "action" as const, label: "New card\u2026" }] : []),
+    ...filteredActions.map((a) => ({
+      kind: "action" as const,
+      id: a.id,
+      label: a.label,
+    })),
     ...filteredDecks.map((d) => ({ kind: "deck" as const, label: d, deck: d })),
   ];
 
@@ -95,6 +116,11 @@ export function CommandPalette() {
     const item = items[index];
     if (!item) return;
     if (item.kind === "action") {
+      if (item.id === "settings") {
+        navigate("/settings");
+        close();
+        return;
+      }
       setMode("pickDeckForCard");
       setQuery("");
       return;
@@ -173,7 +199,7 @@ export function CommandPalette() {
                   const isSelected = i === selected;
                   return (
                     <button
-                      key={item.kind === "action" ? `action:${item.label}` : `deck:${item.deck}`}
+                      key={item.kind === "action" ? `action:${item.id}` : `deck:${item.deck}`}
                       type="button"
                       data-index={i}
                       onClick={() => activate(i)}
@@ -183,9 +209,12 @@ export function CommandPalette() {
                       }`}
                     >
                       <span className="flex items-center gap-2">
-                        {item.kind === "action" && (
-                          <Plus size={14} weight="bold" className="text-foreground/60" />
-                        )}
+                        {item.kind === "action" &&
+                          (item.id === "settings" ? (
+                            <Gear size={14} weight="bold" className="text-foreground/60" />
+                          ) : (
+                            <Plus size={14} weight="bold" className="text-foreground/60" />
+                          ))}
                         {item.kind === "action" ? (
                           <span className="font-medium">{item.label}</span>
                         ) : (
@@ -194,7 +223,13 @@ export function CommandPalette() {
                       </span>
                       {isSelected && (
                         <span className="text-xs text-foreground/40">
-                          {item.kind === "action" ? "new card" : mode === "pickDeckForCard" ? "add here" : "go"}
+                          {item.kind === "action"
+                            ? item.id === "settings"
+                              ? "open"
+                              : "new card"
+                            : mode === "pickDeckForCard"
+                              ? "add here"
+                              : "go"}
                         </span>
                       )}
                     </button>
