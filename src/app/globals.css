@@ -183,10 +183,11 @@ select {
   color: #fbbf24; /* amber-400 */
 }
 
-/* Card answer dividers: unify the hairline across React-rendered <hr>,
-   Anki's <hr id=answer>, and any prose default — Tailwind Typography styles
-   hr via :where() (zero specificity) plus utility ordering quirks otherwise
-   give us inconsistent rules between the two hrs in a typed-cloze answer. */
+/* Card answer dividers: unify the hairline for any <hr> that ships inside
+   rendered card HTML (e.g. Anki's <hr id=answer> or hrs in Back Extra) so it
+   matches the section dividers. Tailwind Typography styles hr via :where()
+   (zero specificity) plus utility ordering quirks otherwise give inconsistent
+   rules. Section-to-section dividers use border-t on the section wrappers. */
 .study-answer hr,
 .study-answer hr#answer {
   border: 0;
