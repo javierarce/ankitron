@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme, type Theme } from "@/lib/theme-context";
+import { useUpdate } from "@/components/update-context";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -8,6 +9,7 @@ type CheckState = "idle" | "checking" | "uptodate" | "error";
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme();
+  const { update, openDialog, presentUpdate } = useUpdate();
   const [version, setVersion] = useState("");
   const [check, setCheck] = useState<CheckState>("idle");
   const [checkError, setCheckError] = useState("");
@@ -27,11 +29,9 @@ export function SettingsPage() {
       const { check: checkUpdate } = await import("@tauri-apps/plugin-updater");
       const found = await checkUpdate();
       if (found) {
-        // Hand the update off to <UpdatePrompt>, which owns the
-        // download/install/relaunch flow and its error handling.
-        window.dispatchEvent(
-          new CustomEvent("update-available", { detail: found })
-        );
+        // Hand the update to the provider, which records it (so this button
+        // becomes "Update now") and opens the install dialog.
+        presentUpdate(found);
         setCheck("idle");
       } else {
         setCheck("uptodate");
@@ -77,11 +77,15 @@ export function SettingsPage() {
               </p>
             </div>
             <button
-              onClick={checkForUpdates}
+              onClick={update ? openDialog : checkForUpdates}
               disabled={check === "checking"}
               className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-60"
             >
-              {check === "checking" ? "Checking…" : "Check for updates"}
+              {update
+                ? "Update now"
+                : check === "checking"
+                  ? "Checking…"
+                  : "Check for updates"}
             </button>
           </div>
         )}

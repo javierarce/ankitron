@@ -5,6 +5,7 @@ import { AboutDialog } from "@/components/about-dialog";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { HeaderNav } from "@/components/header-nav";
+import { UpdateBadge } from "@/components/update-badge";
 import { UpdatePrompt } from "@/components/update-prompt";
 import { ankiFetch } from "@/lib/anki-fetch";
 
@@ -84,6 +85,7 @@ export function Layout() {
             <HeaderNav />
           </div>
           <div className="app-no-drag flex items-center gap-2">
+            <UpdateBadge />
             <Link
               to="/settings"
               title="Settings"
