@@ -62,6 +62,11 @@ Notes from the annotated tag's message become the release notes and the
 updater's "what's new" text. If you cut a lightweight tag (no message), the
 workflow falls back to commit subjects since the previous tag instead.
 
+> [!NOTE]
+> Keep the notes **plain text**. The in-app updater renders them as raw text,
+> so Markdown like `**bold**` or `##` shows up literally. Use a plain headline
+> line and `-` bullets.
+
 ### 5. Watch the build
 
 ```bash
@@ -97,6 +102,11 @@ certainly cut before the bump commit — see the warning at the top.
 
 ### 8. Edit release notes (optional)
 
+This updates the GitHub release body only (not `latest.json`), so prefer
+getting the tag message right in step 4. Keep it plain text — see the note there.
+
 ```bash
-gh release edit vX.Y.Z --notes "## AnkiTron X.Y.Z …"
+gh release edit vX.Y.Z --notes "AnkiTron X.Y.Z — short title
+- Did X
+- Fixed Y"
 ```
