@@ -119,13 +119,12 @@ summary {
   background-color: color-mix(in srgb, var(--foreground) 2%, transparent);
 }
 
-/* A focus ring, drawn regardless of selection, so the keyboard-focused card is
-   identifiable even within a set of selected rows (where the fill alone can't
-   distinguish it). */
+/* A blue border on the focused card, applied regardless of selection, so the
+   keyboard-focused card is identifiable even within a set of selected rows
+   (where the fill alone can't distinguish it). */
 [data-note-id]:focus,
 [data-note-id]:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--foreground) 60%, transparent);
-  outline-offset: 1px;
+  border-color: #3b82f6;
 }
 
 /* Native selects render their chevron inconsistently across platforms

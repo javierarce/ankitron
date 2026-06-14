@@ -190,9 +190,15 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
         }
         return;
       }
-      if (e.key === "Escape" && selectedIds.size > 0) {
-        e.preventDefault();
-        setSelectedIds(new Set());
+      if (e.key === "Escape") {
+        const focusedRow = (document.activeElement as HTMLElement | null)?.closest?.(
+          "[data-note-id]"
+        ) as HTMLElement | null;
+        if (selectedIds.size > 0 || focusedRow) {
+          e.preventDefault();
+          if (selectedIds.size > 0) setSelectedIds(new Set());
+          focusedRow?.blur();
+        }
         return;
       }
       if (e.key === " " || e.code === "Space") {
@@ -211,6 +217,40 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
           });
           lastSelectedRef.current = id;
         }
+        return;
+      }
+      if (
+        (e.key === "J" || e.key === "K") &&
+        e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
+        // Shift + j/k: move focus like j/k, extending the selection along the
+        // way. (vim-nav handles lowercase j/k; Shift yields J/K, so there's no
+        // double-handling.)
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-note-id]")
+        );
+        if (rows.length === 0) return;
+        const dir = e.key === "J" ? 1 : -1;
+        const active = document.activeElement as HTMLElement | null;
+        const focusIdx = active ? rows.indexOf(active) : -1;
+        const fromIdx = focusIdx < 0 ? (dir === 1 ? -1 : rows.length) : focusIdx;
+        const targetIdx = Math.min(rows.length - 1, Math.max(0, fromIdx + dir));
+        e.preventDefault();
+        const ids: number[] = [];
+        if (focusIdx >= 0) ids.push(Number(rows[focusIdx].dataset.noteId));
+        ids.push(Number(rows[targetIdx].dataset.noteId));
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.add(id);
+          return next;
+        });
+        const targetEl = rows[targetIdx];
+        targetEl.focus();
+        targetEl.scrollIntoView({ block: "nearest" });
+        lastSelectedRef.current = Number(targetEl.dataset.noteId);
         return;
       }
       if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
