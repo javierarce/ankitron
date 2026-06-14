@@ -111,6 +111,23 @@ summary {
   background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
+/* Card rows carry their own selected state (a stronger border + fill). Keep the
+   keyboard-focus highlight light so a focused-but-unselected card reads as merely
+   hovered, not selected. */
+[data-note-id]:focus:not([data-selected]),
+[data-note-id]:focus-visible:not([data-selected]) {
+  background-color: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
+/* A blue border on the focused card, applied regardless of selection, so the
+   keyboard-focused card is identifiable even within a set of selected rows
+   (where the fill alone can't distinguish it). */
+[data-note-id]:focus,
+[data-note-id]:focus-visible {
+  border-color: #3b82f6;
+  outline: 3px solid rgba(0, 0, 255, 0.1);
+}
+
 /* Native selects render their chevron inconsistently across platforms
    and at slightly-off positions; replace it with a vertically centered
    chevron we control. */

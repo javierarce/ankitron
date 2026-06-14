@@ -96,8 +96,10 @@ export async function fetchTodayStudyStats(
 }
 
 /**
- * Total number of cards in each deck, including its subdecks (Anki's `deck:`
- * search matches descendants), fetched in parallel.
+ * Number of notes in each deck, including its subdecks (Anki's `deck:` search
+ * matches descendants), fetched in parallel. We count notes rather than cards so
+ * the figure matches the deck detail page, which lists one row per note — a
+ * "Basic (and reversed card)" note is one row here, not two.
  */
 export async function fetchAllCardCounts(
   deckNames: string[],
@@ -105,7 +107,7 @@ export async function fetchAllCardCounts(
   const results = await Promise.all(
     deckNames.map(async (deck) => {
       try {
-        const ids = await ankiFetch<number[]>("findCards", {
+        const ids = await ankiFetch<number[]>("findNotes", {
           query: `deck:"${deck}"`,
         });
         return { deck, count: ids.length };

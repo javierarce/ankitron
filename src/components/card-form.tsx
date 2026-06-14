@@ -3,11 +3,25 @@ import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { formatDeckPath } from "@/lib/deck";
+import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
 import { basicFieldKeys } from "@/lib/note-fields";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 
-type CardType = "Basic" | "Cloze" | "ClozeTyped";
+type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
+
+// Anki's stock note type that generates a forward and a reverse card per note.
+const BASIC_REVERSED_MODEL = "Basic (and reversed card)";
+
+const CARD_TYPE_OPTIONS: { value: CardType; label: string }[] = [
+  { value: "Basic", label: "Basic" },
+  { value: "BasicReversed", label: "Basic (and reversed)" },
+  { value: "Cloze", label: "Cloze" },
+  { value: "ClozeTyped", label: "Cloze (typed)" },
+];
+
+// "Create a new deck" sentinel. The leading space is deliberate: Anki trims
+// deck names, so no real deck path can equal this, keeping it collision-proof.
+const NEW_DECK = " new";
 
 interface CardFormProps {
   deckName: string;
@@ -51,7 +65,9 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
       ? "ClozeTyped"
       : isClozeNote(note)
         ? "Cloze"
-        : "Basic"
+        : note.modelName === BASIC_REVERSED_MODEL
+          ? "BasicReversed"
+          : "Basic"
     : "Basic";
 
   const [cardType, setCardType] = useState<CardType>(initialType);
@@ -70,6 +86,10 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
     setCardType(newType);
   }
 
+  // Basic and "Basic (and reversed)" share the same Front/Back editor; only
+  // the cloze types swap in the Text/Back Extra fields.
+  const isBasicForm = cardType === "Basic" || cardType === "BasicReversed";
+
   // Basic fields, keyed by Anki's field `order` (see basicFieldKeys).
   const { frontKey, backKey } = basicFieldKeys(noteFields);
   const [front, setFront] = useState(extractValue(noteFields[frontKey]));
@@ -87,6 +107,10 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
 
   const [decks, setDecks] = useState<string[]>([deckName]);
   const [targetDeck, setTargetDeck] = useState(deckName);
+  const [newDeck, setNewDeck] = useState("");
+
+  const creatingDeck = targetDeck === NEW_DECK;
+  const destDeck = creatingDeck ? newDeck.trim() : targetDeck;
 
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -96,7 +120,8 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
     ankiFetch<string[]>("deckNames")
       .then((names) => {
         if (cancelled) return;
-        setDecks(names.includes(deckName) ? names : [deckName, ...names]);
+        const all = names.includes(deckName) ? names : [deckName, ...names];
+        setDecks([...all].sort(compareDeckPaths));
       })
       .catch(() => {});
     return () => {
@@ -140,9 +165,9 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const isClozeForm = cardType === "Cloze" || cardType === "ClozeTyped";
+    const isClozeForm = !isBasicForm;
 
-    if (cardType === "Basic") {
+    if (isBasicForm) {
       if (!front.trim() || !back.trim()) {
         setError("Front and back are required.");
         return;
@@ -158,6 +183,11 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
       }
     }
 
+    if (creatingDeck && !destDeck) {
+      setError("Enter a name for the new deck.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -166,12 +196,18 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
         await ensureClozeTypedModel();
       }
 
+      if (creatingDeck) {
+        await ankiFetch("createDeck", { deck: destDeck });
+      }
+
       const modelName =
         cardType === "ClozeTyped"
           ? CLOZE_TYPED_MODEL
           : cardType === "Cloze"
             ? "Cloze"
-            : "Basic";
+            : cardType === "BasicReversed"
+              ? BASIC_REVERSED_MODEL
+              : "Basic";
 
       if (isEdit && cardType === initialType) {
         if (isClozeForm) {
@@ -193,7 +229,7 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
             tags: tags.join(" "),
           });
         }
-        if (targetDeck !== deckName) {
+        if (destDeck !== deckName) {
           let cardIds = note.cards ?? [];
           if (cardIds.length === 0) {
             cardIds = await ankiFetch<number[]>("findCards", {
@@ -201,7 +237,7 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
             });
           }
           if (cardIds.length > 0) {
-            await ankiFetch("changeDeck", { cards: cardIds, deck: targetDeck });
+            await ankiFetch("changeDeck", { cards: cardIds, deck: destDeck });
             // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
             // active reviewer doesn't keep serving the moved card.
             await ankiFetch("reloadCollection").catch(() => {});
@@ -210,13 +246,13 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
       } else {
         const noteData = isClozeForm
           ? {
-              deckName: targetDeck,
+              deckName: destDeck,
               modelName,
               fields: { Text: clozeText, "Back Extra": backExtra },
               tags,
             }
           : {
-              deckName: targetDeck,
+              deckName: destDeck,
               modelName,
               fields: { Front: front, Back: back },
               tags,
@@ -294,44 +330,24 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
           }}
           className="space-y-4"
         >
-          <div className="flex gap-1 rounded-lg bg-foreground/5 p-1">
-            <button
-              type="button"
-              onClick={() => changeCardType("Basic")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                cardType === "Basic"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-foreground/50 hover:text-foreground/70"
-              }`}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+              Type
+            </label>
+            <select
+              value={cardType}
+              onChange={(e) => changeCardType(e.target.value as CardType)}
+              className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
             >
-              Basic
-            </button>
-            <button
-              type="button"
-              onClick={() => changeCardType("Cloze")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                cardType === "Cloze"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-foreground/50 hover:text-foreground/70"
-              }`}
-            >
-              Cloze
-            </button>
-            <button
-              type="button"
-              onClick={() => changeCardType("ClozeTyped")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                cardType === "ClozeTyped"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-foreground/50 hover:text-foreground/70"
-              }`}
-              title="Cloze with a typed answer"
-            >
-              Cloze (typed)
-            </button>
+              {CARD_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {cardType === "Basic" ? (
+          {isBasicForm ? (
             <>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground/70">
@@ -383,17 +399,31 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
               <select
                 value={targetDeck}
                 onChange={(e) => setTargetDeck(e.target.value)}
-                className="w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+                className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
               >
                 {decks.map((d) => (
                   <option key={d} value={d}>
-                    {formatDeckPath(d)}
+                    {/* Indent by depth and show only the leaf so the list reads
+                        as a tree instead of exposing "::" paths. The indent uses
+                        non-breaking spaces — the browser strips leading ASCII
+                        spaces from <option> labels. */}
+                    {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
                   </option>
                 ))}
+                <option value={NEW_DECK}>+ New deck…</option>
               </select>
-              {targetDeck !== deckName && (
+              {creatingDeck && (
+                <input
+                  type="text"
+                  value={newDeck}
+                  onChange={(e) => setNewDeck(e.target.value)}
+                  placeholder="New deck name"
+                  className="mt-2 w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+                />
+              )}
+              {destDeck && destDeck !== deckName && (
                 <p className="mt-1 text-xs text-foreground/50">
-                  The card will be moved to {formatDeckPath(targetDeck)} when you
+                  The card will be moved to {formatDeckPath(destDeck)} when you
                   save.
                 </p>
               )}
