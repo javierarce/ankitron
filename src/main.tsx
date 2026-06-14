@@ -5,6 +5,7 @@ import { Layout } from "./layout";
 import { HomePage } from "./pages/home";
 import { DecksPage } from "./pages/decks";
 import { DeckDetailPage } from "./pages/deck-detail";
+import { DeckSettingsPage } from "./pages/deck-settings";
 import { StudyPage } from "./pages/study";
 import { SettingsPage } from "./pages/settings";
 import { ThemeProvider } from "./lib/theme";
@@ -21,6 +22,7 @@ createRoot(document.getElementById("root")!).render(
               <Route index element={<HomePage />} />
               <Route path="decks" element={<DecksPage />} />
               <Route path="decks/:deckName" element={<DeckDetailPage />} />
+              <Route path="decks/:deckName/settings" element={<DeckSettingsPage />} />
               <Route path="decks/:deckName/study" element={<StudyPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>

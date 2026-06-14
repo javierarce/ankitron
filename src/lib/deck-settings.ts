@@ -25,6 +25,25 @@ export function setDeckLanguage(
   else localStorage.setItem(key, lang);
 }
 
+/**
+ * Move each deck's stored language settings to its new name after a rename.
+ * Takes the from → to pairs produced by `renameDeck` so subdecks are carried
+ * along with their parent.
+ */
+export function migrateDeckLanguages(
+  renames: { from: string; to: string }[],
+): void {
+  if (typeof window === "undefined") return;
+  for (const { from, to } of renames) {
+    for (const makeKey of [PRIMARY_KEY, SECONDARY_KEY]) {
+      const value = localStorage.getItem(makeKey(from));
+      if (value === null) continue;
+      localStorage.setItem(makeKey(to), value);
+      localStorage.removeItem(makeKey(from));
+    }
+  }
+}
+
 export function stripHtml(html: string): string {
   if (typeof document === "undefined") return html;
   const div = document.createElement("div");

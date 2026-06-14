@@ -123,45 +123,47 @@ export function DeckSettings({ deckName }: DeckSettingsProps) {
   }
 
   return (
-    <section className="mt-16 border-t border-foreground/10 pt-6">
-      <h2 className="mb-1 text-sm font-semibold">Deck Settings</h2>
-      <p className="mb-4 text-sm text-foreground/50">
-        Pick up to two languages. The speaker button on cards will let you
-        choose between them.
-      </p>
-
-      {!supported ? (
-        <p className="text-sm text-foreground/40">
-          Speech synthesis isn&apos;t available in this environment.
+    <>
+      <div className="py-4">
+        <p className="text-sm font-medium">Languages</p>
+        <p className="mb-3 mt-1 text-xs text-foreground/50">
+          Pick up to two languages. The speaker button on cards will let you
+          choose between them.
         </p>
-      ) : (
-        <div className="space-y-3">
-          <LanguageRow
-            label="Primary"
-            slot="primary"
-            value={languages.primary ?? ""}
-            options={options}
-            onChange={handleChange}
-            onTest={handleTest}
-          />
-          <LanguageRow
-            label="Secondary"
-            slot="secondary"
-            value={languages.secondary ?? ""}
-            options={options}
-            onChange={handleChange}
-            onTest={handleTest}
-          />
-          {options.length === 0 && (
-            <p className="text-xs text-foreground/40">
-              No voices installed yet.
-            </p>
-          )}
-        </div>
-      )}
 
-      <div className="mt-6">
-        <label className="flex items-center gap-2 text-sm text-foreground/70">
+        {!supported ? (
+          <p className="text-sm text-foreground/40">
+            Speech synthesis isn&apos;t available in this environment.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <LanguageRow
+              label="Primary"
+              slot="primary"
+              value={languages.primary ?? ""}
+              options={options}
+              onChange={handleChange}
+              onTest={handleTest}
+            />
+            <LanguageRow
+              label="Secondary"
+              slot="secondary"
+              value={languages.secondary ?? ""}
+              options={options}
+              onChange={handleChange}
+              onTest={handleTest}
+            />
+            {options.length === 0 && (
+              <p className="text-xs text-foreground/40">
+                No voices installed yet.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="py-4">
+        <label className="flex items-center gap-2 text-sm font-medium">
           <input
             type="checkbox"
             checked={autoplay ?? false}
@@ -171,14 +173,14 @@ export function DeckSettings({ deckName }: DeckSettingsProps) {
           />
           Play card audio automatically during study
         </label>
-        <p className="mt-1 text-xs text-foreground/40">
+        <p className="mt-1 text-xs text-foreground/50">
           This is Anki&apos;s per-deck audio option, so it also applies when
           studying in Anki itself and to decks sharing this deck&apos;s options
           preset. Audio can always be played with the inline buttons or{" "}
           <kbd>R</kbd>.
         </p>
       </div>
-    </section>
+    </>
   );
 }
 
