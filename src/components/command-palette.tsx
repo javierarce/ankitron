@@ -7,6 +7,7 @@ import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass"
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { formatDeckPath } from "@/lib/deck";
 import { CardForm } from "./card-form";
 
 type Mode = "search" | "pickDeckForCard";
@@ -267,7 +268,9 @@ export function CommandPalette() {
 function DeckRow({ name, query }: { name: string; query: string }) {
   const parts = name.split("::");
   const leaf = parts[parts.length - 1];
-  const prefix = parts.length > 1 ? parts.slice(0, -1).join("::") + "::" : null;
+  // Show the parent path with " / " instead of Anki's "::" separator.
+  const prefix =
+    parts.length > 1 ? parts.slice(0, -1).join(" / ") + " / " : null;
 
   if (!query) {
     return (
@@ -278,7 +281,7 @@ function DeckRow({ name, query }: { name: string; query: string }) {
     );
   }
 
-  return <span>{highlight(name, query)}</span>;
+  return <span>{highlight(formatDeckPath(name), query)}</span>;
 }
 
 function highlight(text: string, query: string) {

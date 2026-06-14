@@ -3,6 +3,7 @@ import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { formatDeckPath } from "@/lib/deck";
 import { basicFieldKeys } from "@/lib/note-fields";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 
@@ -386,13 +387,14 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
               >
                 {decks.map((d) => (
                   <option key={d} value={d}>
-                    {d}
+                    {formatDeckPath(d)}
                   </option>
                 ))}
               </select>
               {targetDeck !== deckName && (
                 <p className="mt-1 text-xs text-foreground/50">
-                  The card will be moved to {targetDeck} when you save.
+                  The card will be moved to {formatDeckPath(targetDeck)} when you
+                  save.
                 </p>
               )}
             </div>

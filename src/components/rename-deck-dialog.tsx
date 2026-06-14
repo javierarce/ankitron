@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { deckLeaf, deckParent, joinDeck } from "@/lib/deck";
+import { deckLeaf, deckParent, formatDeckPath, joinDeck } from "@/lib/deck";
 
 interface RenameDeckDialogProps {
   deckName: string;
@@ -59,8 +59,10 @@ export function RenameDeckDialog({
           {parent ? (
             <>
               Renames this deck inside{" "}
-              <strong className="text-foreground/70">{parent}</strong>. Subdecks
-              and their cards come along.
+              <strong className="text-foreground/70">
+                {formatDeckPath(parent)}
+              </strong>
+              . Subdecks and their cards come along.
             </>
           ) : (
             <>Subdecks and their cards come along with the deck.</>

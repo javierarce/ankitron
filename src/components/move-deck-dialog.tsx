@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { deckLeaf, deckParent, isCardInDeck, joinDeck } from "@/lib/deck";
+import {
+  compareDeckPaths,
+  deckDepth,
+  deckLeaf,
+  deckParent,
+  isCardInDeck,
+  joinDeck,
+} from "@/lib/deck";
 
 interface MoveDeckDialogProps {
   deckName: string;
@@ -12,6 +19,9 @@ interface MoveDeckDialogProps {
 }
 
 const TOP_LEVEL = ""; // sentinel for "no parent"
+// "Create a new parent" sentinel. The leading space is deliberate: Anki trims
+// deck names, so no real deck path can equal this, keeping it collision-proof.
+const NEW_PARENT = " new";
 
 export function MoveDeckDialog({
   deckName,
@@ -23,7 +33,8 @@ export function MoveDeckDialog({
   const leaf = deckLeaf(deckName);
   const currentParent = deckParent(deckName);
   const [decks, setDecks] = useState<string[]>([]);
-  const [parent, setParent] = useState(currentParent);
+  const [choice, setChoice] = useState(currentParent);
+  const [newParent, setNewParent] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -51,12 +62,14 @@ export function MoveDeckDialog({
     () =>
       decks
         .filter((d) => !isCardInDeck(d, deckName) && d !== "Default")
-        .sort((a, b) => a.localeCompare(b)),
+        .sort(compareDeckPaths),
     [decks, deckName],
   );
 
+  const creating = choice === NEW_PARENT;
+  const parent = creating ? newParent.trim() : choice;
   const unchanged = parent === currentParent;
-  const disabled = moving || unchanged;
+  const disabled = moving || unchanged || (creating && !newParent.trim());
 
   function submit() {
     if (disabled) return;
@@ -80,8 +93,8 @@ export function MoveDeckDialog({
 
         <label className="mb-1 block text-xs text-foreground/50">Move into</label>
         <select
-          value={parent}
-          onChange={(e) => setParent(e.target.value)}
+          value={choice}
+          onChange={(e) => setChoice(e.target.value)}
           disabled={moving}
           autoFocus
           className="w-full rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
@@ -89,10 +102,30 @@ export function MoveDeckDialog({
           <option value={TOP_LEVEL}>Top level (no parent)</option>
           {candidates.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {/* Indent by depth and show only the leaf so the list reads as a
+                  tree instead of exposing "::" paths. The indent uses
+                  non-breaking spaces — the browser strips leading ASCII spaces
+                  from <option> labels. */}
+              {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
             </option>
           ))}
+          <option value={NEW_PARENT}>+ New parent deck…</option>
         </select>
+
+        {creating && (
+          <input
+            type="text"
+            value={newParent}
+            onChange={(e) => setNewParent(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            placeholder="New parent deck name"
+            autoFocus
+            disabled={moving}
+            className="mt-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+          />
+        )}
 
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 

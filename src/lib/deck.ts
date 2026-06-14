@@ -25,6 +25,33 @@ export function joinDeck(parent: string, leaf: string): string {
   return parent ? `${parent}::${leaf}` : leaf;
 }
 
+/** Nesting depth — 0 for a top-level deck, 1 for its subdeck, and so on. */
+export function deckDepth(name: string): number {
+  return name.split("::").length - 1;
+}
+
+/** Render a deck path for humans: "Languages::Deutsch" → "Languages / Deutsch". */
+export function formatDeckPath(name: string): string {
+  return name.split("::").join(" / ");
+}
+
+/**
+ * Order decks as a tree: each deck immediately precedes its own subdecks, and
+ * siblings sort alphabetically. Comparing whole names alphabetically gets this
+ * wrong (e.g. "Spanish 2" would fall between "Spanish" and "Spanish::Verbs"),
+ * so compare segment by segment instead.
+ */
+export function compareDeckPaths(a: string, b: string): number {
+  const as = a.split("::");
+  const bs = b.split("::");
+  const n = Math.min(as.length, bs.length);
+  for (let i = 0; i < n; i++) {
+    const c = as[i].localeCompare(bs[i]);
+    if (c !== 0) return c;
+  }
+  return as.length - bs.length;
+}
+
 /** A single deck's old → new name as part of a rename. */
 export interface DeckRename {
   from: string;

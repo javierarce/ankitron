@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  compareDeckPaths,
+  deckDepth,
   deckLeaf,
   deckParent,
+  formatDeckPath,
   isCardInDeck,
   joinDeck,
   planDeckRename,
@@ -28,6 +31,37 @@ describe("deck path helpers", () => {
     for (const name of ["Spanish", "Spanish::Verbs", "a::b::c"]) {
       expect(joinDeck(deckParent(name), deckLeaf(name))).toBe(name);
     }
+  });
+
+  it("formats a path with ' / ' separators for display", () => {
+    expect(formatDeckPath("Spanish")).toBe("Spanish");
+    expect(formatDeckPath("Languages::Deutsch")).toBe("Languages / Deutsch");
+    expect(formatDeckPath("a::b::c")).toBe("a / b / c");
+  });
+
+  it("reports nesting depth", () => {
+    expect(deckDepth("Spanish")).toBe(0);
+    expect(deckDepth("Spanish::Verbs")).toBe(1);
+    expect(deckDepth("Spanish::Verbs::Irregular")).toBe(2);
+  });
+
+  it("orders decks as a tree, keeping subdecks under their parent", () => {
+    const sorted = [
+      "Spanish::Verbs",
+      "French",
+      "Spanish 2",
+      "Spanish",
+      "Spanish::Nouns",
+    ].sort(compareDeckPaths);
+    // "Spanish 2" is a separate top-level deck, so it must not slip between
+    // "Spanish" and its subdecks.
+    expect(sorted).toEqual([
+      "French",
+      "Spanish",
+      "Spanish::Nouns",
+      "Spanish::Verbs",
+      "Spanish 2",
+    ]);
   });
 });
 

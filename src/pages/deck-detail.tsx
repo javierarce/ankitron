@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { deckLeaf } from "@/lib/deck";
 import type { Note, DueCounts } from "@/lib/types";
 
 export function DeckDetailPage() {
@@ -84,7 +85,7 @@ export function DeckDetailPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">{deckName}</h1>
+        <h1 className="text-2xl font-bold">{deckLeaf(deckName)}</h1>
         <div className="flex items-center gap-2">
           <Link
             to={`/decks/${encodeURIComponent(deckName)}/settings`}

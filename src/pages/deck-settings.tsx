@@ -6,7 +6,7 @@ import { ImportExport } from "@/components/import-export";
 import { MoveDeckDialog } from "@/components/move-deck-dialog";
 import { RenameDeckDialog } from "@/components/rename-deck-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { deckLeaf, deckParent, renameDeck } from "@/lib/deck";
+import { deckLeaf, deckParent, formatDeckPath, renameDeck } from "@/lib/deck";
 import { migrateDeckLanguages } from "@/lib/deck-settings";
 import type { Note } from "@/lib/types";
 
@@ -109,7 +109,7 @@ export function DeckSettingsPage() {
           <div className="min-w-0">
             <p className="text-sm font-medium">Location</p>
             <p className="truncate text-xs text-foreground/50">
-              {parent || "Top level"}
+              {parent ? formatDeckPath(parent) : "Top level"}
             </p>
           </div>
           <button

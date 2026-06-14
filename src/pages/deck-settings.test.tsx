@@ -148,4 +148,40 @@ describe("DeckSettingsPage rename", () => {
       { replace: true },
     );
   });
+
+  it("moves the deck into a newly named parent", async () => {
+    vi.mocked(renameDeck).mockResolvedValue([
+      { from: "Spanish", to: "Languages::Spanish" },
+    ]);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Deck Settings" });
+    await user.click(screen.getByRole("button", { name: "Move" }));
+    await screen.findByRole("heading", { name: "Move Deck" });
+
+    // Choose "New parent deck…" and type a name for it.
+    await user.selectOptions(
+      screen.getByRole("combobox"),
+      screen.getByRole("option", { name: /New parent deck/ }),
+    );
+    await user.type(
+      screen.getByPlaceholderText("New parent deck name"),
+      "Languages",
+    );
+    const moveButtons = screen.getAllByRole("button", { name: "Move" });
+    await user.click(moveButtons[moveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Move Deck" }),
+      ).toBeNull();
+    });
+    expect(renameDeck).toHaveBeenCalledWith(
+      "Spanish",
+      "Languages::Spanish",
+      expect.any(Function),
+    );
+  });
 });
