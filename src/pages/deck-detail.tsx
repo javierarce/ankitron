@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
-import { DangerZone } from "@/components/danger-zone";
-import { DeckSettings } from "@/components/deck-settings";
-import { ImportExport } from "@/components/import-export";
 import { ankiFetch } from "@/lib/anki-fetch";
 import type { Note, DueCounts } from "@/lib/types";
 
@@ -89,9 +86,12 @@ export function DeckDetailPage() {
       <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{deckName}</h1>
         <div className="flex items-center gap-2">
-          {!error && notes && (
-            <ImportExport deckName={deckName} notes={notes} />
-          )}
+          <Link
+            to={`/decks/${encodeURIComponent(deckName)}/settings`}
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors"
+          >
+            Settings
+          </Link>
           {totalDue > 0 ? (
             <Link
               to={`/decks/${encodeURIComponent(deckName)}/study`}
@@ -117,10 +117,6 @@ export function DeckDetailPage() {
           onSuspendChange={refreshDue}
         />
       )}
-
-      <DeckSettings deckName={deckName} />
-
-      <DangerZone deckName={deckName} />
     </div>
   );
 }

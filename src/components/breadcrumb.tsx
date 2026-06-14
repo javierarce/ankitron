@@ -35,6 +35,11 @@ export function Breadcrumb() {
         label: "Study",
         href: `/decks/${segments[1]}/study`,
       });
+    } else if (segments[2] === "settings") {
+      crumbs.push({
+        label: "Settings",
+        href: `/decks/${segments[1]}/settings`,
+      });
     }
   }
 

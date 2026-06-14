@@ -134,7 +134,7 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
       <button
         onClick={handleExport}
         disabled={importing}
-        className="rounded-lg border border-foreground/15 px-3 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-60"
         title="Download a JSON file with all cards in this deck"
       >
         Export
@@ -142,7 +142,7 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={importing}
-        className="rounded-lg border border-foreground/15 px-3 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-60"
         title="Import cards from a JSON file"
       >
         {importing ? "Importing…" : "Import"}
