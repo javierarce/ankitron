@@ -84,7 +84,7 @@ export function UpdatePrompt() {
             <div className="flex justify-end">
               <button
                 onClick={dismiss}
-                className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+                className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
               >
                 Close
               </button>
@@ -113,7 +113,7 @@ export function UpdatePrompt() {
               <button
                 onClick={install}
                 disabled={phase === "installing"}
-                className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+                className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
               >
                 {phase === "installing" ? "Installing…" : "Install and restart"}
               </button>

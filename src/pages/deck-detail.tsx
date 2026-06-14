@@ -89,19 +89,19 @@ export function DeckDetailPage() {
         <div className="flex items-center gap-2">
           <Link
             to={`/decks/${encodeURIComponent(deckName)}/settings`}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors"
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
           >
             Settings
           </Link>
           {totalDue > 0 ? (
             <Link
               to={`/decks/${encodeURIComponent(deckName)}/study`}
-              className="rounded-lg border border-foreground/15 px-4 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors"
+              className="rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
             >
               Study ({totalDue})
             </Link>
           ) : (
-            <span className="rounded-lg border border-foreground/10 px-4 py-2 text-sm font-medium text-foreground/30 cursor-not-allowed">
+            <span className="rounded-lg border border-foreground/10 px-4 py-2 text-sm text-foreground/30 cursor-not-allowed">
               No cards due
             </span>
           )}

@@ -414,7 +414,7 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+              className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
             >
               {saving ? "Saving..." : isEdit ? "Update Card" : "Add Card"}
             </button>

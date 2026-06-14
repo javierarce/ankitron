@@ -95,7 +95,7 @@ export function SettingsPage() {
           <button
             onClick={syncNow}
             disabled={sync === "syncing"}
-            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-60"
+            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
           >
             {sync === "syncing" ? "Syncing…" : "Sync now"}
           </button>
@@ -114,7 +114,7 @@ export function SettingsPage() {
             <button
               onClick={update ? openDialog : checkForUpdates}
               disabled={check === "checking"}
-              className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-60"
+              className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
             >
               {update
                 ? "Update now"

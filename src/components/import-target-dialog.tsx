@@ -203,7 +203,7 @@ export function ImportTargetDialog({
           <button
             onClick={submit}
             disabled={submitDisabled}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {importing ? "Importing…" : "Import"}
           </button>

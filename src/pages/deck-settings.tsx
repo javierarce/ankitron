@@ -99,7 +99,7 @@ export function DeckSettingsPage() {
               setActionError(null);
               setShowRename(true);
             }}
-            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5"
           >
             Rename
           </button>
@@ -117,7 +117,7 @@ export function DeckSettingsPage() {
               setActionError(null);
               setShowMove(true);
             }}
-            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5"
           >
             Move
           </button>

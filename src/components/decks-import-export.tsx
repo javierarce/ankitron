@@ -124,7 +124,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       <button
         onClick={() => setShowExportPicker(true)}
         disabled={importing || decks.length === 0}
-        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Pick a deck and download it as JSON"
       >
         Export
@@ -132,7 +132,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={importing}
-        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Import cards from a JSON file"
       >
         {importing ? "Importing…" : "Import"}
@@ -255,7 +255,7 @@ function ExportPickerDialog({
           <button
             onClick={handleExport}
             disabled={working || !selected}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {working ? "Exporting…" : "Export"}
           </button>
