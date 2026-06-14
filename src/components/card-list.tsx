@@ -152,7 +152,6 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const lastSelectedRef = useRef<number | null>(null);
-  const hoveredIdRef = useRef<number | null>(null);
   const [bulkMoving, setBulkMoving] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -197,11 +196,13 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
         return;
       }
       if (e.key === " " || e.code === "Space") {
-        const activeId = (target?.closest("[data-note-id]") as HTMLElement | null)
-          ?.dataset.noteId;
-        const id = activeId != null ? Number(activeId) : hoveredIdRef.current;
-        if (id != null) {
+        // Only toggle the focused row. Falling back to the hovered row would
+        // hijack Space-to-scroll for mouse users, since the cursor usually
+        // rests over the list while reading.
+        const row = target?.closest("[data-note-id]") as HTMLElement | null;
+        if (row) {
           e.preventDefault();
+          const id = Number(row.dataset.noteId);
           setSelectedIds((prev) => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
@@ -482,14 +483,6 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
                 role="button"
                 tabIndex={0}
                 onClick={() => setEditingNote(note)}
-                onMouseEnter={() => {
-                  hoveredIdRef.current = note.noteId;
-                }}
-                onMouseLeave={() => {
-                  if (hoveredIdRef.current === note.noteId) {
-                    hoveredIdRef.current = null;
-                  }
-                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
