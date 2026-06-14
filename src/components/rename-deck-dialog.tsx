@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { deckLeaf, deckParent, joinDeck } from "@/lib/deck";
 
 interface RenameDeckDialogProps {
   deckName: string;
   onCancel: () => void;
+  /** Receives the full new deck name (parent path preserved). */
   onConfirm: (newName: string) => void;
   renaming: boolean;
   error: string | null;
@@ -15,7 +17,11 @@ export function RenameDeckDialog({
   renaming,
   error,
 }: RenameDeckDialogProps) {
-  const [name, setName] = useState(deckName);
+  // Only the deck's own name is editable; the parent path stays put (use Move to
+  // change it), so users never have to deal with "::".
+  const parent = deckParent(deckName);
+  const currentLeaf = deckLeaf(deckName);
+  const [leaf, setLeaf] = useState(currentLeaf);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -25,15 +31,19 @@ export function RenameDeckDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [renaming, onCancel]);
 
-  const trimmed = name.trim();
+  const trimmed = leaf.trim();
+  const hasSeparator = trimmed.includes("::");
   // A name that only differs by case is a no-op (Anki matches names
   // case-insensitively), so treat it like the unchanged name.
   const disabled =
-    renaming || !trimmed || trimmed.toLowerCase() === deckName.toLowerCase();
+    renaming ||
+    !trimmed ||
+    hasSeparator ||
+    trimmed.toLowerCase() === currentLeaf.toLowerCase();
 
   function submit() {
     if (disabled) return;
-    onConfirm(trimmed);
+    onConfirm(joinDeck(parent, trimmed));
   }
 
   return (
@@ -46,15 +56,21 @@ export function RenameDeckDialog({
       <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
         <h3 className="mb-1 text-lg font-semibold">Rename Deck</h3>
         <p className="mb-4 text-sm text-foreground/50">
-          Subdecks and their cards move along with the deck. Use{" "}
-          <code className="text-foreground/70">::</code> to nest it under another
-          deck.
+          {parent ? (
+            <>
+              Renames this deck inside{" "}
+              <strong className="text-foreground/70">{parent}</strong>. Subdecks
+              and their cards come along.
+            </>
+          ) : (
+            <>Subdecks and their cards come along with the deck.</>
+          )}
         </p>
 
         <input
           type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={leaf}
+          onChange={(e) => setLeaf(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
           }}
@@ -64,6 +80,12 @@ export function RenameDeckDialog({
           className="w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
         />
 
+        {hasSeparator && (
+          <p className="mt-2 text-xs text-foreground/50">
+            A deck name can&apos;t contain &ldquo;::&rdquo;. Use Move to put this
+            deck inside another.
+          </p>
+        )}
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
         <div className="mt-6 flex justify-end gap-3">

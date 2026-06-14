@@ -3,9 +3,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DangerZone } from "@/components/danger-zone";
 import { DeckSettings } from "@/components/deck-settings";
 import { ImportExport } from "@/components/import-export";
+import { MoveDeckDialog } from "@/components/move-deck-dialog";
 import { RenameDeckDialog } from "@/components/rename-deck-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { renameDeck } from "@/lib/deck";
+import { deckLeaf, deckParent, renameDeck } from "@/lib/deck";
 import { migrateDeckLanguages } from "@/lib/deck-settings";
 import type { Note } from "@/lib/types";
 
@@ -19,33 +20,32 @@ export function DeckSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Rename and Move both produce a new full deck name and run the same flow.
   const [showRename, setShowRename] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [renameError, setRenameError] = useState<string | null>(null);
+  const [showMove, setShowMove] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  async function handleRename(newName: string) {
-    setRenaming(true);
-    setRenameError(null);
+  async function applyRename(newName: string) {
+    setBusy(true);
+    setActionError(null);
     try {
       const renames = await renameDeck(deckName, newName, ankiFetch);
-      if (renames.length === 0) {
-        // No-op (e.g. a case-only change) — nothing moved, so stay put.
-        setShowRename(false);
-        setRenaming(false);
-        return;
-      }
-      migrateDeckLanguages(renames);
       // The destination is the same route, so this component reconciles in place
-      // rather than remounting — clear the dialog state ourselves or it stays
-      // stuck on "Renaming…" (which also blocks its Escape/backdrop dismissal).
+      // rather than remounting — clear dialog state ourselves or it stays stuck
+      // (which also blocks the dialog's Escape/backdrop dismissal).
       setShowRename(false);
-      setRenaming(false);
-      navigate(`/decks/${encodeURIComponent(newName.trim())}/settings`, {
+      setShowMove(false);
+      setBusy(false);
+      // No-op (e.g. a case-only change) — nothing moved, so stay put.
+      if (renames.length === 0) return;
+      migrateDeckLanguages(renames);
+      navigate(`/decks/${encodeURIComponent(newName)}/settings`, {
         replace: true,
       });
     } catch (err) {
-      setRenameError(err instanceof Error ? err.message : "Rename failed.");
-      setRenaming(false);
+      setActionError(err instanceof Error ? err.message : "Rename failed.");
+      setBusy(false);
     }
   }
 
@@ -78,6 +78,8 @@ export function DeckSettingsPage() {
     };
   }, [deckName]);
 
+  const parent = deckParent(deckName);
+
   return (
     <div className="mx-auto w-full max-w-lg">
       <h1 className="mb-6 text-xl font-semibold">Deck Settings</h1>
@@ -88,16 +90,36 @@ export function DeckSettingsPage() {
         <div className="flex items-center justify-between gap-4 py-4">
           <div className="min-w-0">
             <p className="text-sm font-medium">Deck name</p>
-            <p className="truncate text-xs text-foreground/50">{deckName}</p>
+            <p className="truncate text-xs text-foreground/50">
+              {deckLeaf(deckName)}
+            </p>
           </div>
           <button
             onClick={() => {
-              setRenameError(null);
+              setActionError(null);
               setShowRename(true);
             }}
             className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
           >
             Rename
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 py-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Location</p>
+            <p className="truncate text-xs text-foreground/50">
+              {parent || "Top level"}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setActionError(null);
+              setShowMove(true);
+            }}
+            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+          >
+            Move
           </button>
         </div>
 
@@ -121,10 +143,20 @@ export function DeckSettingsPage() {
       {showRename && (
         <RenameDeckDialog
           deckName={deckName}
-          renaming={renaming}
-          error={renameError}
+          renaming={busy}
+          error={actionError}
           onCancel={() => setShowRename(false)}
-          onConfirm={handleRename}
+          onConfirm={applyRename}
+        />
+      )}
+
+      {showMove && (
+        <MoveDeckDialog
+          deckName={deckName}
+          moving={busy}
+          error={actionError}
+          onCancel={() => setShowMove(false)}
+          onConfirm={applyRename}
         />
       )}
     </div>

@@ -8,6 +8,23 @@ export function isCardInDeck(cardDeck: string, studyDeck: string): boolean {
   return cardDeck === studyDeck || cardDeck.startsWith(studyDeck + "::");
 }
 
+/** The deck's own name — the segment after the last "::" (or the whole name). */
+export function deckLeaf(name: string): string {
+  const i = name.lastIndexOf("::");
+  return i === -1 ? name : name.slice(i + 2);
+}
+
+/** The parent path — everything before the last "::", or "" for a top-level deck. */
+export function deckParent(name: string): string {
+  const i = name.lastIndexOf("::");
+  return i === -1 ? "" : name.slice(0, i);
+}
+
+/** Join a parent path and a leaf into a full deck name ("" parent → top level). */
+export function joinDeck(parent: string, leaf: string): string {
+  return parent ? `${parent}::${leaf}` : leaf;
+}
+
 /** A single deck's old → new name as part of a rename. */
 export interface DeckRename {
   from: string;
