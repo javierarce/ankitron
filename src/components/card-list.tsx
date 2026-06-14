@@ -529,7 +529,7 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
                     setEditingNote(note);
                   }
                 }}
-                className={`group relative flex select-none items-center gap-3 rounded-lg border px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer transition-colors ${
+                className={`group relative flex select-none items-center gap-3 rounded-lg border px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer transition-[background-color] ${
                   selected
                     ? "border-foreground/40 bg-foreground/[0.05]"
                     : "border-foreground/10 hover:bg-foreground/[0.02]"

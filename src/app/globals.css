@@ -125,6 +125,7 @@ summary {
 [data-note-id]:focus,
 [data-note-id]:focus-visible {
   border-color: #3b82f6;
+  outline: 3px solid rgba(0, 0, 255, 0.1);
 }
 
 /* Native selects render their chevron inconsistently across platforms
