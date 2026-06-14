@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AllDecksList } from "@/components/all-decks-list";
 import { ankiFetch, fetchAllCardCounts } from "@/lib/anki-fetch";
 
@@ -8,30 +8,48 @@ export function DecksPage() {
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const fetchData = useCallback(async () => {
+    const deckNames = await ankiFetch<string[]>("deckNames");
+    const counts = deckNames.length
+      ? await fetchAllCardCounts(deckNames)
+      : {};
+    return { deckNames, counts };
+  }, []);
+
+  // Used by the list to refresh after a change (e.g. a card added via the menu).
+  const reload = useCallback(async () => {
+    try {
+      const { deckNames, counts } = await fetchData();
+      setDecks(deckNames);
+      setCardCounts(counts);
+      setHasError(false);
+    } catch {
+      setHasError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchData]);
+
   useEffect(() => {
     let cancelled = false;
-
     async function load() {
       try {
-        const deckNames = await ankiFetch<string[]>("deckNames");
+        const { deckNames, counts } = await fetchData();
         if (cancelled) return;
         setDecks(deckNames);
-
-        if (deckNames.length > 0) {
-          const counts = await fetchAllCardCounts(deckNames);
-          if (cancelled) return;
-          setCardCounts(counts);
-        }
+        setCardCounts(counts);
+        setHasError(false);
       } catch {
         if (!cancelled) setHasError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-
     load();
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -49,5 +67,7 @@ export function DecksPage() {
     );
   }
 
-  return <AllDecksList decks={decks} cardCounts={cardCounts} />;
+  return (
+    <AllDecksList decks={decks} cardCounts={cardCounts} onRefresh={reload} />
+  );
 }
