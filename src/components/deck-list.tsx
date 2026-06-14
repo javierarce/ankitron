@@ -144,20 +144,30 @@ function DueGroupCard({
         {decks.map((deck) => {
           const parts = deck.split("::");
           const leaf = parts[parts.length - 1];
+          // Show the path between the group root and the leaf, using " / " so
+          // users never see Anki's "::" separator.
           const subPrefix =
-            parts.length > 2 ? parts.slice(1, -1).join("::") + "::" : null;
+            parts.length > 2 ? parts.slice(1, -1).join(" / ") + " / " : null;
           return (
             <Link
               key={deck}
               data-nav-item
               to={`/decks/${encodeURIComponent(deck)}/study`}
-              className="flex items-center justify-between gap-3 py-3 pl-8 pr-4 bg-clip-padding transition-colors hover:bg-foreground/5"
+              className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
             >
-              <span className="font-medium">
-                {subPrefix && (
-                  <span className="text-foreground/40">{subPrefix}</span>
-                )}
-                {leaf}
+              <span className="flex items-center gap-2 font-medium">
+                {/* A short rule marks the row as a subdeck, replacing the
+                    left-indent so it reads clearly without Anki's "::" cue. */}
+                <span
+                  className="h-px w-4 shrink-0 bg-foreground/20"
+                  aria-hidden
+                />
+                <span>
+                  {subPrefix && (
+                    <span className="text-foreground/40">{subPrefix}</span>
+                  )}
+                  {leaf}
+                </span>
               </span>
               <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
             </Link>

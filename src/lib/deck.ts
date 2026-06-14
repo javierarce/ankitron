@@ -8,6 +8,50 @@ export function isCardInDeck(cardDeck: string, studyDeck: string): boolean {
   return cardDeck === studyDeck || cardDeck.startsWith(studyDeck + "::");
 }
 
+/** The deck's own name — the segment after the last "::" (or the whole name). */
+export function deckLeaf(name: string): string {
+  const i = name.lastIndexOf("::");
+  return i === -1 ? name : name.slice(i + 2);
+}
+
+/** The parent path — everything before the last "::", or "" for a top-level deck. */
+export function deckParent(name: string): string {
+  const i = name.lastIndexOf("::");
+  return i === -1 ? "" : name.slice(0, i);
+}
+
+/** Join a parent path and a leaf into a full deck name ("" parent → top level). */
+export function joinDeck(parent: string, leaf: string): string {
+  return parent ? `${parent}::${leaf}` : leaf;
+}
+
+/** Nesting depth — 0 for a top-level deck, 1 for its subdeck, and so on. */
+export function deckDepth(name: string): number {
+  return name.split("::").length - 1;
+}
+
+/** Render a deck path for humans: "Languages::Deutsch" → "Languages / Deutsch". */
+export function formatDeckPath(name: string): string {
+  return name.split("::").join(" / ");
+}
+
+/**
+ * Order decks as a tree: each deck immediately precedes its own subdecks, and
+ * siblings sort alphabetically. Comparing whole names alphabetically gets this
+ * wrong (e.g. "Spanish 2" would fall between "Spanish" and "Spanish::Verbs"),
+ * so compare segment by segment instead.
+ */
+export function compareDeckPaths(a: string, b: string): number {
+  const as = a.split("::");
+  const bs = b.split("::");
+  const n = Math.min(as.length, bs.length);
+  for (let i = 0; i < n; i++) {
+    const c = as[i].localeCompare(bs[i]);
+    if (c !== 0) return c;
+  }
+  return as.length - bs.length;
+}
+
 /** A single deck's old → new name as part of a rename. */
 export interface DeckRename {
   from: string;

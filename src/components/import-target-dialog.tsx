@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { formatDeckPath } from "@/lib/deck";
 import type { ExportedDeck } from "@/lib/import-export";
 
 type TargetMode = "current" | "existing" | "new";
@@ -102,7 +103,10 @@ export function ImportTargetDialog({
       >
         <h3 className="mb-1 text-lg font-semibold">Import into deck</h3>
         <p className="mb-4 text-sm text-foreground/50">
-          From <strong className="text-foreground/70">{parsed.deckName}</strong>{" "}
+          From{" "}
+          <strong className="text-foreground/70">
+            {formatDeckPath(parsed.deckName)}
+          </strong>{" "}
           · {parsed.notes.length}{" "}
           {parsed.notes.length === 1 ? "card" : "cards"}
         </p>
@@ -119,7 +123,7 @@ export function ImportTargetDialog({
               />
               <span className="flex-1">
                 <span className="block">
-                  Current deck: <strong>{currentDeck}</strong>
+                  Current deck: <strong>{formatDeckPath(currentDeck)}</strong>
                 </span>
               </span>
             </label>
@@ -150,7 +154,7 @@ export function ImportTargetDialog({
                 >
                   {decks.map((d) => (
                     <option key={d} value={d}>
-                      {d}
+                      {formatDeckPath(d)}
                     </option>
                   ))}
                 </select>

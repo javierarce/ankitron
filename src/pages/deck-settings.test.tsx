@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, act, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import type { DeckRename } from "@/lib/deck";
@@ -20,6 +20,7 @@ vi.mock("@/lib/anki-fetch", () => ({
   ankiFetch: vi.fn(async (action: string) => {
     if (action === "findNotes") return [];
     if (action === "getDeckConfig") return { autoplay: true };
+    if (action === "deckNames") return ["Spanish", "French", "German"];
     return undefined;
   }),
 }));
@@ -66,6 +67,10 @@ describe("DeckSettingsPage rename", () => {
     });
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it("closes the rename dialog after a successful rename", async () => {
     // A deferred promise so we can observe the in-progress state, then resolve.
     let resolveRename!: (plan: DeckRename[]) => void;
@@ -108,5 +113,75 @@ describe("DeckSettingsPage rename", () => {
     expect(navigate).toHaveBeenCalledWith("/decks/Espa%C3%B1ol/settings", {
       replace: true,
     });
+  });
+
+  it("moves the deck under the chosen parent, keeping its name", async () => {
+    vi.mocked(renameDeck).mockResolvedValue([
+      { from: "Spanish", to: "French::Spanish" },
+    ]);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Deck Settings" });
+    await user.click(screen.getByRole("button", { name: "Move" }));
+    await screen.findByRole("heading", { name: "Move Deck" });
+
+    // Pick a new parent and confirm.
+    await user.selectOptions(screen.getByRole("combobox"), "French");
+    const moveButtons = screen.getAllByRole("button", { name: "Move" });
+    await user.click(moveButtons[moveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Move Deck" }),
+      ).toBeNull();
+    });
+    // Renames "Spanish" to "French::Spanish" — the leaf is preserved.
+    expect(renameDeck).toHaveBeenCalledWith(
+      "Spanish",
+      "French::Spanish",
+      expect.any(Function),
+    );
+    expect(navigate).toHaveBeenCalledWith(
+      "/decks/French%3A%3ASpanish/settings",
+      { replace: true },
+    );
+  });
+
+  it("moves the deck into a newly named parent", async () => {
+    vi.mocked(renameDeck).mockResolvedValue([
+      { from: "Spanish", to: "Languages::Spanish" },
+    ]);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Deck Settings" });
+    await user.click(screen.getByRole("button", { name: "Move" }));
+    await screen.findByRole("heading", { name: "Move Deck" });
+
+    // Choose "New parent deck…" and type a name for it.
+    await user.selectOptions(
+      screen.getByRole("combobox"),
+      screen.getByRole("option", { name: /New parent deck/ }),
+    );
+    await user.type(
+      screen.getByPlaceholderText("New parent deck name"),
+      "Languages",
+    );
+    const moveButtons = screen.getAllByRole("button", { name: "Move" });
+    await user.click(moveButtons[moveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Move Deck" }),
+      ).toBeNull();
+    });
+    expect(renameDeck).toHaveBeenCalledWith(
+      "Spanish",
+      "Languages::Spanish",
+      expect.any(Function),
+    );
   });
 });

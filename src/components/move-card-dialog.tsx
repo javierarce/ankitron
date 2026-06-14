@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { formatDeckPath } from "@/lib/deck";
 
 interface MoveCardDialogProps {
   note: Note;
@@ -77,7 +78,10 @@ export function MoveCardDialog({ note, currentDeck, onClose }: MoveCardDialogPro
       <div className="mx-4 w-full max-w-sm rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
         <h3 className="mb-1 text-lg font-semibold">Move Card</h3>
         <p className="mb-4 text-sm text-foreground/50">
-          From <strong className="text-foreground/70">{currentDeck}</strong>
+          From{" "}
+          <strong className="text-foreground/70">
+            {formatDeckPath(currentDeck)}
+          </strong>
         </p>
 
         {noOtherDecks ? (
@@ -98,7 +102,7 @@ export function MoveCardDialog({ note, currentDeck, onClose }: MoveCardDialogPro
             >
               {(decks ?? []).map((d) => (
                 <option key={d} value={d}>
-                  {d}
+                  {formatDeckPath(d)}
                 </option>
               ))}
             </select>
