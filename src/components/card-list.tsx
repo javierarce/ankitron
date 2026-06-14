@@ -1,5 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
+import { Check } from "@phosphor-icons/react/dist/ssr/Check";
+import { Checks } from "@phosphor-icons/react/dist/ssr/Checks";
+import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
+import { Pause } from "@phosphor-icons/react/dist/ssr/Pause";
+import { Play } from "@phosphor-icons/react/dist/ssr/Play";
+import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
+import { X } from "@phosphor-icons/react/dist/ssr/X";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -83,9 +90,12 @@ function CardMenu({
     <div ref={menuRef} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="rounded-md p-1 text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 transition-all"
+        aria-label="Card actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="shrink-0 rounded-md p-1 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60"
       >
-        <DotsThreeVertical size={24} weight="bold" />
+        <DotsThreeVertical size={22} weight="bold" />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg">
@@ -140,7 +150,15 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const hasDialog = showAddForm || !!editingNote || !!deletingNote || !!movingNote;
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const lastSelectedRef = useRef<number | null>(null);
+  const hoveredIdRef = useRef<number | null>(null);
+  const [bulkMoving, setBulkMoving] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  const hasDialog =
+    showAddForm || !!editingNote || !!deletingNote || !!movingNote || bulkMoving || bulkDeleteOpen;
 
   useVimNav({ back: "/", enabled: !hasDialog });
 
@@ -163,6 +181,37 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
         return;
       }
       if (inField) return;
+      if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A")) {
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-note-id]")
+        );
+        if (rows.length > 0) {
+          e.preventDefault();
+          setSelectedIds(new Set(rows.map((el) => Number(el.dataset.noteId))));
+        }
+        return;
+      }
+      if (e.key === "Escape" && selectedIds.size > 0) {
+        e.preventDefault();
+        setSelectedIds(new Set());
+        return;
+      }
+      if (e.key === " " || e.code === "Space") {
+        const activeId = (target?.closest("[data-note-id]") as HTMLElement | null)
+          ?.dataset.noteId;
+        const id = activeId != null ? Number(activeId) : hoveredIdRef.current;
+        if (id != null) {
+          e.preventDefault();
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+          lastSelectedRef.current = id;
+        }
+        return;
+      }
       if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setShowAddForm(true);
@@ -170,7 +219,7 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasDialog]);
+  }, [hasDialog, selectedIds]);
 
   const trimmedQuery = query.trim().toLowerCase();
   const filteredNotes = trimmedQuery
@@ -228,6 +277,94 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
     }
   }
 
+  function toggleSelected(noteId: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(noteId)) next.delete(noteId);
+      else next.add(noteId);
+      return next;
+    });
+  }
+
+  function handleCheckboxClick(e: ReactMouseEvent, note: Note) {
+    e.stopPropagation();
+    const anchorId = lastSelectedRef.current;
+    if (e.shiftKey && anchorId !== null) {
+      const anchorIdx = filteredNotes.findIndex((n) => n.noteId === anchorId);
+      const clickedIdx = filteredNotes.findIndex((n) => n.noteId === note.noteId);
+      if (anchorIdx !== -1 && clickedIdx !== -1) {
+        const [start, end] =
+          anchorIdx < clickedIdx ? [anchorIdx, clickedIdx] : [clickedIdx, anchorIdx];
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (let i = start; i <= end; i++) next.add(filteredNotes[i].noteId);
+          return next;
+        });
+        lastSelectedRef.current = note.noteId;
+        return;
+      }
+    }
+    toggleSelected(note.noteId);
+    lastSelectedRef.current = note.noteId;
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    lastSelectedRef.current = null;
+  }
+
+  const selectedNotes = notes.filter((n) => selectedIds.has(n.noteId));
+  const selectionActive = selectedNotes.length > 0;
+  const allSelectedSuspended =
+    selectionActive && selectedNotes.every((n) => isNoteSuspended(n));
+
+  const allVisibleSelected =
+    filteredNotes.length > 0 &&
+    filteredNotes.every((note) => selectedIds.has(note.noteId));
+
+  function selectAllVisible() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const note of filteredNotes) next.add(note.noteId);
+      return next;
+    });
+  }
+
+  async function handleBulkSuspend(suspend: boolean) {
+    const cardIds = selectedNotes.flatMap((n) => n.cards ?? []);
+    if (cardIds.length === 0) return;
+    try {
+      await ankiFetch(suspend ? "suspend" : "unsuspend", { cards: cardIds });
+      setSuspended((prev) => {
+        const next = new Set(prev);
+        for (const id of cardIds) {
+          if (suspend) next.add(id);
+          else next.delete(id);
+        }
+        return next;
+      });
+      onSuspendChange?.();
+    } catch {
+      // silently fail
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedNotes.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      await ankiFetch("deleteNotes", {
+        notes: selectedNotes.map((n) => n.noteId),
+      });
+      setBulkDeleteOpen(false);
+      window.location.reload();
+    } catch {
+      setBulkDeleteOpen(false);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
@@ -256,12 +393,73 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
         </button>
       </div>
 
-      <div className="mb-4">
-        <p className="text-sm text-foreground/50">
-          {trimmedQuery
-            ? `${filteredNotes.length} of ${notes.length} ${notes.length === 1 ? "card" : "cards"}`
-            : `${notes.length} ${notes.length === 1 ? "card" : "cards"}`}
-        </p>
+      <div className="mb-4 flex h-9 items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {selectionActive ? (
+            <>
+              <p className="text-sm font-medium">
+                {selectedNotes.length}{" "}
+                {selectedNotes.length === 1 ? "card" : "cards"} selected
+              </p>
+              {!allVisibleSelected && (
+                <button
+                  onClick={selectAllVisible}
+                  className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-foreground/50 hover:text-foreground transition-colors"
+                >
+                  <Checks size={15} weight="bold" />
+                  Select all
+                </button>
+              )}
+              <button
+                onClick={clearSelection}
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-foreground/50 hover:text-foreground transition-colors"
+              >
+                <X size={14} weight="bold" />
+                Clear
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-foreground/50">
+              {trimmedQuery
+                ? `${filteredNotes.length} of ${notes.length} ${notes.length === 1 ? "card" : "cards"}`
+                : `${notes.length} ${notes.length === 1 ? "card" : "cards"}`}
+            </p>
+          )}
+        </div>
+        {selectionActive && (
+          <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleBulkSuspend(!allSelectedSuspended)}
+                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+              >
+                {allSelectedSuspended ? (
+                  <>
+                    <Play size={16} weight="bold" />
+                    Unsuspend
+                  </>
+                ) : (
+                  <>
+                    <Pause size={16} weight="bold" />
+                    Suspend
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setBulkMoving(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+              >
+                <FolderSimple size={16} weight="bold" />
+                Move
+              </button>
+              <button
+                onClick={() => setBulkDeleteOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash size={16} weight="bold" />
+                Delete
+              </button>
+          </div>
+        )}
       </div>
 
       {notes.length === 0 ? (
@@ -274,23 +472,52 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
         <div className="space-y-2">
           {filteredNotes.map((note) => {
             const noteSuspended = isNoteSuspended(note);
+            const selected = selectedIds.has(note.noteId);
             return (
               <div
                 key={note.noteId}
                 data-nav-item
+                data-note-id={note.noteId}
+                data-selected={selected || undefined}
                 role="button"
                 tabIndex={0}
                 onClick={() => setEditingNote(note)}
+                onMouseEnter={() => {
+                  hoveredIdRef.current = note.noteId;
+                }}
+                onMouseLeave={() => {
+                  if (hoveredIdRef.current === note.noteId) {
+                    hoveredIdRef.current = null;
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
                     setEditingNote(note);
                   }
                 }}
-                className={`group relative flex items-center gap-4 rounded-lg border border-foreground/10 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer hover:bg-foreground/[0.02] transition-colors ${
-                  noteSuspended ? "bg-foreground/[0.03]" : ""
-                }`}
+                className={`group relative flex select-none items-center gap-3 rounded-lg border px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer transition-colors ${
+                  selected
+                    ? "border-foreground/40 bg-foreground/[0.05]"
+                    : "border-foreground/10 hover:bg-foreground/[0.02]"
+                } ${noteSuspended && !selected ? "bg-foreground/[0.03]" : ""}`}
               >
+                <button
+                  onClick={(e) => handleCheckboxClick(e, note)}
+                  aria-label={selected ? "Deselect card" : "Select card"}
+                  aria-pressed={selected}
+                  className="relative z-10 -m-2 flex shrink-0 items-center justify-center p-2"
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded border transition-all ${
+                      selected
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-foreground/25 text-transparent group-hover:border-foreground/50"
+                    }`}
+                  >
+                    <Check size={13} weight="bold" />
+                  </span>
+                </button>
                 <div className={`flex-1 min-w-0 ${noteSuspended ? "opacity-50" : ""}`}>
                   {isClozeNote(note) ? (
                     <>
@@ -354,9 +581,33 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
 
       {movingNote && (
         <MoveCardDialog
-          note={movingNote}
+          notes={[movingNote]}
           currentDeck={deckName}
           onClose={() => setMovingNote(null)}
+        />
+      )}
+
+      {bulkMoving && (
+        <MoveCardDialog
+          notes={selectedNotes}
+          currentDeck={deckName}
+          onClose={() => setBulkMoving(false)}
+        />
+      )}
+
+      {bulkDeleteOpen && (
+        <ConfirmDialog
+          title={
+            selectedNotes.length === 1 ? "Delete Card" : "Delete Cards"
+          }
+          message={
+            selectedNotes.length === 1
+              ? "Delete the selected card?"
+              : `Delete ${selectedNotes.length} selected cards?`
+          }
+          onConfirm={handleBulkDelete}
+          onCancel={() => setBulkDeleteOpen(false)}
+          loading={bulkDeleting}
         />
       )}
 

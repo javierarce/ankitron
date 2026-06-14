@@ -111,6 +111,14 @@ summary {
   background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
+/* Card rows carry their own selected state (a stronger border + fill). Keep the
+   keyboard-focus highlight light so a focused-but-unselected card reads as merely
+   hovered, not selected. */
+[data-note-id]:focus:not([data-selected]),
+[data-note-id]:focus-visible:not([data-selected]) {
+  background-color: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
 /* Native selects render their chevron inconsistently across platforms
    and at slightly-off positions; replace it with a vertically centered
    chevron we control. */
