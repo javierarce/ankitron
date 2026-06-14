@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "ankitron"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "dirs",
  "reqwest 0.12.28",
