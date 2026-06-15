@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 import type { ExportedDeck } from "@/lib/import-export";
 
 type TargetMode = "current" | "existing" | "new";
@@ -21,6 +22,7 @@ export function ImportTargetDialog({
   onCancel,
   onConfirm,
 }: ImportTargetDialogProps) {
+  useScrollLock();
   const sourceMatchesCurrent =
     currentDeck !== undefined && parsed.deckName === currentDeck;
   const [mode, setMode] = useState<TargetMode>(

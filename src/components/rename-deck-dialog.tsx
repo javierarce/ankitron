@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { deckLeaf, deckParent, formatDeckPath, joinDeck } from "@/lib/deck";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface RenameDeckDialogProps {
   deckName: string;
@@ -17,6 +18,7 @@ export function RenameDeckDialog({
   renaming,
   error,
 }: RenameDeckDialogProps) {
+  useScrollLock();
   // Only the deck's own name is editable; the parent path stays put (use Move to
   // change it), so users never have to deal with "::".
   const parent = deckParent(deckName);

@@ -8,6 +8,7 @@ import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { CardForm } from "./card-form";
 
 type Mode = "search" | "pickDeckForCard";
@@ -37,6 +38,10 @@ export function CommandPalette() {
   const [addingToDeck, setAddingToDeck] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // CardForm renders its own backdrop and locks scroll itself; the palette only
+  // needs the lock while its own overlay is up.
+  useScrollLock(open);
 
   const close = useCallback(() => {
     setOpen(false);

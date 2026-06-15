@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useUpdate } from "@/components/update-context";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 type Phase = "available" | "installing" | "error";
 
@@ -30,14 +31,7 @@ export function UpdatePrompt() {
   // While the dialog is up, lock the page behind it so the scroll wheel only
   // scrolls the release notes (which have their own overflow) instead of the
   // content showing through the backdrop.
-  useEffect(() => {
-    if (!isDialogOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [isDialogOpen]);
+  useScrollLock(isDialogOpen);
 
   // Esc closes the dialog — but not mid-install, where the buttons are disabled
   // too, since you can't cancel a download/relaunch partway through.

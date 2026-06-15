@@ -8,6 +8,7 @@ import {
   isCardInDeck,
   joinDeck,
 } from "@/lib/deck";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface MoveDeckDialogProps {
   deckName: string;
@@ -30,6 +31,7 @@ export function MoveDeckDialog({
   moving,
   error,
 }: MoveDeckDialogProps) {
+  useScrollLock();
   const leaf = deckLeaf(deckName);
   const currentParent = deckParent(deckName);
   const [decks, setDecks] = useState<string[]>([]);

@@ -111,6 +111,19 @@ summary {
   background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
+/* On the Decks page the nav item is only the deck-name link, not the whole row
+   (the expand toggle and count/menu sit outside it). Lift the focus highlight to
+   the row so keyboard focus tints the full row, like the Study list. */
+.deck-nav-row:has([data-nav-item]:focus),
+.deck-nav-row:has([data-nav-item]:focus-visible) {
+  background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.deck-nav-row [data-nav-item]:focus,
+.deck-nav-row [data-nav-item]:focus-visible {
+  background-color: transparent;
+}
+
 /* Card rows carry their own selected state (a stronger border + fill). Keep the
    keyboard-focus highlight light so a focused-but-unselected card reads as merely
    hovered, not selected. */

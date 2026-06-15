@@ -270,9 +270,6 @@ export function StudyPage() {
               ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
               : "No cards are due for review."}
           </p>
-          {reviewed > 0 && syncStatus === "syncing" && (
-            <p className="mb-4 text-xs text-foreground/40">Syncing&hellip;</p>
-          )}
           {reviewed > 0 && syncStatus === "error" && (
             <div className="mb-4 flex flex-col items-center gap-2">
               <p className="text-xs text-foreground/40">Sync failed.</p>
@@ -343,7 +340,7 @@ export function StudyPage() {
         </div>
       )}
 
-      {reviewed > 0 && (
+      {reviewed > 0 && !completed && (
         <p className="fixed bottom-4 right-6 text-sm text-foreground/30">
           {initialTotal > 0
             ? `${reviewed > initialTotal ? `(+${reviewed - initialTotal}) ` : ""}${Math.min(reviewed, initialTotal)} / ${initialTotal}`
