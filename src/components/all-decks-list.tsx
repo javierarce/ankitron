@@ -7,7 +7,9 @@ import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVerti
 import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckLeaf, deckParent, formatDeckPath } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { CardForm } from "./card-form";
+import { ConfirmDialog } from "./confirm-dialog";
 import { DecksImportExport } from "./decks-import-export";
 
 interface DeckNode {
@@ -62,8 +64,16 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
   // Deck to add a card to (renders the CardForm when set).
   const [addCardDeck, setAddCardDeck] = useState<string | null>(null);
 
-  const hasDialog = showDialog || addCardDeck !== null;
+  // Deck pending deletion (renders the confirm dialog when set).
+  const [deletingDeck, setDeletingDeck] = useState<string | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
+
+  const hasDialog =
+    showDialog || addCardDeck !== null || deletingDeck !== null;
   useVimNav({ enabled: !hasDialog });
+  // CardForm (addCardDeck) locks scroll itself; lock for the inline Create Deck
+  // dialog so the deck list behind it can't scroll on wheel.
+  useScrollLock(showDialog);
 
   useEffect(() => {
     if (showDialog) {
@@ -118,6 +128,12 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
     e.preventDefault();
     const name = newDeckName.trim();
     if (!name) return;
+    // Anki's createDeck silently returns the existing deck, so guard here —
+    // otherwise "creating" a duplicate just navigates to it with no feedback.
+    if (decks.some((d) => d.toLowerCase() === name.toLowerCase())) {
+      setError("A deck with this name already exists.");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
@@ -131,6 +147,41 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
     }
   }
 
+  async function handleDeleteDeck() {
+    if (!deletingDeck) return;
+    setDeletingBusy(true);
+    try {
+      await ankiFetch("deleteDecks", { decks: [deletingDeck], cardsToo: true });
+      setDeletingDeck(null);
+      onRefresh();
+    } catch {
+      // Leave the dialog open so the user can retry.
+    } finally {
+      setDeletingBusy(false);
+    }
+  }
+
+  const trimmedNewName = newDeckName.trim();
+  const deckNameExists = decks.some(
+    (d) => d.toLowerCase() === trimmedNewName.toLowerCase(),
+  );
+
+  // cardCounts comes from a recursive `deck:` search, so a deck's own entry
+  // already includes every subdeck — use it directly (summing the subdecks too
+  // would multi-count). It surfaces the hidden total so a parent that looks
+  // "Empty" but holds cards under its children can't be deleted by surprise.
+  const deletingSubdeckCount = deletingDeck
+    ? decks.filter((d) => d.startsWith(deletingDeck + "::")).length
+    : 0;
+  const deletingCardTotal = deletingDeck ? cardCounts[deletingDeck] ?? 0 : 0;
+  const deleteMessage = deletingDeck
+    ? `Delete “${formatDeckPath(deletingDeck)}”${
+        deletingSubdeckCount > 0
+          ? ` and its ${deletingSubdeckCount} ${deletingSubdeckCount === 1 ? "subdeck" : "subdecks"}`
+          : ""
+      }? This permanently removes ${deletingCardTotal} ${deletingCardTotal === 1 ? "card" : "cards"} and cannot be undone.`
+    : "";
+
   const tree = useMemo(() => buildDeckTree(decks), [decks]);
   const q = query.trim().toLowerCase();
   // While searching, show a flat list of matches with their full path — the
@@ -141,7 +192,20 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">Decks</h1>
+        <div className="flex items-center gap-2">
+          <DecksImportExport decks={decks} />
+          <button
+            onClick={openDialog}
+            className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+          >
+            Add deck
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4">
         <input
           ref={searchRef}
           type="search"
@@ -154,16 +218,8 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
             }
           }}
           placeholder="Search decks…"
-          className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
+          className="w-full rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
         />
-        <DecksImportExport decks={decks} />
-        <button
-          onClick={openDialog}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-2 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
-        >
-          <Plus size={14} weight="bold" />
-          Add deck
-        </button>
       </div>
 
       {decks.length === 0 ? (
@@ -182,6 +238,7 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
                     deck={deck}
                     count={cardCounts[deck] ?? 0}
                     onAddCard={() => setAddCardDeck(deck)}
+                    onDelete={() => setDeletingDeck(deck)}
                   />
                 ))
               : tree.map((node) => (
@@ -193,6 +250,7 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
                     onToggle={toggle}
                     cardCounts={cardCounts}
                     onAddCard={setAddCardDeck}
+                    onDelete={setDeletingDeck}
                   />
                 ))}
           </div>
@@ -217,7 +275,13 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
                 placeholder="Deck name…"
                 className="w-full rounded-lg border border-foreground/15 bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
               />
-              {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+              {deckNameExists ? (
+                <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">
+                  A deck named “{trimmedNewName}” already exists.
+                </p>
+              ) : error ? (
+                <p className="mt-2 text-sm text-red-500">{error}</p>
+              ) : null}
               <div className="mt-4 flex justify-end gap-3">
                 <button
                   type="button"
@@ -229,7 +293,7 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || !newDeckName.trim()}
+                  disabled={creating || !trimmedNewName || deckNameExists}
                   className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
                 >
                   {creating ? "Creating…" : "Create Deck"}
@@ -248,6 +312,16 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
             setAddCardDeck(null);
             onRefresh();
           }}
+        />
+      )}
+
+      {deletingDeck && (
+        <ConfirmDialog
+          title="Delete Deck"
+          message={deleteMessage}
+          onConfirm={handleDeleteDeck}
+          onCancel={() => setDeletingDeck(null)}
+          loading={deletingBusy}
         />
       )}
     </div>
@@ -271,6 +345,7 @@ function TreeRows({
   onToggle,
   cardCounts,
   onAddCard,
+  onDelete,
 }: {
   node: DeckNode;
   depth: number;
@@ -278,6 +353,7 @@ function TreeRows({
   onToggle: (fullName: string) => void;
   cardCounts: Record<string, number>;
   onAddCard: (deck: string) => void;
+  onDelete: (deck: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const isOpen = expanded.has(node.fullName);
@@ -285,7 +361,7 @@ function TreeRows({
   return (
     <Fragment>
       <div
-        className="flex items-center gap-2 py-3 pr-4 transition-[background-color] hover:bg-foreground/5"
+        className="deck-nav-row flex items-center gap-2 py-3 pr-4 transition-[background-color] hover:bg-foreground/5"
         style={{ paddingLeft: 16 + depth * 24 }}
       >
         {hasChildren ? (
@@ -309,7 +385,11 @@ function TreeRows({
           {node.name}
         </Link>
         <CountLabel count={cardCounts[node.fullName] ?? 0} />
-        <DeckRowMenu deck={node.fullName} onAddCard={() => onAddCard(node.fullName)} />
+        <DeckRowMenu
+          deck={node.fullName}
+          onAddCard={() => onAddCard(node.fullName)}
+          onDelete={() => onDelete(node.fullName)}
+        />
       </div>
       {hasChildren &&
         isOpen &&
@@ -322,6 +402,7 @@ function TreeRows({
             onToggle={onToggle}
             cardCounts={cardCounts}
             onAddCard={onAddCard}
+            onDelete={onDelete}
           />
         ))}
     </Fragment>
@@ -334,14 +415,16 @@ function SearchRow({
   deck,
   count,
   onAddCard,
+  onDelete,
 }: {
   deck: string;
   count: number;
   onAddCard: () => void;
+  onDelete: () => void;
 }) {
   const parent = deckParent(deck);
   return (
-    <div className="flex items-center gap-3 px-4 py-3 transition-[background-color] hover:bg-foreground/5">
+    <div className="deck-nav-row flex items-center gap-3 px-4 py-3 transition-[background-color] hover:bg-foreground/5">
       <Link
         data-nav-item
         to={`/decks/${encodeURIComponent(deck)}`}
@@ -354,7 +437,7 @@ function SearchRow({
         <span className="font-medium">{deckLeaf(deck)}</span>
       </Link>
       <CountLabel count={count} />
-      <DeckRowMenu deck={deck} onAddCard={onAddCard} />
+      <DeckRowMenu deck={deck} onAddCard={onAddCard} onDelete={onDelete} />
     </div>
   );
 }
@@ -362,9 +445,11 @@ function SearchRow({
 function DeckRowMenu({
   deck,
   onAddCard,
+  onDelete,
 }: {
   deck: string;
   onAddCard: () => void;
+  onDelete: () => void;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -456,6 +541,15 @@ function DeckRowMenu({
               className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
             >
               Settings
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-red-500 transition-colors hover:bg-foreground/5"
+            >
+              Delete deck
             </button>
           </div>,
           document.body,

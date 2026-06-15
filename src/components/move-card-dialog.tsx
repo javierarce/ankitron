@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface MoveCardDialogProps {
   notes: Note[];
@@ -14,6 +15,7 @@ interface MoveCardDialogProps {
 const NEW_DECK = " new";
 
 export function MoveCardDialog({ notes, currentDeck, onClose }: MoveCardDialogProps) {
+  useScrollLock();
   const [decks, setDecks] = useState<string[] | null>(null);
   const [choice, setChoice] = useState("");
   const [newDeck, setNewDeck] = useState("");

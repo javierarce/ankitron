@@ -138,11 +138,20 @@ interface CardListProps {
   suspendedCardIds?: number[];
   /** Called after cards are suspended or unsuspended, so the parent can refresh due counts. */
   onSuspendChange?: () => void;
+  /** Add-card form visibility, owned by the page so the button can live in its header. */
+  showAddForm: boolean;
+  onShowAddForm: (show: boolean) => void;
 }
 
-export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }: CardListProps) {
+export function CardList({
+  deckName,
+  notes,
+  suspendedCardIds,
+  onSuspendChange,
+  showAddForm,
+  onShowAddForm,
+}: CardListProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [movingNote, setMovingNote] = useState<Note | null>(null);
@@ -255,7 +264,7 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
       }
       if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        setShowAddForm(true);
+        onShowAddForm(true);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -426,12 +435,6 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
           placeholder="Search cards…"
           className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
         />
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
-        >
-          Add Card
-        </button>
       </div>
 
       <div className="mb-4 flex h-9 items-center justify-between gap-3">
@@ -601,7 +604,7 @@ export function CardList({ deckName, notes, suspendedCardIds, onSuspendChange }:
       )}
 
       {showAddForm && (
-        <CardForm deckName={deckName} onClose={() => setShowAddForm(false)} />
+        <CardForm deckName={deckName} onClose={() => onShowAddForm(false)} />
       )}
 
       {editingNote && (

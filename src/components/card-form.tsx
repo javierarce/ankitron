@@ -6,6 +6,7 @@ import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
 import { basicFieldKeys } from "@/lib/note-fields";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
 
@@ -48,6 +49,7 @@ function hasClozePattern(html: string): boolean {
 }
 
 export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
+  useScrollLock();
   const noteFields = note?.fields ?? {};
 
   function extractValue(field: unknown): string {

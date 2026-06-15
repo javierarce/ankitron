@@ -13,6 +13,7 @@ import {
 } from "@/lib/import-export";
 import { ImportResultModal } from "./import-export";
 import { ImportTargetDialog } from "./import-target-dialog";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface DecksImportExportProps {
   decks: string[];
@@ -183,6 +184,7 @@ function ExportPickerDialog({
   onDone: () => void;
   onError: (msg: string) => void;
 }) {
+  useScrollLock();
   const [selected, setSelected] = useState<string>(decks[0] ?? "");
   const [working, setWorking] = useState(false);
 

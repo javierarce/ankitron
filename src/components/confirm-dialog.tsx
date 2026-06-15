@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface ConfirmDialogProps {
   title: string;
@@ -17,6 +18,7 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   loading = false,
 }: ConfirmDialogProps) {
+  useScrollLock();
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();

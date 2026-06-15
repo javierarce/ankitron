@@ -14,6 +14,7 @@ export function DeckDetailPage() {
   const [due, setDue] = useState<DueCounts>({ new: 0, learn: 0, review: 0 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const refreshDue = useCallback(async () => {
     try {
@@ -93,10 +94,16 @@ export function DeckDetailPage() {
           >
             Settings
           </Link>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
+          >
+            Add card
+          </button>
           {totalDue > 0 ? (
             <Link
               to={`/decks/${encodeURIComponent(deckName)}/study`}
-              className="rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
+              className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
             >
               Study ({totalDue})
             </Link>
@@ -116,6 +123,8 @@ export function DeckDetailPage() {
           notes={notes}
           suspendedCardIds={suspendedCardIds}
           onSuspendChange={refreshDue}
+          showAddForm={showAddForm}
+          onShowAddForm={setShowAddForm}
         />
       )}
     </div>

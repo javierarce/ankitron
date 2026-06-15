@@ -12,6 +12,7 @@ import {
   type ImportResult,
 } from "@/lib/import-export";
 import { ImportTargetDialog } from "./import-target-dialog";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface ImportExportProps {
   deckName: string;
@@ -184,6 +185,7 @@ export function ImportResultModal({
   onOverwriteStale?: () => void;
   onClose: () => void;
 }) {
+  useScrollLock();
   const staleSkipped = result?.staleSkipped ?? 0;
   return (
     <div

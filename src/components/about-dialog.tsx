@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -13,6 +14,8 @@ const WEBSITE = "https://javier.computer";
 export function AboutDialog() {
   const [open, setOpen] = useState(false);
   const [version, setVersion] = useState("");
+
+  useScrollLock(open);
 
   useEffect(() => {
     if (!isTauri) return;
