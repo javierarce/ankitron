@@ -36,6 +36,24 @@ export function formatDeckPath(name: string): string {
 }
 
 /**
+ * The confirmation wording for deleting a deck. Centralised so every entry point
+ * (the decks list, a deck's Danger Zone, …) warns with the same human-readable
+ * path and the same card/subdeck counts rather than drifting into bespoke copy.
+ */
+export function deckDeleteMessage(
+  name: string,
+  cardCount: number,
+  subdeckCount: number,
+): string {
+  const subdecks =
+    subdeckCount > 0
+      ? ` and its ${subdeckCount} ${subdeckCount === 1 ? "subdeck" : "subdecks"}`
+      : "";
+  const cards = `${cardCount} ${cardCount === 1 ? "card" : "cards"}`;
+  return `Delete “${formatDeckPath(name)}”${subdecks}? This permanently removes ${cards} and cannot be undone.`;
+}
+
+/**
  * Order decks as a tree: each deck immediately precedes its own subdecks, and
  * siblings sort alphabetically. Comparing whole names alphabetically gets this
  * wrong (e.g. "Spanish 2" would fall between "Spanish" and "Spanish::Verbs"),
