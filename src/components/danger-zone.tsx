@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ConfirmDialog } from "./confirm-dialog";
+import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 
 interface DangerZoneProps {
@@ -10,18 +10,36 @@ interface DangerZoneProps {
 export function DangerZone({ deckName }: DangerZoneProps) {
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  // Counts power the same "removes N cards" warning the decks list shows. Loaded
+  // up front so the dialog is accurate the moment it opens; default to 0 until then.
+  const [cardCount, setCardCount] = useState(0);
+  const [subdeckCount, setSubdeckCount] = useState(0);
 
-  async function handleDelete() {
-    setDeleting(true);
-    try {
-      await ankiFetch("deleteDecks", { decks: [deckName], cardsToo: true });
-      navigate("/");
-    } catch {
-      setDeleting(false);
-      setShowConfirm(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCounts() {
+      try {
+        // `deck:` matches descendants, so this note count already spans subdecks —
+        // matching how the decks list counts and warns. Subdecks are the deck's
+        // own "::"-prefixed entries.
+        const [noteIds, allDecks] = await Promise.all([
+          ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` }),
+          ankiFetch<string[]>("deckNames"),
+        ]);
+        if (cancelled) return;
+        setCardCount(noteIds.length);
+        setSubdeckCount(
+          allDecks.filter((d) => d.startsWith(deckName + "::")).length,
+        );
+      } catch {
+        // Leave the counts at 0; the warning still conveys the deletion is final.
+      }
     }
-  }
+    loadCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [deckName]);
 
   return (
     <>
@@ -39,12 +57,12 @@ export function DangerZone({ deckName }: DangerZoneProps) {
       </section>
 
       {showConfirm && (
-        <ConfirmDialog
-          title="Delete Deck"
-          message={`Delete "${deckName}" and all its cards? This cannot be undone.`}
-          onConfirm={handleDelete}
+        <DeleteDeckDialog
+          deckName={deckName}
+          cardCount={cardCount}
+          subdeckCount={subdeckCount}
           onCancel={() => setShowConfirm(false)}
-          loading={deleting}
+          onDeleted={() => navigate("/")}
         />
       )}
     </>

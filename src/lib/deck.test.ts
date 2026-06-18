@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   compareDeckPaths,
+  deckDeleteMessage,
   deckDepth,
   deckLeaf,
   deckParent,
@@ -37,6 +38,19 @@ describe("deck path helpers", () => {
     expect(formatDeckPath("Spanish")).toBe("Spanish");
     expect(formatDeckPath("Languages::Deutsch")).toBe("Languages / Deutsch");
     expect(formatDeckPath("a::b::c")).toBe("a / b / c");
+  });
+
+  it("builds a delete warning with the human path and card/subdeck counts", () => {
+    expect(deckDeleteMessage("Languages::Deutsch", 42, 0)).toBe(
+      "Delete “Languages / Deutsch”? This permanently removes 42 cards and cannot be undone.",
+    );
+    // Singular card, and subdecks are called out when present.
+    expect(deckDeleteMessage("Spanish", 1, 1)).toBe(
+      "Delete “Spanish” and its 1 subdeck? This permanently removes 1 card and cannot be undone.",
+    );
+    expect(deckDeleteMessage("Spanish", 0, 3)).toBe(
+      "Delete “Spanish” and its 3 subdecks? This permanently removes 0 cards and cannot be undone.",
+    );
   });
 
   it("reports nesting depth", () => {

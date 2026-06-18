@@ -9,7 +9,7 @@ import { compareDeckPaths, deckLeaf, deckParent, formatDeckPath } from "@/lib/de
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { CardForm } from "./card-form";
-import { ConfirmDialog } from "./confirm-dialog";
+import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { DecksImportExport } from "./decks-import-export";
 
 interface DeckNode {
@@ -66,7 +66,6 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
 
   // Deck pending deletion (renders the confirm dialog when set).
   const [deletingDeck, setDeletingDeck] = useState<string | null>(null);
-  const [deletingBusy, setDeletingBusy] = useState(false);
 
   const hasDialog =
     showDialog || addCardDeck !== null || deletingDeck !== null;
@@ -147,20 +146,6 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
     }
   }
 
-  async function handleDeleteDeck() {
-    if (!deletingDeck) return;
-    setDeletingBusy(true);
-    try {
-      await ankiFetch("deleteDecks", { decks: [deletingDeck], cardsToo: true });
-      setDeletingDeck(null);
-      onRefresh();
-    } catch {
-      // Leave the dialog open so the user can retry.
-    } finally {
-      setDeletingBusy(false);
-    }
-  }
-
   const trimmedNewName = newDeckName.trim();
   const deckNameExists = decks.some(
     (d) => d.toLowerCase() === trimmedNewName.toLowerCase(),
@@ -174,13 +159,6 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
     ? decks.filter((d) => d.startsWith(deletingDeck + "::")).length
     : 0;
   const deletingCardTotal = deletingDeck ? cardCounts[deletingDeck] ?? 0 : 0;
-  const deleteMessage = deletingDeck
-    ? `Delete “${formatDeckPath(deletingDeck)}”${
-        deletingSubdeckCount > 0
-          ? ` and its ${deletingSubdeckCount} ${deletingSubdeckCount === 1 ? "subdeck" : "subdecks"}`
-          : ""
-      }? This permanently removes ${deletingCardTotal} ${deletingCardTotal === 1 ? "card" : "cards"} and cannot be undone.`
-    : "";
 
   const tree = useMemo(() => buildDeckTree(decks), [decks]);
   const q = query.trim().toLowerCase();
@@ -316,12 +294,15 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
       )}
 
       {deletingDeck && (
-        <ConfirmDialog
-          title="Delete Deck"
-          message={deleteMessage}
-          onConfirm={handleDeleteDeck}
+        <DeleteDeckDialog
+          deckName={deletingDeck}
+          cardCount={deletingCardTotal}
+          subdeckCount={deletingSubdeckCount}
           onCancel={() => setDeletingDeck(null)}
-          loading={deletingBusy}
+          onDeleted={() => {
+            setDeletingDeck(null);
+            onRefresh();
+          }}
         />
       )}
     </div>
