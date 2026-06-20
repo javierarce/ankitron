@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type DragEvent as ReactDragEvent,
+} from "react";
 import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { Check } from "@phosphor-icons/react/dist/ssr/Check";
 import { Checks } from "@phosphor-icons/react/dist/ssr/Checks";
@@ -13,7 +19,25 @@ import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { stripSoundTags } from "@/lib/audio";
+import { deckLeaf, formatDeckPath } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
+
+/**
+ * A segment's label, split into a dimmed parent path and the highlighted leaf,
+ * relative to the deck being viewed: the deck itself is just its own leaf
+ * ("Spanish"), and a subdeck shows the path beneath it
+ * ("Spanish::Verbs::Irregular" → prefix "Verbs / ", leaf "Irregular").
+ */
+function segmentLabelParts(
+  deck: string,
+  parent: string,
+): { prefix: string | null; leaf: string } {
+  const rel = deck === parent ? deckLeaf(parent) : deck.slice(parent.length + 2);
+  const parts = rel.split("::");
+  const leaf = parts[parts.length - 1];
+  const prefix = parts.length > 1 ? parts.slice(0, -1).join(" / ") + " / " : null;
+  return { prefix, leaf };
+}
 
 function decodeHtml(html: string): string {
   if (typeof document === "undefined") {
@@ -136,8 +160,14 @@ interface CardListProps {
   deckName: string;
   notes: Note[];
   suspendedCardIds?: number[];
+  /** Each note's home deck. Lets the list scope to one subdeck via the segments. */
+  noteDecks?: Record<number, string>;
+  /** Decks nested under this one, sorted as a tree. Drives the segmented control. */
+  subdecks?: string[];
   /** Called after cards are suspended or unsuspended, so the parent can refresh due counts. */
   onSuspendChange?: () => void;
+  /** Called after cards are moved between (sub)decks, so the parent can refresh due counts. */
+  onCardsMoved?: () => void;
   /** Add-card form visibility, owned by the page so the button can live in its header. */
   showAddForm: boolean;
   onShowAddForm: (show: boolean) => void;
@@ -147,7 +177,10 @@ export function CardList({
   deckName,
   notes,
   suspendedCardIds,
+  noteDecks,
+  subdecks,
   onSuspendChange,
+  onCardsMoved,
   showAddForm,
   onShowAddForm,
 }: CardListProps) {
@@ -164,6 +197,79 @@ export function CardList({
   const [bulkMoving, setBulkMoving] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  // Each note's home deck, kept locally so a drag-move updates the list in place
+  // instead of forcing a reload. Seeded from the prop and re-seeded when it
+  // changes (adjusting state during render rather than in an effect, per
+  // https://react.dev/learn/you-might-not-need-an-effect).
+  const [decks, setDecks] = useState<Record<number, string>>(noteDecks ?? {});
+  const [prevNoteDecks, setPrevNoteDecks] = useState(noteDecks);
+  if (noteDecks !== prevNoteDecks) {
+    setPrevNoteDecks(noteDecks);
+    setDecks(noteDecks ?? {});
+  }
+
+  // Which segments are active. Empty = "All"; otherwise the list is scoped to
+  // the union of these exact deck names. Cmd/Ctrl+click toggles a segment into
+  // the set; Shift+click extends a range from the last-clicked one; a plain
+  // click selects just one (or clears it back to "All").
+  const [activeSegments, setActiveSegments] = useState<Set<string>>(() => new Set());
+  // The last segment clicked, used as the anchor for Shift+click ranges.
+  const [lastSegment, setLastSegment] = useState<string | null>(null);
+  // Reset back to "All" whenever we navigate to a different deck.
+  const [prevDeckName, setPrevDeckName] = useState(deckName);
+  if (deckName !== prevDeckName) {
+    setPrevDeckName(deckName);
+    setActiveSegments(new Set());
+    setLastSegment(null);
+  }
+
+  function handleSegmentClick(deck: string, e: ReactMouseEvent) {
+    const anchor = lastSegment;
+    if (e.shiftKey && anchor) {
+      // Add every segment between the anchor and this one (inclusive) to the
+      // current selection, ordered by the chip row (deck + its subdecks).
+      const anchorIdx = segmentDecks.indexOf(anchor);
+      const clickedIdx = segmentDecks.indexOf(deck);
+      if (anchorIdx !== -1 && clickedIdx !== -1) {
+        const [start, end] =
+          anchorIdx < clickedIdx ? [anchorIdx, clickedIdx] : [clickedIdx, anchorIdx];
+        setActiveSegments((prev) => {
+          const next = new Set(prev);
+          for (let i = start; i <= end; i++) next.add(segmentDecks[i]);
+          return next;
+        });
+        setLastSegment(deck);
+        return;
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      setActiveSegments((prev) => {
+        const next = new Set(prev);
+        if (next.has(deck)) next.delete(deck);
+        else next.add(deck);
+        return next;
+      });
+    } else {
+      // Plain click: select just this segment, or clear it if it was already
+      // the sole selection.
+      setActiveSegments((prev) =>
+        prev.size === 1 && prev.has(deck) ? new Set() : new Set([deck]),
+      );
+    }
+    setLastSegment(deck);
+  }
+
+  // The deck a card is currently being dragged over, for drop-target highlight.
+  const [dragOverDeck, setDragOverDeck] = useState<string | null>(null);
+  // The note ids in the active drag (one card, or the whole selection).
+  const draggingRef = useRef<number[]>([]);
+  // The off-screen element used as the drag preview, torn down on drag end.
+  const dragImageRef = useRef<HTMLElement | null>(null);
+
+  // The segmented control covers this deck plus every nested subdeck.
+  const hasSegments = (subdecks?.length ?? 0) > 0;
+  const segmentDecks = [deckName, ...(subdecks ?? [])];
 
   const hasDialog =
     showAddForm || !!editingNote || !!deletingNote || !!movingNote || bulkMoving || bulkDeleteOpen;
@@ -271,9 +377,17 @@ export function CardList({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [hasDialog, selectedIds]);
 
+  // Scope to the active segments first; "All" (empty set) keeps every note. A
+  // note's deck falls back to the viewed deck if cardsInfo hasn't loaded its
+  // mapping yet.
+  const segmentNotes =
+    activeSegments.size === 0
+      ? notes
+      : notes.filter((note) => activeSegments.has(decks[note.noteId] ?? deckName));
+
   const trimmedQuery = query.trim().toLowerCase();
   const filteredNotes = trimmedQuery
-    ? notes.filter((note) => {
+    ? segmentNotes.filter((note) => {
         const haystack = [
           note.fields.Front?.value,
           note.fields.Back?.value,
@@ -287,7 +401,7 @@ export function CardList({
           .toLowerCase();
         return haystack.includes(trimmedQuery);
       })
-    : notes;
+    : segmentNotes;
 
   function isNoteSuspended(note: Note): boolean {
     return (note.cards ?? []).some((id) => suspended.has(id));
@@ -415,28 +529,211 @@ export function CardList({
     }
   }
 
+  // How many notes live directly in each (sub)deck, for the segment badges.
+  const countByDeck = new Map<string, number>();
+  for (const note of notes) {
+    const deck = decks[note.noteId] ?? deckName;
+    countByDeck.set(deck, (countByDeck.get(deck) ?? 0) + 1);
+  }
+
+  // When the selected segment(s) hold no cards, hide the search field, count,
+  // and "no match" message and show a dedicated empty state instead.
+  const segmentScopeEmpty = activeSegments.size > 0 && segmentNotes.length === 0;
+  const onlySegment = activeSegments.size === 1 ? [...activeSegments][0] : null;
+  const emptySegmentLabel = onlySegment
+    ? (() => {
+        const { prefix, leaf } = segmentLabelParts(onlySegment, deckName);
+        return (prefix ?? "") + leaf;
+      })()
+    : "the selected decks";
+
+  // Move the given notes into a target (sub)deck, updating the list in place
+  // rather than reloading. Notes already in the target are skipped.
+  async function moveNotesToDeck(noteList: Note[], target: string) {
+    const toMove = noteList.filter((n) => (decks[n.noteId] ?? deckName) !== target);
+    if (toMove.length === 0) return;
+    let cardIds = toMove.flatMap((n) => n.cards ?? []);
+    if (cardIds.length === 0) {
+      cardIds = await ankiFetch<number[]>("findCards", {
+        query: toMove.map((n) => `nid:${n.noteId}`).join(" OR "),
+      });
+    }
+    if (cardIds.length === 0) return;
+    try {
+      await ankiFetch("changeDeck", { cards: cardIds, deck: target });
+      // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an active
+      // reviewer doesn't keep serving the moved card.
+      await ankiFetch("reloadCollection").catch(() => {});
+      setDecks((prev) => {
+        const next = { ...prev };
+        for (const n of toMove) next[n.noteId] = target;
+        return next;
+      });
+      // Drop the moved notes from the selection — they've left the current view.
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const n of toMove) next.delete(n.noteId);
+        return next;
+      });
+      onCardsMoved?.();
+    } catch {
+      // Leave the list untouched if the move fails.
+    }
+  }
+
+  function clearDragImage() {
+    dragImageRef.current?.remove();
+    dragImageRef.current = null;
+  }
+
+  function handleRowDragStart(e: ReactDragEvent, note: Note) {
+    // Drag the whole selection when the grabbed card is part of it; otherwise
+    // just the one card.
+    const ids = selectedIds.has(note.noteId)
+      ? Array.from(selectedIds)
+      : [note.noteId];
+    draggingRef.current = ids;
+    // "copyMove" so the drop targets can show a "copy" (+) cursor — on macOS the
+    // plain "move" cursor is indistinguishable from the default arrow, making
+    // the segments look like they don't accept the drop.
+    e.dataTransfer.effectAllowed = "copyMove";
+    // Firefox requires data to be set for the drag to start at all.
+    e.dataTransfer.setData("text/plain", ids.join(","));
+
+    // Replace the default (semi-transparent row) preview with a solid count
+    // badge. The element must live in the DOM when the browser snapshots it, so
+    // it sits off-screen until drag end clears it. A transparent-padded wrapper
+    // lets us put the cursor hotspot at its top-left (0, 0) so the pill trails
+    // just below-right of the pointer instead of sitting under it.
+    const wrapper = document.createElement("div");
+    Object.assign(wrapper.style, {
+      position: "fixed",
+      top: "-9999px",
+      left: "-9999px",
+      // Top/left set the cursor-to-pill gap; right/bottom just leave room so the
+      // pill's drop shadow isn't clipped out of the snapshot.
+      paddingTop: "14px",
+      paddingLeft: "16px",
+      paddingRight: "20px",
+      paddingBottom: "26px",
+      pointerEvents: "none",
+    });
+    const badge = document.createElement("div");
+    badge.textContent = ids.length === 1 ? "1 card" : `${ids.length} cards`;
+    Object.assign(badge.style, {
+      padding: "0.375rem 0.75rem",
+      borderRadius: "9999px",
+      fontSize: "0.875rem",
+      fontWeight: "600",
+      whiteSpace: "nowrap",
+      background: "var(--foreground)",
+      color: "var(--background)",
+      boxShadow: "0 6px 16px rgba(0, 0, 0, 0.25)",
+    });
+    wrapper.appendChild(badge);
+    document.body.appendChild(wrapper);
+    dragImageRef.current = wrapper;
+    e.dataTransfer.setDragImage(wrapper, 0, 0);
+  }
+
+  function handleSegmentDrop(target: string) {
+    const ids = draggingRef.current;
+    draggingRef.current = [];
+    setDragOverDeck(null);
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    void moveNotesToDeck(
+      notes.filter((n) => idSet.has(n.noteId)),
+      target,
+    );
+  }
+
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
-        <input
-          ref={searchRef}
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              if (query) {
-                setQuery("");
-              } else {
-                searchRef.current?.blur();
-              }
-            }
-          }}
-          placeholder="Search cards…"
-          className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
-        />
-      </div>
+      {hasSegments && (
+        // A horizontal segmented control: one chip per (sub)deck plus "All".
+        // Tap to scope the list to a single deck; drag cards onto a chip to move
+        // them there. Scrolls sideways when the decks overflow the row.
+        <div className="mb-4 -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+          <button
+            onClick={() => {
+              setActiveSegments(new Set());
+              setLastSegment(null);
+            }}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
+              activeSegments.size === 0
+                ? "border-foreground bg-foreground text-background"
+                : "border-foreground/15 hover:bg-foreground/5"
+            }`}
+          >
+            All
+            <span className="ml-1.5 opacity-50 tabular-nums">{notes.length}</span>
+          </button>
+          {segmentDecks.map((d) => {
+            const active = activeSegments.has(d);
+            const isDragOver = dragOverDeck === d;
+            const { prefix, leaf } = segmentLabelParts(d, deckName);
+            return (
+              <button
+                key={d}
+                onClick={(e) => handleSegmentClick(d, e)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                  setDragOverDeck(d);
+                }}
+                onDragLeave={() =>
+                  setDragOverDeck((prev) => (prev === d ? null : prev))
+                }
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleSegmentDrop(d);
+                }}
+                title={formatDeckPath(d)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
+                  active
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-foreground/15 hover:bg-foreground/5"
+                } ${
+                  isDragOver
+                    ? "ring-2 ring-foreground/40 ring-offset-1 ring-offset-background"
+                    : ""
+                }`}
+              >
+                {prefix && <span className="opacity-50">{prefix}</span>}
+                {leaf}
+                <span className="ml-1.5 opacity-50 tabular-nums">
+                  {countByDeck.get(d) ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
+      {!segmentScopeEmpty && (
+        <div className="mb-4 flex items-center gap-3">
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                if (query) {
+                  setQuery("");
+                } else {
+                  searchRef.current?.blur();
+                }
+              }
+            }}
+            placeholder="Search cards…"
+            className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
+          />
+        </div>
+      )}
+
+      {!segmentScopeEmpty && (
       <div className="mb-4 flex h-9 items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {selectionActive ? (
@@ -465,8 +762,8 @@ export function CardList({
           ) : (
             <p className="text-sm text-foreground/50">
               {trimmedQuery
-                ? `${filteredNotes.length} of ${notes.length} ${notes.length === 1 ? "card" : "cards"}`
-                : `${notes.length} ${notes.length === 1 ? "card" : "cards"}`}
+                ? `${filteredNotes.length} of ${segmentNotes.length} ${segmentNotes.length === 1 ? "card" : "cards"}`
+                : `${segmentNotes.length} ${segmentNotes.length === 1 ? "card" : "cards"}`}
             </p>
           )}
         </div>
@@ -505,8 +802,19 @@ export function CardList({
           </div>
         )}
       </div>
+      )}
 
-      {notes.length === 0 ? (
+      {segmentScopeEmpty ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
+          <FolderSimple size={32} weight="light" className="text-foreground/25" />
+          <p className="text-sm font-medium text-foreground/70">
+            No cards in {emptySegmentLabel}
+          </p>
+          <p className="text-sm text-foreground/40">
+            Drag cards from another deck onto it to move them here.
+          </p>
+        </div>
+      ) : notes.length === 0 ? (
         <p className="text-foreground/50">
           No cards yet. Add your first card above.
         </p>
@@ -525,6 +833,13 @@ export function CardList({
                 data-selected={selected || undefined}
                 role="button"
                 tabIndex={0}
+                draggable={hasSegments}
+                onDragStart={(e) => handleRowDragStart(e, note)}
+                onDragEnd={() => {
+                  draggingRef.current = [];
+                  setDragOverDeck(null);
+                  clearDragImage();
+                }}
                 onClick={() => setEditingNote(note)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {

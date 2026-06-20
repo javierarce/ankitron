@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { deckLeaf } from "@/lib/deck";
+import { compareDeckPaths, deckLeaf } from "@/lib/deck";
 import type { Note, DueCounts } from "@/lib/types";
 
 export function DeckDetailPage() {
@@ -11,6 +11,12 @@ export function DeckDetailPage() {
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [suspendedCardIds, setSuspendedCardIds] = useState<number[]>([]);
+  // Each note's home deck (the deck of its first card), so the card list can
+  // scope to a single subdeck. A note's cards normally share a deck; we key off
+  // the first one.
+  const [noteDecks, setNoteDecks] = useState<Record<number, string>>({});
+  // Every deck nested under this one ("Spanish::Verbs", …), sorted as a tree.
+  const [subdecks, setSubdecks] = useState<string[]>([]);
   const [due, setDue] = useState<DueCounts>({ new: 0, learn: 0, review: 0 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,9 +47,17 @@ export function DeckDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const noteIds = await ankiFetch<number[]>("findNotes", {
-          query: `deck:"${deckName}"`,
-        });
+        const [noteIds, allDeckNames] = await Promise.all([
+          ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` }),
+          ankiFetch<string[]>("deckNames"),
+        ]);
+        if (cancelled) return;
+        setSubdecks(
+          allDeckNames
+            .filter((n) => n.startsWith(deckName + "::"))
+            .sort(compareDeckPaths),
+        );
+
         const fetchedNotes =
           noteIds.length === 0
             ? []
@@ -53,11 +67,24 @@ export function DeckDetailPage() {
 
         const allCardIds = fetchedNotes.flatMap((n) => n.cards ?? []);
         if (allCardIds.length > 0) {
-          const results = await ankiFetch<(boolean | null)[]>("areSuspended", {
-            cards: allCardIds,
-          });
+          // One cardsInfo call gives us both each card's deck (to scope the list
+          // to a subdeck) and its scheduling queue (-1 means suspended), so we
+          // don't need a separate areSuspended round-trip.
+          const cards = await ankiFetch<
+            { cardId: number; deckName: string; queue: number }[]
+          >("cardsInfo", { cards: allCardIds });
           if (cancelled) return;
-          setSuspendedCardIds(allCardIds.filter((_, i) => results[i]));
+          const byCard = new Map(cards.map((c) => [c.cardId, c]));
+          setSuspendedCardIds(
+            allCardIds.filter((id) => byCard.get(id)?.queue === -1),
+          );
+          const decksByNote: Record<number, string> = {};
+          for (const note of fetchedNotes) {
+            const firstCard = (note.cards ?? []).find((id) => byCard.has(id));
+            const deck = firstCard != null ? byCard.get(firstCard)?.deckName : undefined;
+            if (deck) decksByNote[note.noteId] = deck;
+          }
+          setNoteDecks(decksByNote);
         }
 
         if (cancelled) return;
@@ -122,7 +149,10 @@ export function DeckDetailPage() {
           deckName={deckName}
           notes={notes}
           suspendedCardIds={suspendedCardIds}
+          noteDecks={noteDecks}
+          subdecks={subdecks}
           onSuspendChange={refreshDue}
+          onCardsMoved={refreshDue}
           showAddForm={showAddForm}
           onShowAddForm={setShowAddForm}
         />
