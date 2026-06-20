@@ -727,6 +727,9 @@ export function CardList({
                 }
               }
             }}
+            // Cards being dragged onto a segment carry their note ids as
+            // text/plain; block dropping that onto the search box.
+            onDrop={(e) => e.preventDefault()}
             placeholder="Search cards…"
             className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
           />
