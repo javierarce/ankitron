@@ -227,12 +227,17 @@ export function StudyPage() {
     }
     await loadCurrentCard();
     if (wasRevealed) {
+      // Mirror handleReveal's fade: hide the question side, swap in the answer
+      // while hidden, then fade it back in so the restore matches a manual reveal.
+      setCardVisible(false);
+      await delay(FADE_MS);
       try {
         await ankiFetch("guiShowAnswer");
       } catch {
         // Re-revealing in Anki is best-effort; reveal locally regardless.
       }
       setIsRevealed(true);
+      setCardVisible(true);
     }
   }
 
