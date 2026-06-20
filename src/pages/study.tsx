@@ -139,6 +139,22 @@ export function StudyPage() {
     await loadCurrentCard();
   }, [completed, reviewed, deckName, loadCurrentCard]);
 
+  const handleEdit = useCallback(async () => {
+    if (!card) return;
+    try {
+      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
+      if (!cardsResult.length) return;
+      const noteId = cardsResult[0].noteId ?? cardsResult[0].note;
+      if (!noteId) return;
+      const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
+      if (notes.length > 0) {
+        setEditingNote(notes[0]);
+      }
+    } catch {
+      // silently fail
+    }
+  }, [card]);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (editingNote || showAddForm) return;
@@ -150,6 +166,9 @@ export function StudyPage() {
       } else if (e.key === "h" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         navigate(`/decks/${encodeURIComponent(deckName)}`);
+      } else if (e.key === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        handleEdit();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         handleUndo();
@@ -157,7 +176,7 @@ export function StudyPage() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm, navigate, deckName, handleUndo]);
+  }, [editingNote, showAddForm, navigate, deckName, handleEdit, handleUndo]);
 
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
@@ -195,23 +214,11 @@ export function StudyPage() {
     transitioningRef.current = false;
   }
 
-  async function handleEdit() {
-    if (!card) return;
-    try {
-      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
-      if (!cardsResult.length) return;
-      const noteId = cardsResult[0].noteId ?? cardsResult[0].note;
-      if (!noteId) return;
-      const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
-      if (notes.length > 0) {
-        setEditingNote(notes[0]);
-      }
-    } catch {
-      // silently fail
-    }
-  }
-
   async function handleEditClose() {
+    // loadCurrentCard rebuilds the queue and resets to the question side; if the
+    // answer was showing before the edit, restore it so editing doesn't bounce
+    // the card back to its unanswered state.
+    const wasRevealed = isRevealed;
     setEditingNote(null);
     try {
       await ankiFetch("guiDeckReview", { name: deckName });
@@ -219,6 +226,14 @@ export function StudyPage() {
       // ignore
     }
     await loadCurrentCard();
+    if (wasRevealed) {
+      try {
+        await ankiFetch("guiShowAnswer");
+      } catch {
+        // Re-revealing in Anki is best-effort; reveal locally regardless.
+      }
+      setIsRevealed(true);
+    }
   }
 
   async function handleAddSaved() {
