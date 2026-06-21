@@ -2,7 +2,8 @@
 
 [![Latest release](https://img.shields.io/github/v/release/javierarce/ankitron?label=latest%20release)](https://github.com/javierarce/ankitron/releases/latest)
 
-A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Browse decks, create and edit cards, and run study sessions in a simple and clean interface.
+
+A simple, lightweight Mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Browse decks, create and edit cards, and run study sessions in a simple and clean interface.
 
 <img width="2800" height="2048" alt="image" src="https://github.com/user-attachments/assets/9e1f1988-b034-401d-a482-b2b7a6158032" />
 
