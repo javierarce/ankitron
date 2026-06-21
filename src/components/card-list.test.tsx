@@ -52,6 +52,19 @@ describe("CardList add flow", () => {
       configurable: true,
       value: { ...realLocation, reload },
     });
+    // jsdom derives localStorage from the document origin via window.location,
+    // so the swap above detaches it. CardList reads localStorage on render (its
+    // saved sort), so provide a plain in-memory stand-in.
+    const store = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+        clear: () => store.clear(),
+      },
+    });
   });
 
   afterEach(() => {
@@ -59,6 +72,7 @@ describe("CardList add flow", () => {
       configurable: true,
       value: realLocation,
     });
+    delete (window as { localStorage?: Storage }).localStorage;
   });
 
   it("refreshes in place and closes the form, without a page reload", async () => {

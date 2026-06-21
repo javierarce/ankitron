@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckLeaf } from "@/lib/deck";
+import { resolveDeckRedirect } from "@/lib/deck-redirects";
 import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
 
@@ -15,6 +16,11 @@ async function fetchDeckData(deckName: string) {
     ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` }),
     ankiFetch<string[]>("deckNames"),
   ]);
+
+  // deckNames is authoritative for existence: a deck reached via a stale
+  // history entry (renamed/deleted) won't be in it, and findNotes would just
+  // return [] and render a phantom empty deck under the old name.
+  const exists = allDeckNames.includes(deckName);
 
   const subdecks = allDeckNames
     .filter((n) => n.startsWith(deckName + "::"))
@@ -42,12 +48,13 @@ async function fetchDeckData(deckName: string) {
     }
   }
 
-  return { subdecks, notes, suspendedCardIds, noteDecks };
+  return { subdecks, notes, suspendedCardIds, noteDecks, exists };
 }
 
 export function DeckDetailPage() {
   const { deckName: rawName } = useParams<{ deckName: string }>();
   const deckName = decodeURIComponent(rawName!);
+  const navigate = useNavigate();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [suspendedCardIds, setSuspendedCardIds] = useState<number[]>([]);
@@ -118,6 +125,18 @@ export function DeckDetailPage() {
       try {
         const data = await fetchDeckData(deckName);
         if (cancelled) return;
+        // If the deck no longer exists (landed here via a stale history entry
+        // after a rename or delete), forward to its new name when known,
+        // otherwise fall back to the deck list. Replace the entry either way so
+        // back doesn't return here.
+        if (!data.exists) {
+          const renamedTo = resolveDeckRedirect(deckName);
+          navigate(
+            renamedTo ? `/decks/${encodeURIComponent(renamedTo)}` : "/",
+            { replace: true },
+          );
+          return;
+        }
         applyData(data);
         if (cancelled) return;
         await refreshDue();
@@ -130,7 +149,7 @@ export function DeckDetailPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [deckName, applyData, refreshDue]);
+  }, [deckName, applyData, refreshDue, navigate]);
 
   if (loading) {
     return (
