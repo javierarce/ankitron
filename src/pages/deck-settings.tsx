@@ -7,6 +7,7 @@ import { MoveDeckDialog } from "@/components/move-deck-dialog";
 import { RenameDeckDialog } from "@/components/rename-deck-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { deckLeaf, deckParent, formatDeckPath, renameDeck } from "@/lib/deck";
+import { recordDeckRedirect } from "@/lib/deck-redirects";
 import { migrateDeckLanguages } from "@/lib/deck-settings";
 import type { Note } from "@/lib/types";
 
@@ -40,6 +41,10 @@ export function DeckSettingsPage() {
       // No-op (e.g. a case-only change) — nothing moved, so stay put.
       if (renames.length === 0) return;
       migrateDeckLanguages(renames);
+      // Remember where each old deck path went so a stale history entry (e.g.
+      // pressing cmd+left back onto the pre-rename deck) forwards to the new
+      // name instead of dead-ending.
+      for (const { from, to } of renames) recordDeckRedirect(from, to);
       navigate(`/decks/${encodeURIComponent(newName)}/settings`, {
         replace: true,
       });
