@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckLeaf } from "@/lib/deck";
@@ -8,6 +8,7 @@ import type { Note, DueCounts } from "@/lib/types";
 export function DeckDetailPage() {
   const { deckName: rawName } = useParams<{ deckName: string }>();
   const deckName = decodeURIComponent(rawName!);
+  const navigate = useNavigate();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [suspendedCardIds, setSuspendedCardIds] = useState<number[]>([]);
@@ -52,6 +53,15 @@ export function DeckDetailPage() {
           ankiFetch<string[]>("deckNames"),
         ]);
         if (cancelled) return;
+        // deckNames is authoritative: if this deck isn't in it, it no longer
+        // exists (e.g. we landed here via a stale history entry after the deck
+        // was renamed or deleted). Without this guard, findNotes returns [] and
+        // we'd render a phantom empty deck under the old name. Replace the entry
+        // so pressing back again doesn't return to this dead route.
+        if (!allDeckNames.includes(deckName)) {
+          navigate("/", { replace: true });
+          return;
+        }
         setSubdecks(
           allDeckNames
             .filter((n) => n.startsWith(deckName + "::"))
@@ -98,7 +108,7 @@ export function DeckDetailPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [deckName, refreshDue]);
+  }, [deckName, refreshDue, navigate]);
 
   if (loading) {
     return (
