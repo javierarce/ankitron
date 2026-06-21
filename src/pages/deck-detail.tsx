@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckLeaf } from "@/lib/deck";
+import { resolveDeckRedirect } from "@/lib/deck-redirects";
 import type { Note, DueCounts } from "@/lib/types";
 
 export function DeckDetailPage() {
@@ -56,10 +57,15 @@ export function DeckDetailPage() {
         // deckNames is authoritative: if this deck isn't in it, it no longer
         // exists (e.g. we landed here via a stale history entry after the deck
         // was renamed or deleted). Without this guard, findNotes returns [] and
-        // we'd render a phantom empty deck under the old name. Replace the entry
-        // so pressing back again doesn't return to this dead route.
+        // we'd render a phantom empty deck under the old name. If the deck was
+        // renamed, forward to its new name; otherwise (deleted) fall back to the
+        // deck list. Replace the entry either way so back doesn't return here.
         if (!allDeckNames.includes(deckName)) {
-          navigate("/", { replace: true });
+          const renamedTo = resolveDeckRedirect(deckName);
+          navigate(
+            renamedTo ? `/decks/${encodeURIComponent(renamedTo)}` : "/",
+            { replace: true },
+          );
           return;
         }
         setSubdecks(
