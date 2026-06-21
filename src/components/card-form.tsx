@@ -340,6 +340,9 @@ export function CardForm({
           savedNote = {
             ...note,
             noteId,
+            // The new note has fresh card ids we haven't fetched; drop the
+            // deleted note's so a later deck change falls back to findCards.
+            cards: undefined,
             modelName,
             tags,
             fields: isClozeForm
