@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { CaretLeft } from "@phosphor-icons/react/dist/ssr/CaretLeft";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
+import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
 import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
@@ -47,6 +48,13 @@ interface CardFormProps {
   onPrev?: () => void;
   /** Skip to the next card (or finish) without saving the current one. */
   onSkip?: () => void;
+  /** Delete the current card. Renders a Delete button in the footer. */
+  onDelete?: () => void;
+  /**
+   * Set while a dialog (e.g. the delete confirmation) is stacked on top, so the
+   * form ignores Escape and backdrop clicks and lets that dialog handle them.
+   */
+  blocked?: boolean;
 }
 
 function isClozeNote(note: Note): boolean {
@@ -70,6 +78,8 @@ export function CardForm({
   position,
   onPrev,
   onSkip,
+  onDelete,
+  blocked,
 }: CardFormProps) {
   useScrollLock();
   const noteFields = note?.fields ?? {};
@@ -161,12 +171,13 @@ export function CardForm({
   }, [isEdit, deckName]);
 
   useEffect(() => {
+    if (blocked) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, blocked]);
 
   useEffect(() => {
     let cancelled = false;
@@ -374,7 +385,7 @@ export function CardForm({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (!blocked && e.target === e.currentTarget) onClose();
       }}
     >
       <div
@@ -552,14 +563,15 @@ export function CardForm({
 
           <div className="flex items-center justify-between gap-3 pt-2">
             <div>
-              {position && (
+              {onDelete && (
                 <button
                   type="button"
-                  onClick={onSkip}
+                  onClick={onDelete}
                   disabled={saving}
-                  className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                 >
-                  Skip
+                  <Trash size={16} weight="bold" />
+                  Delete
                 </button>
               )}
             </div>

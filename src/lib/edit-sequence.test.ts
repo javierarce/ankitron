@@ -5,6 +5,7 @@ import {
   editSequencePrev,
   editSequenceNext,
   editSequenceSaved,
+  editSequenceDeleted,
   editSequenceCurrentId,
   editSequenceCurrentNote,
   type EditSequence,
@@ -150,6 +151,58 @@ describe("editSequenceSaved", () => {
       const back = editSequencePrev(second.seq);
       expect(editSequenceCurrentNote(back, original)?.noteId).toBe(123);
     });
+  });
+});
+
+describe("editSequenceDeleted", () => {
+  it("keeps the cursor put so the next card slides into the slot, and dirties", () => {
+    const step = editSequenceDeleted(at([1, 2, 3], 0));
+    expect(step.done).toBe(false);
+    if (!step.done) {
+      expect(step.seq.ids).toEqual([2, 3]);
+      expect(step.seq.index).toBe(0);
+      expect(step.seq.dirty).toBe(true);
+    }
+  });
+
+  it("steps back when the deleted card was last", () => {
+    const step = editSequenceDeleted(at([1, 2, 3], 2));
+    expect(step.done).toBe(false);
+    if (!step.done) {
+      expect(step.seq.ids).toEqual([1, 2]);
+      expect(step.seq.index).toBe(1);
+    }
+  });
+
+  it("finishes dirty when the deleted card was the only one left", () => {
+    expect(editSequenceDeleted(at([1], 0))).toEqual({ done: true, dirty: true });
+  });
+
+  it("drops the deleted card's saved edit", () => {
+    const seq: EditSequence = {
+      ids: [1, 2],
+      index: 0,
+      edited: { 1: note(1, "Basic", "edited") },
+      dirty: true,
+    };
+    const step = editSequenceDeleted(seq);
+    expect(step.done).toBe(false);
+    if (!step.done) expect(step.seq.edited[1]).toBeUndefined();
+  });
+
+  it("keeps earlier edits and stays dirty even when the deleted card was untouched", () => {
+    const seq: EditSequence = {
+      ids: [1, 2, 3],
+      index: 2,
+      edited: { 1: note(1, "Basic", "edited") },
+      dirty: true,
+    };
+    const step = editSequenceDeleted(seq);
+    expect(step.done).toBe(false);
+    if (!step.done) {
+      expect(step.seq.edited[1].fields.Front.value).toBe("edited");
+      expect(step.seq.dirty).toBe(true);
+    }
   });
 });
 

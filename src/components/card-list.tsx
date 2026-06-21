@@ -24,6 +24,7 @@ import {
   editSequencePrev,
   editSequenceNext,
   editSequenceSaved,
+  editSequenceDeleted,
   editSequenceCurrentId,
   editSequenceCurrentNote,
   type EditSequence,
@@ -48,6 +49,20 @@ function segmentLabelParts(
   const leaf = parts[parts.length - 1];
   const prefix = parts.length > 1 ? parts.slice(0, -1).join(" / ") + " / " : null;
   return { prefix, leaf };
+}
+
+/**
+ * Centered placeholder shown when the card list has nothing to render — a fresh
+ * empty deck, or a segment scoped to a (sub)deck that holds no cards.
+ */
+function EmptyState({ heading, hint }: { heading: string; hint: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
+      <FolderSimple size={32} weight="light" className="text-foreground/25" />
+      <p className="text-sm font-medium text-foreground/70">{heading}</p>
+      <p className="text-sm text-foreground/40">{hint}</p>
+    </div>
+  );
 }
 
 function decodeHtml(html: string): string {
@@ -90,11 +105,13 @@ function isClozeNote(note: Note): boolean {
 }
 
 function CardMenu({
+  onEdit,
   isSuspended,
   onToggleSuspend,
   onMove,
   onDelete,
 }: {
+  onEdit: () => void;
   isSuspended: boolean;
   onToggleSuspend: () => void;
   onMove: () => void;
@@ -134,6 +151,15 @@ function CardMenu({
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg">
+          <button
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+            className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
+          >
+            Edit
+          </button>
           <button
             onClick={() => {
               setOpen(false);
@@ -213,6 +239,9 @@ export function CardList({
   // "Update Card" (or Skip) advances. The cursor logic lives in lib/edit-sequence
   // so it can be tested without rendering the editor.
   const [editSeq, setEditSeq] = useState<EditSequence | null>(null);
+  // Confirmation for deleting the card currently open in the edit run.
+  const [seqDeleteOpen, setSeqDeleteOpen] = useState(false);
+  const [seqDeleting, setSeqDeleting] = useState(false);
 
   function beginEdit(ids: number[]) {
     setEditSeq(createEditSequence(ids));
@@ -228,6 +257,22 @@ export function CardList({
   function applyStep(step: SequenceStep) {
     if (step.done) finishEdit(step.dirty);
     else setEditSeq(step.seq);
+  }
+
+  // Delete the card open in the run, then drop it from the sequence and show the
+  // next one (or finish if it was the last). The list reloads on finish.
+  async function handleSeqDelete() {
+    if (!editSeq) return;
+    setSeqDeleting(true);
+    try {
+      await ankiFetch("deleteNotes", { notes: [editSequenceCurrentId(editSeq)] });
+      setSeqDeleteOpen(false);
+      applyStep(editSequenceDeleted(editSeq));
+    } catch {
+      setSeqDeleteOpen(false);
+    } finally {
+      setSeqDeleting(false);
+    }
   }
 
   // Each note's home deck, kept locally so a drag-move updates the list in place
@@ -599,6 +644,9 @@ export function CardList({
   // When the selected segment(s) hold no cards, hide the search field, count,
   // and "no match" message and show a dedicated empty state instead.
   const segmentScopeEmpty = activeSegments.size > 0 && segmentNotes.length === 0;
+  // Nothing to search or count: a fresh empty deck, or an empty segment scope.
+  // Both fall through to the EmptyState, so suppress the search box and count.
+  const listEmpty = segmentScopeEmpty || notes.length === 0;
   const onlySegment = activeSegments.size === 1 ? [...activeSegments][0] : null;
   const emptySegmentLabel = onlySegment
     ? (() => {
@@ -771,7 +819,7 @@ export function CardList({
         </div>
       )}
 
-      {!segmentScopeEmpty && (
+      {!listEmpty && (
         <div className="mb-4 flex items-center gap-3">
           <input
             ref={searchRef}
@@ -796,7 +844,7 @@ export function CardList({
         </div>
       )}
 
-      {!segmentScopeEmpty && (
+      {!listEmpty && (
       <div className="mb-4 flex h-9 items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {selectionActive ? (
@@ -881,19 +929,15 @@ export function CardList({
       )}
 
       {segmentScopeEmpty ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
-          <FolderSimple size={32} weight="light" className="text-foreground/25" />
-          <p className="text-sm font-medium text-foreground/70">
-            No cards in {emptySegmentLabel}
-          </p>
-          <p className="text-sm text-foreground/40">
-            Drag cards from another deck onto it to move them here.
-          </p>
-        </div>
+        <EmptyState
+          heading={`No cards in ${emptySegmentLabel}`}
+          hint="Drag cards from another deck onto it to move them here."
+        />
       ) : notes.length === 0 ? (
-        <p className="text-foreground/50">
-          No cards yet. Add your first card above.
-        </p>
+        <EmptyState
+          heading={`No cards in ${deckLeaf(deckName)}`}
+          hint="Add your first card to get started."
+        />
       ) : filteredNotes.length === 0 ? (
         <p className="text-foreground/50">No cards match &ldquo;{query}&rdquo;.</p>
       ) : (
@@ -982,6 +1026,7 @@ export function CardList({
                 </div>
                 <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                   <CardMenu
+                    onEdit={() => setEditingNote(note)}
                     isSuspended={noteSuspended}
                     onToggleSuspend={() => handleToggleSuspend(note)}
                     onMove={() => setMovingNote(note)}
@@ -1002,6 +1047,8 @@ export function CardList({
         <CardForm
           deckName={deckName}
           note={editingNote}
+          onDelete={() => setDeletingNote(editingNote)}
+          blocked={!!deletingNote}
           onClose={() => setEditingNote(null)}
         />
       )}
@@ -1018,8 +1065,33 @@ export function CardList({
               position={{ index: editSeq.index, total: editSeq.ids.length }}
               onPrev={() => setEditSeq(editSequencePrev(editSeq))}
               onSkip={() => applyStep(editSequenceNext(editSeq))}
+              onDelete={() => setSeqDeleteOpen(true)}
+              blocked={seqDeleteOpen}
               onSaved={(updated) => applyStep(editSequenceSaved(editSeq, updated))}
               onClose={() => finishEdit(editSeq.dirty)}
+            />
+          );
+        })()}
+
+      {seqDeleteOpen &&
+        editSeq &&
+        (() => {
+          const note = editSequenceCurrentNote(editSeq, notes);
+          const preview = note
+            ? truncate(
+                isClozeNote(note)
+                  ? stripCloze(stripHtml(note.fields.Text?.value ?? ""))
+                  : stripHtml(note.fields.Front?.value ?? ""),
+                50,
+              )
+            : "";
+          return (
+            <ConfirmDialog
+              title="Delete Card"
+              message={preview ? `Delete "${preview}"?` : "Delete this card?"}
+              onConfirm={handleSeqDelete}
+              onCancel={() => setSeqDeleteOpen(false)}
+              loading={seqDeleting}
             />
           );
         })()}
