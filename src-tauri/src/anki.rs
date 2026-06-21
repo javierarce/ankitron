@@ -37,7 +37,7 @@ impl Drop for AnkiState {
 /// Path to the file recording the PID of the headless Anki we spawned, so a
 /// later run (or one started after a crash) can recognise and reclaim it.
 fn pidfile_path() -> Option<PathBuf> {
-    let dir = dirs::cache_dir()?.join("AnkiTron");
+    let dir = dirs::cache_dir()?.join("Ankitron");
     Some(dir.join("anki.pid"))
 }
 
@@ -227,7 +227,7 @@ fn adopt_orphan_if_ours(state: &AnkiState) {
     spawn_watchdog(state, pid);
 }
 
-/// Spawn a watchdog process that kills Anki if AnkiTron exits without running
+/// Spawn a watchdog process that kills Anki if Ankitron exits without running
 /// cleanup (a crash or force-quit). The watchdog polls our PID and, once we
 /// disappear, sends SIGTERM and then escalates to SIGKILL if Anki is still
 /// alive a few seconds later — a single SIGTERM can be missed while Anki is

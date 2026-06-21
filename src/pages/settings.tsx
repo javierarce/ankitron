@@ -87,7 +87,7 @@ export function SettingsPage() {
           <div>
             <p className="text-sm font-medium">Sync</p>
             <p className="text-xs text-foreground/50">
-              AnkiTron syncs on launch and after studying.
+              Ankitron syncs on launch and after studying.
               {sync === "ok" && " — synced"}
               {sync === "error" && ` — ${syncError}`}
             </p>
@@ -106,7 +106,7 @@ export function SettingsPage() {
             <div>
               <p className="text-sm font-medium">Updates</p>
               <p className="text-xs text-foreground/50">
-                {version ? `AnkiTron ${version}` : "AnkiTron"}
+                {version ? `Ankitron ${version}` : "Ankitron"}
                 {check === "uptodate" && " — you're up to date"}
                 {check === "error" && ` — ${checkError}`}
               </p>

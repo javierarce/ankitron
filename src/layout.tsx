@@ -44,7 +44,7 @@ export function Layout() {
     });
 
     // Wait for Anki, then pull from AnkiWeb before rendering any pages so the
-    // app always opens on fresh data (AnkiTron and Anki can't run at once, so
+    // app always opens on fresh data (Ankitron and Anki can't run at once, so
     // a launch sync replaces the manual Sync button). Sync failure never
     // blocks startup — we render regardless.
     import("@tauri-apps/api/core").then(({ invoke }) => {

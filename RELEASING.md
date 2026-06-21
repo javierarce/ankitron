@@ -1,9 +1,9 @@
-# Releasing AnkiTron
+# Releasing Ankitron
 
 Releases are cut by pushing a `v*` tag. That triggers
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds
 the universal macOS app, signs + notarizes it with the GitHub Secrets (no local
-signing needed), and publishes `AnkiTron.dmg` plus `latest.json` (for the in-app
+signing needed), and publishes `Ankitron.dmg` plus `latest.json` (for the in-app
 updater) to a GitHub release.
 
 > [!IMPORTANT]
@@ -106,7 +106,7 @@ This updates the GitHub release body only (not `latest.json`), so prefer
 getting the tag message right in step 4. Keep it plain text — see the note there.
 
 ```bash
-gh release edit vX.Y.Z --notes "AnkiTron X.Y.Z — short title
+gh release edit vX.Y.Z --notes "Ankitron X.Y.Z — short title
 - Did X
 - Fixed Y"
 ```

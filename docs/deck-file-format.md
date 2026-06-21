@@ -1,6 +1,6 @@
-# AnkiTron deck file format
+# Ankitron deck file format
 
-AnkiTron imports and exports decks as a single `.json` file. The format is
+Ankitron imports and exports decks as a single `.json` file. The format is
 simple enough to write by hand or generate from another app. This document explains the structure with examples.
 
 ## The big picture
@@ -105,7 +105,7 @@ using `::` to separate levels:
 }
 ```
 
-On import, AnkiTron creates the subdeck if it doesn't already exist. Notes
+On import, Ankitron creates the subdeck if it doesn't already exist. Notes
 without a `deck` field go into the deck you choose at import time.
 
 ## A complete example
@@ -144,7 +144,7 @@ without a `deck` field go into the deck you choose at import time.
 }
 ```
 
-Save this as something like `spanish.json` and import it from AnkiTron.
+Save this as something like `spanish.json` and import it from Ankitron.
 
 ## How import handles existing cards
 
@@ -155,8 +155,8 @@ Save this as something like `spanish.json` and import it from AnkiTron.
 - **Tags are merged**, not replaced — importing never removes tags a note
   already has in Anki.
 - **Stale-edit guard:** when updating an existing note, if its copy in Anki was
-  changed more recently than the export (`mod` timestamp), AnkiTron skips it to
+  changed more recently than the export (`mod` timestamp), Ankitron skips it to
   avoid clobbering your edits, and reports it. You can choose **Overwrite
   anyway** to force the update. This only matters for re-imports of files that
-  AnkiTron exported; hand-written files generally have no `noteId`/`mod` and are
+  Ankitron exported; hand-written files generally have no `noteId`/`mod` and are
   simply added.
