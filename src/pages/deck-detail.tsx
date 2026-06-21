@@ -5,6 +5,45 @@ import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckLeaf } from "@/lib/deck";
 import type { Note, DueCounts } from "@/lib/types";
 
+type CardInfo = { cardId: number; deckName: string; queue: number };
+
+// Fetch everything the page renders for a deck, in one place so the initial
+// (spinner-backed) load and the silent post-edit refresh stay in sync.
+async function fetchDeckData(deckName: string) {
+  const [noteIds, allDeckNames] = await Promise.all([
+    ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` }),
+    ankiFetch<string[]>("deckNames"),
+  ]);
+
+  const subdecks = allDeckNames
+    .filter((n) => n.startsWith(deckName + "::"))
+    .sort(compareDeckPaths);
+
+  const notes =
+    noteIds.length === 0
+      ? []
+      : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
+
+  const allCardIds = notes.flatMap((n) => n.cards ?? []);
+  let suspendedCardIds: number[] = [];
+  const noteDecks: Record<number, string> = {};
+  if (allCardIds.length > 0) {
+    // One cardsInfo call gives us both each card's deck (to scope the list to a
+    // subdeck) and its scheduling queue (-1 means suspended), so we don't need a
+    // separate areSuspended round-trip.
+    const cards = await ankiFetch<CardInfo[]>("cardsInfo", { cards: allCardIds });
+    const byCard = new Map(cards.map((c) => [c.cardId, c]));
+    suspendedCardIds = allCardIds.filter((id) => byCard.get(id)?.queue === -1);
+    for (const note of notes) {
+      const firstCard = (note.cards ?? []).find((id) => byCard.has(id));
+      const deck = firstCard != null ? byCard.get(firstCard)?.deckName : undefined;
+      if (deck) noteDecks[note.noteId] = deck;
+    }
+  }
+
+  return { subdecks, notes, suspendedCardIds, noteDecks };
+}
+
 export function DeckDetailPage() {
   const { deckName: rawName } = useParams<{ deckName: string }>();
   const deckName = decodeURIComponent(rawName!);
@@ -40,6 +79,28 @@ export function DeckDetailPage() {
     }
   }, [deckName]);
 
+  const applyData = useCallback(
+    (data: Awaited<ReturnType<typeof fetchDeckData>>) => {
+      setSubdecks(data.subdecks);
+      setNotes(data.notes);
+      setSuspendedCardIds(data.suspendedCardIds);
+      setNoteDecks(data.noteDecks);
+    },
+    [],
+  );
+
+  // Silent in-place refresh after a card is added, edited, or deleted — no
+  // blocking spinner and no full page reload, so the list just updates under
+  // the (now-closed) editor.
+  const refresh = useCallback(async () => {
+    try {
+      applyData(await fetchDeckData(deckName));
+      await refreshDue();
+    } catch {
+      // Keep the current view if a refresh fails; the user just acted on it.
+    }
+  }, [deckName, applyData, refreshDue]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -47,46 +108,9 @@ export function DeckDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const [noteIds, allDeckNames] = await Promise.all([
-          ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` }),
-          ankiFetch<string[]>("deckNames"),
-        ]);
+        const data = await fetchDeckData(deckName);
         if (cancelled) return;
-        setSubdecks(
-          allDeckNames
-            .filter((n) => n.startsWith(deckName + "::"))
-            .sort(compareDeckPaths),
-        );
-
-        const fetchedNotes =
-          noteIds.length === 0
-            ? []
-            : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
-        if (cancelled) return;
-        setNotes(fetchedNotes);
-
-        const allCardIds = fetchedNotes.flatMap((n) => n.cards ?? []);
-        if (allCardIds.length > 0) {
-          // One cardsInfo call gives us both each card's deck (to scope the list
-          // to a subdeck) and its scheduling queue (-1 means suspended), so we
-          // don't need a separate areSuspended round-trip.
-          const cards = await ankiFetch<
-            { cardId: number; deckName: string; queue: number }[]
-          >("cardsInfo", { cards: allCardIds });
-          if (cancelled) return;
-          const byCard = new Map(cards.map((c) => [c.cardId, c]));
-          setSuspendedCardIds(
-            allCardIds.filter((id) => byCard.get(id)?.queue === -1),
-          );
-          const decksByNote: Record<number, string> = {};
-          for (const note of fetchedNotes) {
-            const firstCard = (note.cards ?? []).find((id) => byCard.has(id));
-            const deck = firstCard != null ? byCard.get(firstCard)?.deckName : undefined;
-            if (deck) decksByNote[note.noteId] = deck;
-          }
-          setNoteDecks(decksByNote);
-        }
-
+        applyData(data);
         if (cancelled) return;
         await refreshDue();
       } catch {
@@ -98,7 +122,7 @@ export function DeckDetailPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [deckName, refreshDue]);
+  }, [deckName, applyData, refreshDue]);
 
   if (loading) {
     return (
@@ -153,6 +177,7 @@ export function DeckDetailPage() {
           subdecks={subdecks}
           onSuspendChange={refreshDue}
           onCardsMoved={refreshDue}
+          onChanged={refresh}
           showAddForm={showAddForm}
           onShowAddForm={setShowAddForm}
         />

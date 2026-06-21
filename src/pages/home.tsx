@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DeckList } from "@/components/deck-list";
 import { StudySummary } from "@/components/study-summary";
+import { useSync } from "@/lib/sync-context";
 import {
   ankiFetch,
   fetchAllDueCounts,
@@ -17,6 +18,13 @@ export function HomePage() {
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { syncedAt, registerPageLoad } = useSync();
+
+  // While our blocking spinner is up, suppress the corner sync indicator so the
+  // two never show at once.
+  useEffect(() => {
+    if (loading) return registerPageLoad();
+  }, [loading, registerPageLoad]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +57,9 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Re-run silently when a sync completes (`loading` is already false by then,
+    // so no spinner) to pick up cards pulled from AnkiWeb.
+  }, [syncedAt]);
 
   if (loading) {
     return (

@@ -205,6 +205,12 @@ interface CardListProps {
   onSuspendChange?: () => void;
   /** Called after cards are moved between (sub)decks, so the parent can refresh due counts. */
   onCardsMoved?: () => void;
+  /**
+   * Called after a card is added, edited, or deleted so the parent can refetch
+   * the list in place. Without it these actions fall back to a full page
+   * reload, which blanks the whole app.
+   */
+  onChanged?: () => void;
   /** Add-card form visibility, owned by the page so the button can live in its header. */
   showAddForm: boolean;
   onShowAddForm: (show: boolean) => void;
@@ -218,6 +224,7 @@ export function CardList({
   subdecks,
   onSuspendChange,
   onCardsMoved,
+  onChanged,
   showAddForm,
   onShowAddForm,
 }: CardListProps) {
@@ -247,11 +254,15 @@ export function CardList({
     setEditSeq(createEditSequence(ids));
   }
 
-  // The rest of the app reloads after an edit to resync; do it once when the run
-  // finishes, and only if something was actually written.
+  // Refresh the list in place after a write. Falls back to a full page reload
+  // only if the parent didn't wire up an in-place refresh.
+  const refreshAfterChange = onChanged ?? (() => window.location.reload());
+
+  // Resync the list once the run finishes, and only if something was actually
+  // written.
   function finishEdit(dirty: boolean) {
     setEditSeq(null);
-    if (dirty) window.location.reload();
+    if (dirty) refreshAfterChange();
   }
 
   function applyStep(step: SequenceStep) {
@@ -538,7 +549,9 @@ export function CardList({
     try {
       await ankiFetch("deleteNotes", { notes: [deletingNote.noteId] });
       setDeletingNote(null);
-      window.location.reload();
+      // Close the editor too — it may have been the delete's entry point.
+      setEditingNote(null);
+      refreshAfterChange();
     } catch {
       setDeletingNote(null);
     } finally {
@@ -626,7 +639,8 @@ export function CardList({
         notes: selectedNotes.map((n) => n.noteId),
       });
       setBulkDeleteOpen(false);
-      window.location.reload();
+      clearSelection();
+      refreshAfterChange();
     } catch {
       setBulkDeleteOpen(false);
     } finally {
@@ -1040,7 +1054,14 @@ export function CardList({
       )}
 
       {showAddForm && (
-        <CardForm deckName={deckName} onClose={() => onShowAddForm(false)} />
+        <CardForm
+          deckName={deckName}
+          onClose={() => onShowAddForm(false)}
+          onSaved={() => {
+            onShowAddForm(false);
+            refreshAfterChange();
+          }}
+        />
       )}
 
       {editingNote && (
@@ -1050,6 +1071,10 @@ export function CardList({
           onDelete={() => setDeletingNote(editingNote)}
           blocked={!!deletingNote}
           onClose={() => setEditingNote(null)}
+          onSaved={() => {
+            setEditingNote(null);
+            refreshAfterChange();
+          }}
         />
       )}
 
@@ -1101,6 +1126,10 @@ export function CardList({
           notes={[movingNote]}
           currentDeck={deckName}
           onClose={() => setMovingNote(null)}
+          onMoved={() => {
+            setMovingNote(null);
+            refreshAfterChange();
+          }}
         />
       )}
 
@@ -1109,6 +1138,11 @@ export function CardList({
           notes={selectedNotes}
           currentDeck={deckName}
           onClose={() => setBulkMoving(false)}
+          onMoved={() => {
+            setBulkMoving(false);
+            clearSelection();
+            refreshAfterChange();
+          }}
         />
       )}
 
