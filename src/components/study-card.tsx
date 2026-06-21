@@ -164,7 +164,7 @@ export function StudyCard({
 
   // No autoplay here: the session drives Anki's real (offscreen) reviewer,
   // which already autoplays card audio per the deck's options — playing it
-  // from AnkiTron too sounds everything twice. Our player only handles
+  // from Ankitron too sounds everything twice. Our player only handles
   // manual playback: the inline buttons and the `r` key.
 
   const updateFromSelection = useCallback(() => {

@@ -88,7 +88,7 @@ export function UpdatePrompt() {
           <>
             <h3 className="mb-2 text-lg font-semibold">Update available</h3>
             <p className="mb-3 text-sm text-foreground/70">
-              AnkiTron {update.version} is available (you have{" "}
+              Ankitron {update.version} is available (you have{" "}
               {update.currentVersion}).
             </p>
             {update.body ? (

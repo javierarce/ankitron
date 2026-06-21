@@ -197,7 +197,7 @@ export async function playAudio(files: string[]): Promise<void> {
 
 // --- Autoplay ---------------------------------------------------------------
 //
-// During study AnkiTron drives Anki's real reviewer, so automatic playback is
+// During study Ankitron drives Anki's real reviewer, so automatic playback is
 // Anki's doing, governed by the deck's "Don't play audio automatically"
 // option. These helpers surface that option. Note that deck configs are
 // shared presets: changing it affects every deck using the same preset, and

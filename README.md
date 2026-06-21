@@ -1,4 +1,4 @@
-# AnkiTron
+# Ankitron
 
 [![Latest release](https://img.shields.io/github/v/release/javierarce/ankitron?label=latest%20release)](https://github.com/javierarce/ankitron/releases/latest)
 
@@ -34,20 +34,20 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 
 ## Prerequisites
 
-Before launching AnkiTron install the latest [Anki desktop](https://apps.ankiweb.net) app and the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on.
+Before launching Ankitron install the latest [Anki desktop](https://apps.ankiweb.net) app and the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on.
 
 ## Installation (macOS)
 
-1. Download **[AnkiTron.dmg](https://github.com/javierarce/ankitron/releases/latest/download/AnkiTron.dmg)**.
-2. Mount the DMG, drag AnkiTron to **Applications**, and launch it.
+1. Download **[Ankitron.dmg](https://github.com/javierarce/ankitron/releases/latest/download/Ankitron.dmg)**.
+2. Mount the DMG, drag Ankitron to **Applications**, and launch it.
 
 ## Why only two answer buttons?
 
-Anki shows four answer buttons (Again, Hard, Good, Easy), but AnkiTron deliberately shows two: **Fail** and **Pass**, mapped to Anki's Again and Good. Pass/fail grading is a long-standing practice among experienced Anki users, and the data supports it: an [analysis by an FSRS researcher](https://forums.ankiweb.net/t/pass-fail-grading-as-default/34147/120) across thousands of collections found no statistically significant difference in scheduling accuracy between two-button and four-button users.
+Anki shows four answer buttons (Again, Hard, Good, Easy), but Ankitron deliberately shows two: **Fail** and **Pass**, mapped to Anki's Again and Good. Pass/fail grading is a long-standing practice among experienced Anki users, and the data supports it: an [analysis by an FSRS researcher](https://forums.ankiweb.net/t/pass-fail-grading-as-default/34147/120) across thousands of collections found no statistically significant difference in scheduling accuracy between two-button and four-button users.
 
 Two buttons also remove the most common grading mistake: pressing Hard when you actually forgot. Anki's schedulers treat Hard as a *pass* (recalled with hesitation), so misusing it inflates intervals — a [known enough problem](https://github.com/open-spaced-repetition/fsrs4anki/wiki) that the FSRS Helper add-on ships a remedy for it. With pass/fail, that mistake can't happen, and you spend your time recalling instead of deciding how well you recalled.
 
-# AnkiTron Keyboard Shortcuts
+# Ankitron Keyboard Shortcuts
 
 ## Global
 
@@ -112,7 +112,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, project structure, and t
 
 ## Disclaimer
 
-AnkiTron is an unofficial third-party app and is not affiliated with the official Anki project or Ankitects Pty Ltd.
+Ankitron is an unofficial third-party app and is not affiliated with the official Anki project or Ankitects Pty Ltd.
 
 Use at your own risk. The developer is not responsible for any data loss or synchronization errors with your AnkiWeb account.
 

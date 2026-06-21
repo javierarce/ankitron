@@ -11,7 +11,7 @@ export function UpdateBadge() {
 
   if (!update) return null;
 
-  const label = `New version available: AnkiTron ${update.version}`;
+  const label = `New version available: Ankitron ${update.version}`;
 
   return (
     <button

@@ -116,7 +116,7 @@ fn main() {
                 let menu = Menu::default(handle)?;
                 if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.first() {
                     let about =
-                        MenuItem::with_id(handle, "about", "About AnkiTron", true, None::<&str>)?;
+                        MenuItem::with_id(handle, "about", "About Ankitron", true, None::<&str>)?;
                     if let Some(native_about) = app_menu.items()?.first() {
                         app_menu.remove(native_about)?;
                     }
@@ -153,7 +153,7 @@ fn main() {
             stop_anki_for_update
         ])
         .build(tauri::generate_context!())
-        .expect("error while running AnkiTron")
+        .expect("error while running Ankitron")
         // Also clean up on app exit (e.g. Cmd+Q / Quit), not just when the
         // window is destroyed — otherwise a quit path that skips the window
         // event would leave the headless Anki orphaned, holding the collection
