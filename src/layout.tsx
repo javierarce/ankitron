@@ -5,16 +5,15 @@ import { AboutDialog } from "@/components/about-dialog";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { HeaderNav } from "@/components/header-nav";
+import { SyncProvider } from "@/components/sync-provider";
 import { UpdateBadge } from "@/components/update-badge";
 import { UpdatePrompt } from "@/components/update-prompt";
-import { ankiFetch } from "@/lib/anki-fetch";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function Layout() {
   const [ankiReady, setAnkiReady] = useState(!isTauri);
-  const [startupMsg, setStartupMsg] = useState("Starting Anki…");
 
   useEffect(() => {
     // With the webview's native drag-drop disabled, the browser default for a
@@ -43,22 +42,12 @@ export function Layout() {
       }
     });
 
-    // Wait for Anki, then pull from AnkiWeb before rendering any pages so the
-    // app always opens on fresh data (Ankitron and Anki can't run at once, so
-    // a launch sync replaces the manual Sync button). Sync failure never
-    // blocks startup — we render regardless.
+    // Wait for Anki to be reachable before rendering pages (they fetch on
+    // mount). The launch sync itself runs in the background via SyncProvider so
+    // the app opens instantly instead of waiting on an AnkiWeb round-trip.
     import("@tauri-apps/api/core").then(({ invoke }) => {
-      invoke("wait_for_anki").then(async (ok) => {
-        if (ok) {
-          setStartupMsg("Syncing…");
-          try {
-            await ankiFetch("sync");
-          } catch (e) {
-            console.warn("Startup sync failed:", e);
-          }
-        } else {
-          console.warn("Anki did not start in time");
-        }
+      invoke("wait_for_anki").then((ok) => {
+        if (!ok) console.warn("Anki did not start in time");
         setAnkiReady(true);
       });
     });
@@ -82,7 +71,7 @@ export function Layout() {
         <div className="flex min-h-dvh items-center justify-center">
           <div className="text-center">
             <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-            <p className="text-sm text-foreground/50">{startupMsg}</p>
+            <p className="text-sm text-foreground/50">Starting Anki…</p>
           </div>
         </div>
         <UpdatePrompt />
@@ -92,7 +81,7 @@ export function Layout() {
   }
 
   return (
-    <>
+    <SyncProvider>
       <header
         onMouseDown={handleDrag}
         className="app-header sticky top-0 z-40 border-b border-foreground/10 bg-background"
@@ -123,6 +112,6 @@ export function Layout() {
       <CommandPalette />
       <UpdatePrompt />
       <AboutDialog />
-    </>
+    </SyncProvider>
   );
 }

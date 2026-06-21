@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AllDecksList } from "@/components/all-decks-list";
+import { useSync } from "@/lib/sync-context";
 import { ankiFetch, fetchAllCardCounts } from "@/lib/anki-fetch";
 
 export function DecksPage() {
@@ -7,6 +8,13 @@ export function DecksPage() {
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { syncedAt, registerPageLoad } = useSync();
+
+  // While our blocking spinner is up, suppress the corner sync indicator so the
+  // two never show at once.
+  useEffect(() => {
+    if (loading) return registerPageLoad();
+  }, [loading, registerPageLoad]);
 
   const fetchData = useCallback(async () => {
     const deckNames = await ankiFetch<string[]>("deckNames");
@@ -49,7 +57,9 @@ export function DecksPage() {
     return () => {
       cancelled = true;
     };
-  }, [fetchData]);
+    // Re-run silently when a sync completes (`loading` is already false by then,
+    // so no spinner) to pick up changes pulled from AnkiWeb.
+  }, [fetchData, syncedAt]);
 
   if (loading) {
     return (

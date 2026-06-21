@@ -8,13 +8,19 @@ interface MoveCardDialogProps {
   notes: Note[];
   currentDeck: string;
   onClose: () => void;
+  /**
+   * Called after a successful move instead of reloading the page. The callback
+   * owns closing the dialog and refreshing whatever is on screen. Falls back to
+   * a full page reload when omitted.
+   */
+  onMoved?: () => void;
 }
 
 // "Create a new deck" sentinel. The leading space is deliberate: Anki trims
 // deck names, so no real deck path can equal this, keeping it collision-proof.
 const NEW_DECK = " new";
 
-export function MoveCardDialog({ notes, currentDeck, onClose }: MoveCardDialogProps) {
+export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCardDialogProps) {
   useScrollLock();
   const [decks, setDecks] = useState<string[] | null>(null);
   const [choice, setChoice] = useState("");
@@ -80,8 +86,12 @@ export function MoveCardDialog({ notes, currentDeck, onClose }: MoveCardDialogPr
       // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
       // active reviewer doesn't keep serving the moved card.
       await ankiFetch("reloadCollection").catch(() => {});
-      onClose();
-      window.location.reload();
+      if (onMoved) {
+        onMoved();
+      } else {
+        onClose();
+        window.location.reload();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to move card");
       setMoving(false);
