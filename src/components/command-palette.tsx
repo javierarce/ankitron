@@ -32,6 +32,10 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("search");
+  // True only when the deck picker was reached from the search step (via the
+  // "New card…" action), so Esc has a previous step to return to. When the
+  // picker is opened directly (cmd+N) there's no step to go back to.
+  const [deckPickFromSearch, setDeckPickFromSearch] = useState(false);
   const [query, setQuery] = useState("");
   const [decks, setDecks] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
@@ -47,6 +51,7 @@ export function CommandPalette() {
     setOpen(false);
     setQuery("");
     setMode("search");
+    setDeckPickFromSearch(false);
     setSelected(0);
   }, []);
 
@@ -59,6 +64,7 @@ export function CommandPalette() {
       } else if (mod && e.key.toLowerCase() === "n") {
         e.preventDefault();
         setMode("pickDeckForCard");
+        setDeckPickFromSearch(false);
         setQuery("");
         setSelected(0);
         setOpen(true);
@@ -128,6 +134,7 @@ export function CommandPalette() {
         return;
       }
       setMode("pickDeckForCard");
+      setDeckPickFromSearch(true);
       setQuery("");
       return;
     }
@@ -155,8 +162,9 @@ export function CommandPalette() {
       activate(selected);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      if (mode === "pickDeckForCard") {
+      if (mode === "pickDeckForCard" && deckPickFromSearch) {
         setMode("search");
+        setDeckPickFromSearch(false);
         setQuery("");
       } else {
         close();
@@ -245,7 +253,9 @@ export function CommandPalette() {
             </div>
             <div className="flex items-center justify-between border-t border-foreground/10 px-4 py-2 text-xs text-foreground/40">
               <span>
-                {mode === "pickDeckForCard" ? "Esc to go back" : "Esc to close"}
+                {mode === "pickDeckForCard" && deckPickFromSearch
+                  ? "Esc to go back"
+                  : "Esc to close"}
               </span>
               <span className="flex items-center gap-1.5">
                 <ArrowUp size={12} weight="bold" />
