@@ -47,6 +47,65 @@ Anki shows four answer buttons (Again, Hard, Good, Easy), but AnkiTron deliberat
 
 Two buttons also remove the most common grading mistake: pressing Hard when you actually forgot. Anki's schedulers treat Hard as a *pass* (recalled with hesitation), so misusing it inflates intervals — a [known enough problem](https://github.com/open-spaced-repetition/fsrs4anki/wiki) that the FSRS Helper add-on ships a remedy for it. With pass/fail, that mistake can't happen, and you spend your time recalling instead of deciding how well you recalled.
 
+# AnkiTron Keyboard Shortcuts
+
+## Global
+
+| Shortcut | Action |
+| --- | --- |
+| `Cmd` + `K` | Open the command palette |
+| `Cmd` + `N` | New card |
+
+## Command palette (when open)
+
+| Shortcut | Action |
+| --- | --- |
+| `↑` / `↓` | Move the selection |
+| `Enter` | Open the selected deck / run the action |
+| `Esc` | Go back a level, or close the palette |
+
+## List navigation 
+
+| Shortcut | Action |
+| --- | --- |
+| `j` | Move down |
+| `k` | Move up |
+| `g` `g` | Jump to the top (press `g` twice within 500 ms) |
+| `G` (`Shift` + `g`) | Jump to the bottom |
+| `h` | Go back (where a back target exists) |
+
+## Decks page
+
+| Shortcut | Action |
+| --- | --- |
+| `Cmd` + `F` or `/` | Focus the search box |
+
+## Card list (deck detail)
+
+| Shortcut | Action |
+| --- | --- |
+| `Cmd` + `F` or `/` | Focus the search box |
+| `Cmd` + `A` | Select all cards |
+| `Space` | Toggle selection of the focused card |
+| `Shift` + `J` / `Shift` + `K` | Move down/up, extending the selection |
+| `a` | Add a new card |
+| `e` | Edit the selected cards in sequence (or the focused card if none are selected) |
+
+
+## Study session
+
+| Shortcut | Action |
+| --- | --- |
+| `Space`, `1`, or `2` | Reveal the answer |
+| `1` | Grade **Fail** (after reveal) |
+| `Space` or `2` | Grade **Pass** (after reveal) |
+| `r` | Play the card's audio (answer side once revealed, otherwise the question) |
+| `e` | Edit the current card |
+| `a` | Add a card to the session |
+| `h` | Return to the deck |
+| `Cmd` + `Z` | Undo the last review |
+
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, project structure, and the release process.
