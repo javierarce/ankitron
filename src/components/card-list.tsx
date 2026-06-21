@@ -933,10 +933,10 @@ export function CardList({
                   onClick={(e) => handleCheckboxClick(e, note)}
                   aria-label={selected ? "Deselect card" : "Select card"}
                   aria-pressed={selected}
-                  className="relative z-10 -m-2 flex shrink-0 items-center justify-center p-2"
+                  className="relative z-10 -m-2 flex shrink-0 items-center justify-center self-start p-2"
                 >
                   <span
-                    className={`flex h-5 w-5 items-center justify-center rounded border transition-all ${
+                    className={`flex h-5 w-5 translate-y-[2px] items-center justify-center rounded border transition-all ${
                       selected
                         ? "border-foreground bg-foreground text-background"
                         : "border-foreground/25 text-transparent group-hover:border-foreground/50"
