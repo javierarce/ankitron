@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { CaretLeft } from "@phosphor-icons/react/dist/ssr/CaretLeft";
+import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
 import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
@@ -31,8 +33,20 @@ interface CardFormProps {
   /**
    * Called after a successful save instead of reloading the page. The
    * callback owns closing the form and refreshing whatever is on screen.
+   * Receives the updated note when fields/tags/deck actually changed, so a
+   * sequential editor can keep its list in sync without a full reload; it's
+   * called with no argument when nothing was written (a no-op save).
    */
-  onSaved?: () => void;
+  onSaved?: (updated?: Note) => void;
+  /**
+   * When editing a selection one card at a time, the current position in the
+   * run. Drives the "n / total" progress and the prev/next arrows.
+   */
+  position?: { index: number; total: number };
+  /** Go to the previous card in the run, discarding any edits. */
+  onPrev?: () => void;
+  /** Skip to the next card (or finish) without saving the current one. */
+  onSkip?: () => void;
 }
 
 function isClozeNote(note: Note): boolean {
@@ -48,7 +62,15 @@ function hasClozePattern(html: string): boolean {
   return /\{\{c\d+::.*?\}\}/.test(text);
 }
 
-export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
+export function CardForm({
+  deckName,
+  note,
+  onClose,
+  onSaved,
+  position,
+  onPrev,
+  onSkip,
+}: CardFormProps) {
   useScrollLock();
   const noteFields = note?.fields ?? {};
 
@@ -92,18 +114,25 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
   // the cloze types swap in the Text/Back Extra fields.
   const isBasicForm = cardType === "Basic" || cardType === "BasicReversed";
 
-  // Basic fields, keyed by Anki's field `order` (see basicFieldKeys).
+  // Basic fields, keyed by Anki's field `order` (see basicFieldKeys). The
+  // initial* snapshots let us dirty-check on save so we never rewrite (and
+  // re-sync) a card the user merely paged through without touching.
   const { frontKey, backKey } = basicFieldKeys(noteFields);
-  const [front, setFront] = useState(extractValue(noteFields[frontKey]));
-  const [back, setBack] = useState(extractValue(noteFields[backKey]));
+  const initialFront = extractValue(noteFields[frontKey]);
+  const initialBack = extractValue(noteFields[backKey]);
+  const [front, setFront] = useState(initialFront);
+  const [back, setBack] = useState(initialBack);
 
   // Cloze fields
   const textField = noteFields["Text"];
   const backExtraField = noteFields["Back Extra"];
-  const [clozeText, setClozeText] = useState(extractValue(textField));
-  const [backExtra, setBackExtra] = useState(extractValue(backExtraField));
+  const initialClozeText = extractValue(textField);
+  const initialBackExtra = extractValue(backExtraField);
+  const [clozeText, setClozeText] = useState(initialClozeText);
+  const [backExtra, setBackExtra] = useState(initialBackExtra);
 
-  const [tags, setTags] = useState<string[]>(note?.tags ?? []);
+  const initialTags = note?.tags ?? [];
+  const [tags, setTags] = useState<string[]>(initialTags);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,6 +222,10 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
     setSaving(true);
     setError(null);
 
+    // Set when a save actually writes something, so the caller can refresh.
+    // Left undefined for a no-op save (paged-through, untouched card).
+    let savedNote: Note | undefined;
+
     try {
       if (cardType === "ClozeTyped") {
         await ensureClozeTypedModel();
@@ -212,26 +245,40 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
               : "Basic";
 
       if (isEdit && cardType === initialType) {
-        if (isClozeForm) {
-          await ankiFetch("updateNoteFields", {
-            note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
-          });
-        } else {
-          await ankiFetch("updateNoteFields", {
-            note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
-          });
+        // Only write what actually changed. Walking a selection and hitting
+        // "Update Card" on every card would otherwise bump `mod` and re-sync
+        // each one even when untouched.
+        const fieldsChanged = isClozeForm
+          ? clozeText !== initialClozeText || backExtra !== initialBackExtra
+          : front !== initialFront || back !== initialBack;
+        const tagsChanged =
+          [...tags].sort().join(" ") !==
+          [...initialTags].sort().join(" ");
+        const deckChanged = destDeck !== deckName;
+
+        if (fieldsChanged) {
+          if (isClozeForm) {
+            await ankiFetch("updateNoteFields", {
+              note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
+            });
+          } else {
+            await ankiFetch("updateNoteFields", {
+              note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
+            });
+          }
         }
-        // Update tags
-        for (const tag of note.tags) {
-          await ankiFetch("removeTags", { notes: [note.noteId], tags: tag });
+        if (tagsChanged) {
+          for (const tag of note.tags) {
+            await ankiFetch("removeTags", { notes: [note.noteId], tags: tag });
+          }
+          if (tags.length > 0) {
+            await ankiFetch("addTags", {
+              notes: [note.noteId],
+              tags: tags.join(" "),
+            });
+          }
         }
-        if (tags.length > 0) {
-          await ankiFetch("addTags", {
-            notes: [note.noteId],
-            tags: tags.join(" "),
-          });
-        }
-        if (destDeck !== deckName) {
+        if (deckChanged) {
           let cardIds = note.cards ?? [];
           if (cardIds.length === 0) {
             cardIds = await ankiFetch<number[]>("findCards", {
@@ -244,6 +291,24 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
             // active reviewer doesn't keep serving the moved card.
             await ankiFetch("reloadCollection").catch(() => {});
           }
+        }
+        if (fieldsChanged || tagsChanged || deckChanged) {
+          const updatedFields = { ...note.fields };
+          if (isClozeForm) {
+            if (updatedFields.Text)
+              updatedFields.Text = { ...updatedFields.Text, value: clozeText };
+            if (updatedFields["Back Extra"])
+              updatedFields["Back Extra"] = {
+                ...updatedFields["Back Extra"],
+                value: backExtra,
+              };
+          } else {
+            if (updatedFields[frontKey])
+              updatedFields[frontKey] = { ...updatedFields[frontKey], value: front };
+            if (updatedFields[backKey])
+              updatedFields[backKey] = { ...updatedFields[backKey], value: back };
+          }
+          savedNote = { ...note, fields: updatedFields, tags };
         }
       } else {
         const noteData = isClozeForm
@@ -269,10 +334,28 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
         }
         if (isEdit) {
           await ankiFetch("deleteNotes", { notes: [note.noteId] });
+          // A type change replaces the note with a new id. Report the rebuilt
+          // note so a sequential editor can refresh on close and repoint its
+          // run at the new id for correct back-navigation.
+          savedNote = {
+            ...note,
+            noteId,
+            modelName,
+            tags,
+            fields: isClozeForm
+              ? {
+                  Text: { value: clozeText, order: 0 },
+                  "Back Extra": { value: backExtra, order: 1 },
+                }
+              : {
+                  Front: { value: front, order: 0 },
+                  Back: { value: back, order: 1 },
+                },
+          };
         }
       }
       if (onSaved) {
-        onSaved();
+        onSaved(savedNote);
       } else {
         onClose();
         window.location.reload();
@@ -297,15 +380,45 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
         className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg outline-none"
       >
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h3 className="text-lg font-semibold">
-            {isEdit ? "Edit Card" : "Add Card"}
-          </h3>
-          {isEdit && cardType !== initialType && (
-            <p className="text-xs text-amber-600 dark:text-amber-500">
-              Changing the card type creates a new card and resets its review history.
-            </p>
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold">
+              {isEdit ? "Edit Card" : "Add Card"}
+            </h3>
+            {position && (
+              <span className="text-sm tabular-nums text-foreground/40">
+                {position.index + 1} / {position.total}
+              </span>
+            )}
+          </div>
+          {position && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={onPrev}
+                disabled={saving || position.index === 0}
+                aria-label="Previous card"
+                className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <CaretLeft size={18} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={onSkip}
+                disabled={saving || position.index === position.total - 1}
+                aria-label="Next card"
+                className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <CaretRight size={18} weight="bold" />
+              </button>
+            </div>
           )}
         </div>
+
+        {isEdit && cardType !== initialType && (
+          <p className="mb-4 text-xs text-amber-600 dark:text-amber-500">
+            Changing the card type creates a new card and resets its review history.
+          </p>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -434,22 +547,36 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : isEdit ? "Update Card" : "Add Card"}
-            </button>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <div>
+              {position && (
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  disabled={saving}
+                  className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  Skip
+                </button>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : isEdit ? "Update Card" : "Add Card"}
+              </button>
+            </div>
           </div>
         </form>
       </div>

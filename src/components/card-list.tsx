@@ -12,12 +12,23 @@ import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
 import { Pause } from "@phosphor-icons/react/dist/ssr/Pause";
 import { Play } from "@phosphor-icons/react/dist/ssr/Play";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
+import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { X } from "@phosphor-icons/react/dist/ssr/X";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
+import {
+  createEditSequence,
+  editSequencePrev,
+  editSequenceNext,
+  editSequenceSaved,
+  editSequenceCurrentId,
+  editSequenceCurrentNote,
+  type EditSequence,
+  type SequenceStep,
+} from "@/lib/edit-sequence";
 import { stripSoundTags } from "@/lib/audio";
 import { deckLeaf, formatDeckPath } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
@@ -198,6 +209,27 @@ export function CardList({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
+  // Sequential edit run: the card editor opens one selected note at a time, and
+  // "Update Card" (or Skip) advances. The cursor logic lives in lib/edit-sequence
+  // so it can be tested without rendering the editor.
+  const [editSeq, setEditSeq] = useState<EditSequence | null>(null);
+
+  function beginEdit(ids: number[]) {
+    setEditSeq(createEditSequence(ids));
+  }
+
+  // The rest of the app reloads after an edit to resync; do it once when the run
+  // finishes, and only if something was actually written.
+  function finishEdit(dirty: boolean) {
+    setEditSeq(null);
+    if (dirty) window.location.reload();
+  }
+
+  function applyStep(step: SequenceStep) {
+    if (step.done) finishEdit(step.dirty);
+    else setEditSeq(step.seq);
+  }
+
   // Each note's home deck, kept locally so a drag-move updates the list in place
   // instead of forcing a reload. Seeded from the prop and re-seeded when it
   // changes (adjusting state during render rather than in an effect, per
@@ -272,7 +304,13 @@ export function CardList({
   const segmentDecks = [deckName, ...(subdecks ?? [])];
 
   const hasDialog =
-    showAddForm || !!editingNote || !!deletingNote || !!movingNote || bulkMoving || bulkDeleteOpen;
+    showAddForm ||
+    !!editingNote ||
+    !!deletingNote ||
+    !!movingNote ||
+    bulkMoving ||
+    bulkDeleteOpen ||
+    !!editSeq;
 
   useVimNav({ back: "/", enabled: !hasDialog });
 
@@ -371,6 +409,28 @@ export function CardList({
       if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         onShowAddForm(true);
+        return;
+      }
+      if (e.key === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Edit the selection in display order; with nothing selected, edit the
+        // focused row as a run of one. Read ids from the DOM so the order and
+        // membership stay current without this handler depending on the notes.
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-note-id]")
+        );
+        let ids = rows
+          .map((el) => Number(el.dataset.noteId))
+          .filter((id) => selectedIds.has(id));
+        if (ids.length === 0) {
+          const focusedRow = (
+            document.activeElement as HTMLElement | null
+          )?.closest?.("[data-note-id]") as HTMLElement | null;
+          if (focusedRow) ids = [Number(focusedRow.dataset.noteId)];
+        }
+        if (ids.length > 0) {
+          e.preventDefault();
+          beginEdit(ids);
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -773,6 +833,19 @@ export function CardList({
         {selectionActive && (
           <div className="flex items-center gap-2">
               <button
+                onClick={() =>
+                  beginEdit(
+                    filteredNotes
+                      .filter((n) => selectedIds.has(n.noteId))
+                      .map((n) => n.noteId),
+                  )
+                }
+                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+              >
+                <PencilSimple size={16} weight="bold" />
+                Edit
+              </button>
+              <button
                 onClick={() => handleBulkSuspend(!allSelectedSuspended)}
                 className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
               >
@@ -932,6 +1005,24 @@ export function CardList({
           onClose={() => setEditingNote(null)}
         />
       )}
+
+      {editSeq &&
+        (() => {
+          const note = editSequenceCurrentNote(editSeq, notes);
+          if (!note) return null;
+          return (
+            <CardForm
+              key={editSequenceCurrentId(editSeq)}
+              deckName={deckName}
+              note={note}
+              position={{ index: editSeq.index, total: editSeq.ids.length }}
+              onPrev={() => setEditSeq(editSequencePrev(editSeq))}
+              onSkip={() => applyStep(editSequenceNext(editSeq))}
+              onSaved={(updated) => applyStep(editSequenceSaved(editSeq, updated))}
+              onClose={() => finishEdit(editSeq.dirty)}
+            />
+          );
+        })()}
 
       {movingNote && (
         <MoveCardDialog
