@@ -420,7 +420,7 @@ export function CardList({
     bulkDeleteOpen ||
     !!editSeq;
 
-  useVimNav({ back: "/", enabled: !hasDialog });
+  useVimNav({ enabled: !hasDialog });
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
