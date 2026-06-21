@@ -8,15 +8,29 @@ A mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Brow
 
 ## Features
 
-- Browse all decks with due-card counts
-- Create, edit, and delete cards (Basic and Cloze note types)
-- Move cards between decks
-- See and manage card tags
-- Card audio: `[sound:…]` files play during study (automatically and via inline play buttons, `R` to replay), and audio files can be attached from the editor
+**Decks**
+- Browse all decks with new/learning/review due counts.
+- Create, rename, and move decks and subdecks.
+
+**Cards**
+- Create, edit, and delete cards in four note types: Basic, Basic (and reversed), Cloze, and Cloze (typed)
+- Rich-text editor with bold, italic, lists, image insertion, and a cloze helper (with hints)
+- Toggle a raw HTML source view to edit the underlying markup
+- Add and remove tags
+- Suspend and unsuspend cards
+- Bulk-select cards to delete, move, suspend, or edit them one at a time in sequence
+
+**Audio & speech**
+- `[sound:…]` audio plays during study — automatically and via inline play buttons (`R` to replay)
+- Attach audio to a card by dragging a file onto the editor or picking one
+- Select text on a card to have it read aloud (text-to-speech) in a configurable primary/secondary language
+
+**Sync, import & more**
 - JSON import/export — edit decks offline and re-import them to update existing notes or add new ones (see the [deck file format](docs/deck-file-format.md))
-- Undo the last review with `Cmd`/`Ctrl-Z` during study
-- Light/dark theme toggle with system preference detection
-- Navigate between decks using the command palette with `Cmd`/`Ctrl-K`
+- Manual "Sync now", plus automatic sync on launch and after each session
+- Command palette (`Cmd`/`Ctrl-K`) to jump between decks or add a card, with vim-style `j`/`k` navigation throughout
+- Light/dark theme toggle with system-preference detection
+- Built-in update checks.
 
 ## Prerequisites
 
