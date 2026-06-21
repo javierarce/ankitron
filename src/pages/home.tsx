@@ -45,6 +45,9 @@ export function HomePage() {
           setDueCounts(counts);
           setStudyStats(stats);
         }
+        // Clear any earlier failure so a recovered background refetch (on a
+        // syncedAt bump) drops the "Anki isn't connected" overlay.
+        if (!cancelled) setHasError(false);
       } catch (err) {
         console.error("Home page load failed:", err);
         if (!cancelled) setHasError(true);

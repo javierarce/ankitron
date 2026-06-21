@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckLeaf } from "@/lib/deck";
+import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
 
 type CardInfo = { cardId: number; deckName: string; queue: number };
@@ -60,6 +61,13 @@ export function DeckDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const { registerPageLoad } = useSync();
+
+  // While our blocking spinner is up, suppress the corner sync indicator so the
+  // two never show at once.
+  useEffect(() => {
+    if (loading) return registerPageLoad();
+  }, [loading, registerPageLoad]);
 
   const refreshDue = useCallback(async () => {
     try {
