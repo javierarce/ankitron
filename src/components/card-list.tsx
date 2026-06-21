@@ -104,6 +104,42 @@ function isClozeNote(note: Note): boolean {
   );
 }
 
+type SortMode = "modified-desc" | "created-desc" | "created-asc";
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "modified-desc", label: "Recently modified" },
+  { value: "created-desc", label: "Newest first" },
+  { value: "created-asc", label: "Oldest first" },
+];
+
+const SORT_STORAGE_KEY = "ankitron:card-sort";
+
+function isSortMode(value: string | null): value is SortMode {
+  return SORT_OPTIONS.some((o) => o.value === value);
+}
+
+// A note's id is its creation time in epoch milliseconds; `mod` is the
+// last-edit time in epoch seconds (falling back to creation when absent, e.g.
+// for imports that didn't carry it).
+function createdAt(note: Note): number {
+  return note.noteId;
+}
+function modifiedAt(note: Note): number {
+  return note.mod != null ? note.mod * 1000 : note.noteId;
+}
+
+function sortNotes(notes: Note[], mode: SortMode): Note[] {
+  const sorted = [...notes];
+  switch (mode) {
+    case "created-asc":
+      return sorted.sort((a, b) => createdAt(a) - createdAt(b));
+    case "created-desc":
+      return sorted.sort((a, b) => createdAt(b) - createdAt(a));
+    case "modified-desc":
+      return sorted.sort((a, b) => modifiedAt(b) - modifiedAt(a));
+  }
+}
+
 function CardMenu({
   onEdit,
   isSuspended,
@@ -228,6 +264,22 @@ export function CardList({
   const [suspended, setSuspended] = useState<Set<number>>(() => new Set(suspendedCardIds ?? []));
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // The list reloads (window.location.reload) after edits, so persist the sort
+  // choice in localStorage to keep it from resetting on every save.
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    if (typeof localStorage === "undefined") return "modified-desc";
+    const saved = localStorage.getItem(SORT_STORAGE_KEY);
+    return isSortMode(saved) ? saved : "modified-desc";
+  });
+  function handleSortChange(mode: SortMode) {
+    setSortMode(mode);
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, mode);
+    } catch {
+      // ignore storage failures (private mode, etc.)
+    }
+  }
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const lastSelectedRef = useRef<number | null>(null);
@@ -491,7 +543,7 @@ export function CardList({
       : notes.filter((note) => activeSegments.has(decks[note.noteId] ?? deckName));
 
   const trimmedQuery = query.trim().toLowerCase();
-  const filteredNotes = trimmedQuery
+  const matchedNotes = trimmedQuery
     ? segmentNotes.filter((note) => {
         const haystack = [
           note.fields.Front?.value,
@@ -507,6 +559,9 @@ export function CardList({
         return haystack.includes(trimmedQuery);
       })
     : segmentNotes;
+  // Sort last so display order — and the selection ranges, "select all", and
+  // keyboard nav that read it — all follow the chosen order.
+  const filteredNotes = sortNotes(matchedNotes, sortMode);
 
   function isNoteSuspended(note: Note): boolean {
     return (note.cards ?? []).some((id) => suspended.has(id));
@@ -878,6 +933,20 @@ export function CardList({
             </p>
           )}
         </div>
+        {!selectionActive && (
+          <select
+            value={sortMode}
+            onChange={(e) => handleSortChange(e.target.value as SortMode)}
+            aria-label="Sort cards"
+            className="rounded-lg border border-foreground/15 bg-transparent px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-foreground/5 focus:outline-none focus:border-foreground/30 transition-colors cursor-pointer"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        )}
         {selectionActive && (
           <div className="flex items-center gap-2">
               <button
