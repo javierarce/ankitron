@@ -67,6 +67,23 @@ export function editSequenceSaved(
   });
 }
 
+/**
+ * Drop the current card from the run after it's been deleted from Anki. The
+ * next card slides into the current slot so the cursor stays put — except when
+ * the deleted card was last, where it steps back one. Finishes the run when the
+ * deleted card was the only one left. Always marks the run dirty so the caller
+ * reloads the list when the run ends.
+ */
+export function editSequenceDeleted(seq: EditSequence): SequenceStep {
+  const ids = seq.ids.filter((_, i) => i !== seq.index);
+  if (ids.length === 0) return { done: true, dirty: true };
+  const removedId = seq.ids[seq.index];
+  const edited = { ...seq.edited };
+  delete edited[removedId];
+  const index = Math.min(seq.index, ids.length - 1);
+  return { done: false, seq: { ...seq, ids, index, edited, dirty: true } };
+}
+
 /** The id of the card currently being edited. */
 export function editSequenceCurrentId(seq: EditSequence): number {
   return seq.ids[seq.index];
