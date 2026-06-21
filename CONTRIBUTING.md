@@ -65,11 +65,4 @@ Requests to AnkiConnect are proxied through the Rust `anki_request` command (inv
 
 ## Releasing
 
-Releases are produced by a GitHub Actions workflow on tag push (`.github/workflows/release.yml`). To cut a release, bump the version in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`, then:
-
-```bash
-git tag -a vX.Y.Z -m "vX.Y.Z"
-git push --follow-tags
-```
-
-The workflow uses [`tauri-action`](https://github.com/tauri-apps/tauri-action) on a macOS runner to build a universal `.dmg`, sign it with the Developer ID certificate, notarize it with Apple (both the app and the dmg), and publish it to a GitHub Release. The signing certificate and App Store Connect API key are stored as repository secrets.
+See [RELEASING.md](RELEASING.md) to learn about the release process.

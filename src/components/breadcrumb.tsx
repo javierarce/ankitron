@@ -4,9 +4,14 @@ export function Breadcrumb() {
   const { pathname } = useLocation();
   const segments = pathname.split("/").filter(Boolean);
 
-  // On the decks index the crumb would just say "Decks", which is redundant
-  // with the header nav and the "All decks" heading below — render a spacer.
-  if (segments.length === 0 || (segments.length === 1 && segments[0] === "decks"))
+  // Top-level pages already carry their own heading (the "All decks" / page
+  // title below), so a single crumb would be redundant — render a spacer.
+  // This also avoids seeding the "Decks" crumb on routes like /settings that
+  // don't belong under Decks at all.
+  if (
+    segments.length === 0 ||
+    (segments.length === 1 && (segments[0] === "decks" || segments[0] === "settings"))
+  )
     return <div className="h-5" />;
 
   const crumbs: { label: string; href: string }[] = [
@@ -29,6 +34,11 @@ export function Breadcrumb() {
       crumbs.push({
         label: "Study",
         href: `/decks/${segments[1]}/study`,
+      });
+    } else if (segments[2] === "settings") {
+      crumbs.push({
+        label: "Settings",
+        href: `/decks/${segments[1]}/settings`,
       });
     }
   }

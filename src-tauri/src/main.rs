@@ -61,7 +61,7 @@ async fn anki_request(body: serde_json::Value) -> Result<serde_json::Value, Stri
 async fn stop_anki_for_update(state: tauri::State<'_, Arc<AnkiState>>) -> Result<(), String> {
     let state = state.inner().clone();
     let we_spawned = state
-        .child
+        .anki_pid
         .lock()
         .map(|g| g.is_some())
         .unwrap_or(false);
@@ -93,6 +93,7 @@ fn main() {
     let anki_state = Arc::new(AnkiState::default());
     let startup_state = anki_state.clone();
     let cleanup_state = anki_state.clone();
+    let exit_state = anki_state.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -115,7 +116,7 @@ fn main() {
                 let menu = Menu::default(handle)?;
                 if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.first() {
                     let about =
-                        MenuItem::with_id(handle, "about", "About AnkiTron", true, None::<&str>)?;
+                        MenuItem::with_id(handle, "about", "About Ankitron", true, None::<&str>)?;
                     if let Some(native_about) = app_menu.items()?.first() {
                         app_menu.remove(native_about)?;
                     }
@@ -151,6 +152,16 @@ fn main() {
             save_text_file,
             stop_anki_for_update
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running AnkiTron");
+        .build(tauri::generate_context!())
+        .expect("error while running Ankitron")
+        // Also clean up on app exit (e.g. Cmd+Q / Quit), not just when the
+        // window is destroyed — otherwise a quit path that skips the window
+        // event would leave the headless Anki orphaned, holding the collection
+        // lock so the user can't reopen the desktop Anki. Idempotent with the
+        // window handler above.
+        .run(move |_app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                stop_spawned_anki(&exit_state);
+            }
+        });
 }

@@ -1,12 +1,30 @@
 import { useState, useEffect, useRef } from "react";
+import { CaretLeft } from "@phosphor-icons/react/dist/ssr/CaretLeft";
+import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
 import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
 import { basicFieldKeys } from "@/lib/note-fields";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
-type CardType = "Basic" | "Cloze" | "ClozeTyped";
+type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
+
+// Anki's stock note type that generates a forward and a reverse card per note.
+const BASIC_REVERSED_MODEL = "Basic (and reversed card)";
+
+const CARD_TYPE_OPTIONS: { value: CardType; label: string }[] = [
+  { value: "Basic", label: "Basic" },
+  { value: "BasicReversed", label: "Basic (and reversed)" },
+  { value: "Cloze", label: "Cloze" },
+  { value: "ClozeTyped", label: "Cloze (typed)" },
+];
+
+// "Create a new deck" sentinel. The leading space is deliberate: Anki trims
+// deck names, so no real deck path can equal this, keeping it collision-proof.
+const NEW_DECK = " new";
 
 interface CardFormProps {
   deckName: string;
@@ -15,8 +33,20 @@ interface CardFormProps {
   /**
    * Called after a successful save instead of reloading the page. The
    * callback owns closing the form and refreshing whatever is on screen.
+   * Receives the updated note when fields/tags/deck actually changed, so a
+   * sequential editor can keep its list in sync without a full reload; it's
+   * called with no argument when nothing was written (a no-op save).
    */
-  onSaved?: () => void;
+  onSaved?: (updated?: Note) => void;
+  /**
+   * When editing a selection one card at a time, the current position in the
+   * run. Drives the "n / total" progress and the prev/next arrows.
+   */
+  position?: { index: number; total: number };
+  /** Go to the previous card in the run, discarding any edits. */
+  onPrev?: () => void;
+  /** Skip to the next card (or finish) without saving the current one. */
+  onSkip?: () => void;
 }
 
 function isClozeNote(note: Note): boolean {
@@ -32,7 +62,16 @@ function hasClozePattern(html: string): boolean {
   return /\{\{c\d+::.*?\}\}/.test(text);
 }
 
-export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
+export function CardForm({
+  deckName,
+  note,
+  onClose,
+  onSaved,
+  position,
+  onPrev,
+  onSkip,
+}: CardFormProps) {
+  useScrollLock();
   const noteFields = note?.fields ?? {};
 
   function extractValue(field: unknown): string {
@@ -50,7 +89,9 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
       ? "ClozeTyped"
       : isClozeNote(note)
         ? "Cloze"
-        : "Basic"
+        : note.modelName === BASIC_REVERSED_MODEL
+          ? "BasicReversed"
+          : "Basic"
     : "Basic";
 
   const [cardType, setCardType] = useState<CardType>(initialType);
@@ -69,23 +110,38 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
     setCardType(newType);
   }
 
-  // Basic fields, keyed by Anki's field `order` (see basicFieldKeys).
+  // Basic and "Basic (and reversed)" share the same Front/Back editor; only
+  // the cloze types swap in the Text/Back Extra fields.
+  const isBasicForm = cardType === "Basic" || cardType === "BasicReversed";
+
+  // Basic fields, keyed by Anki's field `order` (see basicFieldKeys). The
+  // initial* snapshots let us dirty-check on save so we never rewrite (and
+  // re-sync) a card the user merely paged through without touching.
   const { frontKey, backKey } = basicFieldKeys(noteFields);
-  const [front, setFront] = useState(extractValue(noteFields[frontKey]));
-  const [back, setBack] = useState(extractValue(noteFields[backKey]));
+  const initialFront = extractValue(noteFields[frontKey]);
+  const initialBack = extractValue(noteFields[backKey]);
+  const [front, setFront] = useState(initialFront);
+  const [back, setBack] = useState(initialBack);
 
   // Cloze fields
   const textField = noteFields["Text"];
   const backExtraField = noteFields["Back Extra"];
-  const [clozeText, setClozeText] = useState(extractValue(textField));
-  const [backExtra, setBackExtra] = useState(extractValue(backExtraField));
+  const initialClozeText = extractValue(textField);
+  const initialBackExtra = extractValue(backExtraField);
+  const [clozeText, setClozeText] = useState(initialClozeText);
+  const [backExtra, setBackExtra] = useState(initialBackExtra);
 
-  const [tags, setTags] = useState<string[]>(note?.tags ?? []);
+  const initialTags = note?.tags ?? [];
+  const [tags, setTags] = useState<string[]>(initialTags);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [decks, setDecks] = useState<string[]>([deckName]);
   const [targetDeck, setTargetDeck] = useState(deckName);
+  const [newDeck, setNewDeck] = useState("");
+
+  const creatingDeck = targetDeck === NEW_DECK;
+  const destDeck = creatingDeck ? newDeck.trim() : targetDeck;
 
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +151,8 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
     ankiFetch<string[]>("deckNames")
       .then((names) => {
         if (cancelled) return;
-        setDecks(names.includes(deckName) ? names : [deckName, ...names]);
+        const all = names.includes(deckName) ? names : [deckName, ...names];
+        setDecks([...all].sort(compareDeckPaths));
       })
       .catch(() => {});
     return () => {
@@ -139,9 +196,9 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const isClozeForm = cardType === "Cloze" || cardType === "ClozeTyped";
+    const isClozeForm = !isBasicForm;
 
-    if (cardType === "Basic") {
+    if (isBasicForm) {
       if (!front.trim() || !back.trim()) {
         setError("Front and back are required.");
         return;
@@ -157,12 +214,25 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
       }
     }
 
+    if (creatingDeck && !destDeck) {
+      setError("Enter a name for the new deck.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
+
+    // Set when a save actually writes something, so the caller can refresh.
+    // Left undefined for a no-op save (paged-through, untouched card).
+    let savedNote: Note | undefined;
 
     try {
       if (cardType === "ClozeTyped") {
         await ensureClozeTypedModel();
+      }
+
+      if (creatingDeck) {
+        await ankiFetch("createDeck", { deck: destDeck });
       }
 
       const modelName =
@@ -170,29 +240,45 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
           ? CLOZE_TYPED_MODEL
           : cardType === "Cloze"
             ? "Cloze"
-            : "Basic";
+            : cardType === "BasicReversed"
+              ? BASIC_REVERSED_MODEL
+              : "Basic";
 
       if (isEdit && cardType === initialType) {
-        if (isClozeForm) {
-          await ankiFetch("updateNoteFields", {
-            note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
-          });
-        } else {
-          await ankiFetch("updateNoteFields", {
-            note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
-          });
+        // Only write what actually changed. Walking a selection and hitting
+        // "Update Card" on every card would otherwise bump `mod` and re-sync
+        // each one even when untouched.
+        const fieldsChanged = isClozeForm
+          ? clozeText !== initialClozeText || backExtra !== initialBackExtra
+          : front !== initialFront || back !== initialBack;
+        const tagsChanged =
+          [...tags].sort().join(" ") !==
+          [...initialTags].sort().join(" ");
+        const deckChanged = destDeck !== deckName;
+
+        if (fieldsChanged) {
+          if (isClozeForm) {
+            await ankiFetch("updateNoteFields", {
+              note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
+            });
+          } else {
+            await ankiFetch("updateNoteFields", {
+              note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
+            });
+          }
         }
-        // Update tags
-        for (const tag of note.tags) {
-          await ankiFetch("removeTags", { notes: [note.noteId], tags: tag });
+        if (tagsChanged) {
+          for (const tag of note.tags) {
+            await ankiFetch("removeTags", { notes: [note.noteId], tags: tag });
+          }
+          if (tags.length > 0) {
+            await ankiFetch("addTags", {
+              notes: [note.noteId],
+              tags: tags.join(" "),
+            });
+          }
         }
-        if (tags.length > 0) {
-          await ankiFetch("addTags", {
-            notes: [note.noteId],
-            tags: tags.join(" "),
-          });
-        }
-        if (targetDeck !== deckName) {
+        if (deckChanged) {
           let cardIds = note.cards ?? [];
           if (cardIds.length === 0) {
             cardIds = await ankiFetch<number[]>("findCards", {
@@ -200,22 +286,40 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
             });
           }
           if (cardIds.length > 0) {
-            await ankiFetch("changeDeck", { cards: cardIds, deck: targetDeck });
+            await ankiFetch("changeDeck", { cards: cardIds, deck: destDeck });
             // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
             // active reviewer doesn't keep serving the moved card.
             await ankiFetch("reloadCollection").catch(() => {});
           }
         }
+        if (fieldsChanged || tagsChanged || deckChanged) {
+          const updatedFields = { ...note.fields };
+          if (isClozeForm) {
+            if (updatedFields.Text)
+              updatedFields.Text = { ...updatedFields.Text, value: clozeText };
+            if (updatedFields["Back Extra"])
+              updatedFields["Back Extra"] = {
+                ...updatedFields["Back Extra"],
+                value: backExtra,
+              };
+          } else {
+            if (updatedFields[frontKey])
+              updatedFields[frontKey] = { ...updatedFields[frontKey], value: front };
+            if (updatedFields[backKey])
+              updatedFields[backKey] = { ...updatedFields[backKey], value: back };
+          }
+          savedNote = { ...note, fields: updatedFields, tags };
+        }
       } else {
         const noteData = isClozeForm
           ? {
-              deckName: targetDeck,
+              deckName: destDeck,
               modelName,
               fields: { Text: clozeText, "Back Extra": backExtra },
               tags,
             }
           : {
-              deckName: targetDeck,
+              deckName: destDeck,
               modelName,
               fields: { Front: front, Back: back },
               tags,
@@ -230,10 +334,31 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
         }
         if (isEdit) {
           await ankiFetch("deleteNotes", { notes: [note.noteId] });
+          // A type change replaces the note with a new id. Report the rebuilt
+          // note so a sequential editor can refresh on close and repoint its
+          // run at the new id for correct back-navigation.
+          savedNote = {
+            ...note,
+            noteId,
+            // The new note has fresh card ids we haven't fetched; drop the
+            // deleted note's so a later deck change falls back to findCards.
+            cards: undefined,
+            modelName,
+            tags,
+            fields: isClozeForm
+              ? {
+                  Text: { value: clozeText, order: 0 },
+                  "Back Extra": { value: backExtra, order: 1 },
+                }
+              : {
+                  Front: { value: front, order: 0 },
+                  Back: { value: back, order: 1 },
+                },
+          };
         }
       }
       if (onSaved) {
-        onSaved();
+        onSaved(savedNote);
       } else {
         onClose();
         window.location.reload();
@@ -258,15 +383,45 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
         className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg outline-none"
       >
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h3 className="text-lg font-semibold">
-            {isEdit ? "Edit Card" : "Add Card"}
-          </h3>
-          {isEdit && cardType !== initialType && (
-            <p className="text-xs text-amber-600 dark:text-amber-500">
-              Changing the card type creates a new card and resets its review history.
-            </p>
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold">
+              {isEdit ? "Edit Card" : "Add Card"}
+            </h3>
+            {position && (
+              <span className="text-sm tabular-nums text-foreground/40">
+                {position.index + 1} / {position.total}
+              </span>
+            )}
+          </div>
+          {position && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={onPrev}
+                disabled={saving || position.index === 0}
+                aria-label="Previous card"
+                className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <CaretLeft size={18} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={onSkip}
+                disabled={saving || position.index === position.total - 1}
+                aria-label="Next card"
+                className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <CaretRight size={18} weight="bold" />
+              </button>
+            </div>
           )}
         </div>
+
+        {isEdit && cardType !== initialType && (
+          <p className="mb-4 text-xs text-amber-600 dark:text-amber-500">
+            Changing the card type creates a new card and resets its review history.
+          </p>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -293,44 +448,24 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
           }}
           className="space-y-4"
         >
-          <div className="flex gap-1 rounded-lg bg-foreground/5 p-1">
-            <button
-              type="button"
-              onClick={() => changeCardType("Basic")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                cardType === "Basic"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-foreground/50 hover:text-foreground/70"
-              }`}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+              Type
+            </label>
+            <select
+              value={cardType}
+              onChange={(e) => changeCardType(e.target.value as CardType)}
+              className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
             >
-              Basic
-            </button>
-            <button
-              type="button"
-              onClick={() => changeCardType("Cloze")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                cardType === "Cloze"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-foreground/50 hover:text-foreground/70"
-              }`}
-            >
-              Cloze
-            </button>
-            <button
-              type="button"
-              onClick={() => changeCardType("ClozeTyped")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                cardType === "ClozeTyped"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-foreground/50 hover:text-foreground/70"
-              }`}
-              title="Cloze with a typed answer"
-            >
-              Cloze (typed)
-            </button>
+              {CARD_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {cardType === "Basic" ? (
+          {isBasicForm ? (
             <>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground/70">
@@ -382,17 +517,32 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
               <select
                 value={targetDeck}
                 onChange={(e) => setTargetDeck(e.target.value)}
-                className="w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+                className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
               >
                 {decks.map((d) => (
                   <option key={d} value={d}>
-                    {d}
+                    {/* Indent by depth and show only the leaf so the list reads
+                        as a tree instead of exposing "::" paths. The indent uses
+                        non-breaking spaces — the browser strips leading ASCII
+                        spaces from <option> labels. */}
+                    {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
                   </option>
                 ))}
+                <option value={NEW_DECK}>+ New deck…</option>
               </select>
-              {targetDeck !== deckName && (
+              {creatingDeck && (
+                <input
+                  type="text"
+                  value={newDeck}
+                  onChange={(e) => setNewDeck(e.target.value)}
+                  placeholder="New deck name"
+                  className="mt-2 w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+                />
+              )}
+              {destDeck && destDeck !== deckName && (
                 <p className="mt-1 text-xs text-foreground/50">
-                  The card will be moved to {targetDeck} when you save.
+                  The card will be moved to {formatDeckPath(destDeck)} when you
+                  save.
                 </p>
               )}
             </div>
@@ -400,22 +550,36 @@ export function CardForm({ deckName, note, onClose, onSaved }: CardFormProps) {
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
-            >
-              {saving ? "Saving..." : isEdit ? "Update Card" : "Add Card"}
-            </button>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <div>
+              {position && (
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  disabled={saving}
+                  className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  Skip
+                </button>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : isEdit ? "Update Card" : "Add Card"}
+              </button>
+            </div>
           </div>
         </form>
       </div>

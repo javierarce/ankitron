@@ -40,6 +40,12 @@ export interface ImportResult {
   updated: number;
   added: number;
   skipped: number;
+  /**
+   * Notes left alone by the stale-import guard: their live copy in Anki has a
+   * newer `mod` than the export. Counted separately from `skipped` (duplicates)
+   * so the UI can explain why and offer a forced overwrite.
+   */
+  staleSkipped: number;
   errors: string[];
 }
 
@@ -55,6 +61,12 @@ export interface ImportOptions {
    * silently update cards in the *source* deck via their noteIds.
    */
   addOnly?: boolean;
+  /**
+   * Bypass the stale-import guard: update matched notes even when their live
+   * copy in Anki has a newer `mod` than the export. Meant for an explicit
+   * user choice after a first import reported stale skips — never the default.
+   */
+  overwriteStale?: boolean;
 }
 
 export function flattenFields(fields: Note["fields"]): Record<string, string> {
@@ -243,6 +255,7 @@ async function importOne(
   existingIds: Set<number>,
   result: ImportResult,
   deps: ImportDeps,
+  options: ImportOptions,
 ) {
   const targetDeck = cardTargets[0];
   const tags = (note.tags ?? []).map((t) => String(t)).filter(Boolean);
@@ -259,11 +272,12 @@ async function importOne(
       // was taken, leave it alone rather than overwriting the user's newer work.
       // Only applies when both timestamps are known; otherwise we overwrite.
       if (
+        !options.overwriteStale &&
         typeof note.mod === "number" &&
         typeof existingMod === "number" &&
         existingMod > note.mod
       ) {
-        result.skipped += 1;
+        result.staleSkipped += 1;
         return;
       }
 
@@ -380,7 +394,13 @@ export async function importDeck(
     }
   }
 
-  const result: ImportResult = { updated: 0, added: 0, skipped: 0, errors: [] };
+  const result: ImportResult = {
+    updated: 0,
+    added: 0,
+    skipped: 0,
+    staleSkipped: 0,
+    errors: [],
+  };
   for (let i = 0; i < parsed.notes.length; i += 1) {
     await importOne(
       cardTargetsByNote[i],
@@ -388,7 +408,49 @@ export async function importDeck(
       existingIds,
       result,
       deps,
+      options,
     );
   }
   return result;
+}
+
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+/**
+ * Save a deck export to disk. In the Tauri app this opens a native save dialog
+ * so the user picks the destination folder and filename; in the browser it
+ * falls back to a plain anchor download into the default Downloads folder.
+ * Resolves to false if the user cancels the dialog, true otherwise.
+ */
+export async function downloadDeckJson(
+  payload: ExportedDeck,
+  name: string,
+): Promise<boolean> {
+  const json = JSON.stringify(payload, null, 2);
+  const date = new Date().toISOString().slice(0, 10);
+  const defaultName = `${sanitizeFilename(name)}-${date}.json`;
+
+  if (isTauri) {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({
+      defaultPath: defaultName,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (!path) return false; // user cancelled
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("save_text_file", { path, contents: json });
+    return true;
+  }
+
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = defaultName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return true;
 }

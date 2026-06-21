@@ -6,6 +6,7 @@ import {
   setDeckLanguage,
   speak,
 } from "@/lib/deck-settings";
+import { getDeckAutoplay, setDeckAutoplay } from "@/lib/audio";
 
 interface DeckSettingsProps {
   deckName: string;
@@ -59,28 +60,55 @@ function sampleFor(lang: string): string {
 }
 
 export function DeckSettings({ deckName }: DeckSettingsProps) {
-  const [mounted, setMounted] = useState(false);
-  const [languages, setLanguages] = useState<DeckLanguages>({
-    primary: null,
-    secondary: null,
-  });
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [languages, setLanguages] = useState<DeckLanguages>(() =>
+    getDeckLanguages(deckName)
+  );
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>(() =>
+    "speechSynthesis" in window ? window.speechSynthesis.getVoices() : []
+  );
+
+  // Route param changes swap the deck without remounting; reload its settings.
+  const [prevDeckName, setPrevDeckName] = useState(deckName);
+  if (prevDeckName !== deckName) {
+    setPrevDeckName(deckName);
+    setLanguages(getDeckLanguages(deckName));
+  }
+
+  // null while loading or when Anki is unreachable — the toggle stays disabled.
+  const [autoplay, setAutoplay] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setMounted(true);
-    setLanguages(getDeckLanguages(deckName));
-
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const synth = window.speechSynthesis;
-    const update = () => setVoices(synth.getVoices());
-    update();
-    synth.addEventListener("voiceschanged", update);
-    return () => synth.removeEventListener("voiceschanged", update);
+    let cancelled = false;
+    getDeckAutoplay(deckName).then((value) => {
+      if (!cancelled) setAutoplay(value);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [deckName]);
 
+  async function handleAutoplayToggle() {
+    if (autoplay === null) return;
+    const next = !autoplay;
+    setAutoplay(next);
+    try {
+      await setDeckAutoplay(deckName, next);
+    } catch {
+      setAutoplay(!next);
+    }
+  }
+
+  // Voices often load asynchronously; refresh the list when they arrive.
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+    const update = () => setVoices(synth.getVoices());
+    synth.addEventListener("voiceschanged", update);
+    return () => synth.removeEventListener("voiceschanged", update);
+  }, []);
+
   const options = useMemo(() => buildOptions(voices), [voices]);
-  const supported =
-    typeof window !== "undefined" && "speechSynthesis" in window;
+  const supported = "speechSynthesis" in window;
 
   function handleChange(slot: "primary" | "secondary", value: string) {
     const lang = value || null;
@@ -94,46 +122,65 @@ export function DeckSettings({ deckName }: DeckSettingsProps) {
     speak(sampleFor(lang), lang);
   }
 
-  if (!mounted) return <div className="mt-16 h-32" />;
-
   return (
-    <section className="mt-16 border-t border-foreground/10 pt-6">
-      <h2 className="mb-1 text-sm font-semibold">Deck Settings</h2>
-      <p className="mb-4 text-sm text-foreground/50">
-        Pick up to two languages. The speaker button on cards will let you
-        choose between them.
-      </p>
-
-      {!supported ? (
-        <p className="text-sm text-foreground/40">
-          Speech synthesis isn&apos;t available in this environment.
+    <>
+      <div className="py-4">
+        <p className="text-sm font-medium">Languages</p>
+        <p className="mb-3 mt-1 text-xs text-foreground/50">
+          Pick up to two languages. The speaker button on cards will let you
+          choose between them.
         </p>
-      ) : (
-        <div className="space-y-3">
-          <LanguageRow
-            label="Primary"
-            slot="primary"
-            value={languages.primary ?? ""}
-            options={options}
-            onChange={handleChange}
-            onTest={handleTest}
+
+        {!supported ? (
+          <p className="text-sm text-foreground/40">
+            Speech synthesis isn&apos;t available in this environment.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <LanguageRow
+              label="Primary"
+              slot="primary"
+              value={languages.primary ?? ""}
+              options={options}
+              onChange={handleChange}
+              onTest={handleTest}
+            />
+            <LanguageRow
+              label="Secondary"
+              slot="secondary"
+              value={languages.secondary ?? ""}
+              options={options}
+              onChange={handleChange}
+              onTest={handleTest}
+            />
+            {options.length === 0 && (
+              <p className="text-xs text-foreground/40">
+                No voices installed yet.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="py-4">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={autoplay ?? false}
+            disabled={autoplay === null}
+            onChange={handleAutoplayToggle}
+            className="accent-foreground"
           />
-          <LanguageRow
-            label="Secondary"
-            slot="secondary"
-            value={languages.secondary ?? ""}
-            options={options}
-            onChange={handleChange}
-            onTest={handleTest}
-          />
-          {options.length === 0 && (
-            <p className="text-xs text-foreground/40">
-              No voices installed yet.
-            </p>
-          )}
-        </div>
-      )}
-    </section>
+          Play card audio automatically during study
+        </label>
+        <p className="mt-1 text-xs text-foreground/50">
+          This is Anki&apos;s per-deck audio option, so it also applies when
+          studying in Anki itself and to decks sharing this deck&apos;s options
+          preset. Audio can always be played with the inline buttons or{" "}
+          <kbd>R</kbd>.
+        </p>
+      </div>
+    </>
   );
 }
 

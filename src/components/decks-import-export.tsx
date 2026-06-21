@@ -4,14 +4,16 @@ import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { Note } from "@/lib/types";
 import {
   buildExport,
+  downloadDeckJson,
   fetchCardDecksByNoteId,
   importDeck,
   isExportedDeck,
   type ExportedDeck,
   type ImportResult,
 } from "@/lib/import-export";
-import { downloadDeckJson, ImportResultModal } from "./import-export";
+import { ImportResultModal } from "./import-export";
 import { ImportTargetDialog } from "./import-target-dialog";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface DecksImportExportProps {
   decks: string[];
@@ -24,6 +26,12 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
   const [showExportPicker, setShowExportPicker] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Kept after a successful import so "Overwrite anyway" can re-run it, and as
+  // the signal that Anki changed and the page needs a reload on dismiss.
+  const [lastImport, setLastImport] = useState<{
+    target: string;
+    parsed: ExportedDeck;
+  } | null>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -64,8 +72,8 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
         { addOnly },
       );
       setResult(r);
+      setLastImport({ target, parsed: pending });
       setPending(null);
-      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed.");
       setPending(null);
@@ -74,7 +82,33 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
     }
   }
 
+  async function runOverwrite() {
+    if (!lastImport) return;
+    setImporting(true);
+    try {
+      const addOnly = lastImport.target !== lastImport.parsed.deckName;
+      const r = await importDeck(
+        lastImport.target,
+        lastImport.parsed,
+        { ankiFetch, ensureClozeTypedModel },
+        { addOnly, overwriteStale: true },
+      );
+      setResult(r);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function dismissResult() {
+    // Reload only when an import actually ran, so the page reflects the new
+    // cards; a parse/validation error changed nothing.
+    if (lastImport) {
+      window.location.reload();
+      return;
+    }
     setResult(null);
     setError(null);
   }
@@ -91,7 +125,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       <button
         onClick={() => setShowExportPicker(true)}
         disabled={importing || decks.length === 0}
-        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Pick a deck and download it as JSON"
       >
         Export
@@ -99,7 +133,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={importing}
-        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Import cards from a JSON file"
       >
         {importing ? "Importing…" : "Import"}
@@ -130,6 +164,8 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
         <ImportResultModal
           result={result}
           error={error}
+          importing={importing}
+          onOverwriteStale={runOverwrite}
           onClose={dismissResult}
         />
       )}
@@ -148,6 +184,7 @@ function ExportPickerDialog({
   onDone: () => void;
   onError: (msg: string) => void;
 }) {
+  useScrollLock();
   const [selected, setSelected] = useState<string>(decks[0] ?? "");
   const [working, setWorking] = useState(false);
 
@@ -220,7 +257,7 @@ function ExportPickerDialog({
           <button
             onClick={handleExport}
             disabled={working || !selected}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {working ? "Exporting…" : "Export"}
           </button>

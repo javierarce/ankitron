@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Ease, Note } from "@/lib/types";
+import { Ease, Note, NoteField } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { extractSoundFilenames } from "@/lib/audio";
 import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
 import { isCardInDeck } from "@/lib/deck";
 import { canUndo } from "@/lib/study";
+
+// Duration of the card fade transitions (must match the CSS transition below).
+const FADE_MS = 180;
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface CurrentCard {
   cardId: number;
@@ -14,6 +19,7 @@ interface CurrentCard {
   question: string;
   answer: string;
   deckName: string;
+  fields: Record<string, NoteField>;
 }
 
 export function StudyPage() {
@@ -31,18 +37,21 @@ export function StudyPage() {
   const [initialTotal, setInitialTotal] = useState(0);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [pinnedTop, setPinnedTop] = useState<number | null>(null);
+  const [cardVisible, setCardVisible] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
-  const [languages, setLanguages] = useState<DeckLanguages>({
-    primary: null,
-    secondary: null,
-  });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cardSlotRef = useRef<HTMLDivElement>(null);
+  const languages = useMemo<DeckLanguages>(
+    () => getDeckLanguages(deckName),
+    [deckName]
+  );
+  // Guards against overlapping reveal/answer transitions (e.g. mashing space).
+  const transitioningRef = useRef(false);
 
-  useEffect(() => {
-    setLanguages(getDeckLanguages(deckName));
-  }, [deckName]);
+  // The rendered HTML only carries [anki:play:…] placeholders; the filenames
+  // behind them live in the raw fields (see resolveCardAudio).
+  const sounds = useMemo(
+    () => (card ? extractSoundFilenames(card.fields ?? {}) : []),
+    [card]
+  );
 
   const loadCurrentCard = useCallback(async () => {
     try {
@@ -64,7 +73,6 @@ export function StudyPage() {
       } else {
         setCard(result);
         setIsRevealed(false);
-        setPinnedTop(null);
         await ankiFetch("guiStartCardTimer");
       }
     } catch {
@@ -118,8 +126,34 @@ export function StudyPage() {
     }
     setReviewed((r) => Math.max(0, r - 1));
     setSyncStatus("idle");
+    // The undo reverts the collection, but the (hidden) reviewer defers its
+    // own refresh until focused — guiCurrentCard would keep returning the
+    // already-advanced card. Re-enter review to rebuild the queue; the
+    // collection is back in its pre-answer state, so the undone card is
+    // served again.
+    try {
+      await ankiFetch("guiDeckReview", { name: deckName });
+    } catch {
+      // ignore — loadCurrentCard will surface any real failure
+    }
     await loadCurrentCard();
-  }, [completed, reviewed, loadCurrentCard]);
+  }, [completed, reviewed, deckName, loadCurrentCard]);
+
+  const handleEdit = useCallback(async () => {
+    if (!card) return;
+    try {
+      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
+      if (!cardsResult.length) return;
+      const noteId = cardsResult[0].noteId ?? cardsResult[0].note;
+      if (!noteId) return;
+      const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
+      if (notes.length > 0) {
+        setEditingNote(notes[0]);
+      }
+    } catch {
+      // silently fail
+    }
+  }, [card]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -132,6 +166,9 @@ export function StudyPage() {
       } else if (e.key === "h" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         navigate(`/decks/${encodeURIComponent(deckName)}`);
+      } else if (e.key === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        handleEdit();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         handleUndo();
@@ -139,11 +176,12 @@ export function StudyPage() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm, navigate, deckName, handleUndo]);
+  }, [editingNote, showAddForm, navigate, deckName, handleEdit, handleUndo]);
 
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- this effect owns the sync state machine; the transition to "syncing" belongs with the request it starts
     setSyncStatus("syncing");
     (async () => {
       try {
@@ -161,36 +199,26 @@ export function StudyPage() {
   }, [completed, reviewed, syncStatus]);
 
   async function handleReveal() {
-    const cardRect = cardSlotRef.current?.getBoundingClientRect();
-    const containerRect = containerRef.current?.getBoundingClientRect();
-    if (cardRect && containerRect) {
-      setPinnedTop(cardRect.top - containerRect.top);
-    }
+    if (transitioningRef.current) return;
+    transitioningRef.current = true;
+    // Fade the question out, swap in the answer while hidden, then fade in.
+    setCardVisible(false);
+    await delay(FADE_MS);
     try {
       await ankiFetch("guiShowAnswer");
-      setIsRevealed(true);
     } catch {
-      setIsRevealed(true);
+      // Showing the answer in Anki is best-effort; reveal locally regardless.
     }
-  }
-
-  async function handleEdit() {
-    if (!card) return;
-    try {
-      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
-      if (!cardsResult.length) return;
-      const noteId = cardsResult[0].noteId ?? cardsResult[0].note;
-      if (!noteId) return;
-      const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
-      if (notes.length > 0) {
-        setEditingNote(notes[0]);
-      }
-    } catch {
-      // silently fail
-    }
+    setIsRevealed(true);
+    setCardVisible(true);
+    transitioningRef.current = false;
   }
 
   async function handleEditClose() {
+    // loadCurrentCard rebuilds the queue and resets to the question side; if the
+    // answer was showing before the edit, restore it so editing doesn't bounce
+    // the card back to its unanswered state.
+    const wasRevealed = isRevealed;
     setEditingNote(null);
     try {
       await ankiFetch("guiDeckReview", { name: deckName });
@@ -198,6 +226,19 @@ export function StudyPage() {
       // ignore
     }
     await loadCurrentCard();
+    if (wasRevealed) {
+      // Mirror handleReveal's fade: hide the question side, swap in the answer
+      // while hidden, then fade it back in so the restore matches a manual reveal.
+      setCardVisible(false);
+      await delay(FADE_MS);
+      try {
+        await ankiFetch("guiShowAnswer");
+      } catch {
+        // Re-revealing in Anki is best-effort; reveal locally regardless.
+      }
+      setIsRevealed(true);
+      setCardVisible(true);
+    }
   }
 
   async function handleAddSaved() {
@@ -212,7 +253,12 @@ export function StudyPage() {
   }
 
   async function handleAnswer(ease: Ease) {
+    if (transitioningRef.current) return;
+    transitioningRef.current = true;
     setAnswering(true);
+    // Fade the answered card out, load the next card while hidden, then fade in.
+    setCardVisible(false);
+    await delay(FADE_MS);
     try {
       const success = await ankiFetch<boolean>("guiAnswerCard", { ease });
       if (success) {
@@ -223,17 +269,13 @@ export function StudyPage() {
       setError("Failed to record answer. Try again.");
     } finally {
       setAnswering(false);
+      setCardVisible(true);
+      transitioningRef.current = false;
     }
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`flex flex-1 flex-col items-center pb-[6rem] ${
-        pinnedTop === null ? "justify-center" : ""
-      }`}
-      style={pinnedTop !== null ? { paddingTop: pinnedTop } : undefined}
-    >
+    <div className="flex flex-1 flex-col items-center justify-center pb-[6rem]">
       {loading && (
         <p className="text-foreground/50">Loading cards...</p>
       )}
@@ -248,12 +290,16 @@ export function StudyPage() {
               ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
               : "No cards are due for review."}
           </p>
-          {reviewed > 0 && (
-            <p className="mb-4 text-xs text-foreground/40">
-              {syncStatus === "syncing" && "Syncing with AnkiWeb\u2026"}
-              {syncStatus === "ok" && "Synced with AnkiWeb."}
-              {syncStatus === "error" && "Sync failed \u2014 try the Sync button."}
-            </p>
+          {reviewed > 0 && syncStatus === "error" && (
+            <div className="mb-4 flex flex-col items-center gap-2">
+              <p className="text-xs text-foreground/40">Sync failed.</p>
+              <button
+                onClick={() => setSyncStatus("idle")}
+                className="rounded-md border border-foreground/15 px-3 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+              >
+                Retry sync
+              </button>
+            </div>
           )}
           <a
             href="/"
@@ -265,7 +311,10 @@ export function StudyPage() {
       )}
 
       {!loading && !error && card && (
-        <div ref={cardSlotRef} className="w-full max-w-2xl">
+        <div
+          className="w-full max-w-2xl transition-opacity ease-out"
+          style={{ opacity: cardVisible ? 1 : 0, transitionDuration: `${FADE_MS}ms` }}
+        >
           <StudyCard
             question={card.question}
             answer={card.answer}
@@ -275,6 +324,7 @@ export function StudyPage() {
             onEdit={handleEdit}
             answering={answering}
             languages={languages}
+            sounds={sounds}
           />
         </div>
       )}
@@ -310,7 +360,7 @@ export function StudyPage() {
         </div>
       )}
 
-      {reviewed > 0 && (
+      {reviewed > 0 && !completed && (
         <p className="fixed bottom-4 right-6 text-sm text-foreground/30">
           {initialTotal > 0
             ? `${reviewed > initialTotal ? `(+${reviewed - initialTotal}) ` : ""}${Math.min(reviewed, initialTotal)} / ${initialTotal}`

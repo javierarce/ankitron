@@ -107,7 +107,7 @@ function AnkiNotConnected() {
       </div>
       <h2 className="text-xl font-semibold">Anki isn&apos;t connected</h2>
       <p className="mt-2 text-sm text-foreground/60">
-        AnkiTron can&apos;t reach Anki right now.
+        Ankitron can&apos;t reach Anki right now.
       </p>
       <button
         onClick={retry}

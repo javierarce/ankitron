@@ -4,6 +4,7 @@ import { SpeakerHigh } from "@phosphor-icons/react/dist/ssr/SpeakerHigh";
 import { Stop } from "@phosphor-icons/react/dist/ssr/Stop";
 import { Ease } from "@/lib/types";
 import { DeckLanguages, speak, stopSpeaking } from "@/lib/deck-settings";
+import { playAudio, resolveCardAudio, stopAudio } from "@/lib/audio";
 import {
   diffTypedAnswer,
   extractExpectedClozeAnswer,
@@ -19,6 +20,8 @@ interface StudyCardProps {
   onEdit: () => void;
   answering: boolean;
   languages: DeckLanguages;
+  /** Ordered [sound:…] filenames from the note's raw fields. */
+  sounds: string[];
 }
 
 function describeLanguage(lang: string): string {
@@ -97,8 +100,15 @@ export function StudyCard({
   onEdit,
   answering,
   languages,
+  sounds,
 }: StudyCardProps) {
   const typed = useMemo(() => hasTypeCloze(question), [question]);
+  // Swap the [anki:play:…] placeholders for inline play buttons; everything
+  // below renders the processed HTML, while cloze/diff logic keeps the raw.
+  const audio = useMemo(
+    () => resolveCardAudio(question, answer, sounds),
+    [question, answer, sounds]
+  );
   const [typedValue, setTypedValue] = useState("");
   const [submittedValue, setSubmittedValue] = useState("");
   const [prevQuestion, setPrevQuestion] = useState(question);
@@ -128,8 +138,34 @@ export function StudyCard({
   );
 
   useEffect(() => {
-    return () => stopSpeaking();
+    return () => {
+      stopSpeaking();
+      stopAudio();
+    };
   }, [question]);
+
+  // Play buttons live inside imperatively-rendered HTML, so clicks are
+  // handled by delegation. Capture phase so the card's reveal-on-click
+  // handler never sees them.
+  useEffect(() => {
+    const body = cardBodyRef.current;
+    if (!body) return;
+    function handleClick(e: MouseEvent) {
+      const button = (e.target as HTMLElement).closest?.("[data-audio-file]");
+      if (!button) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const file = button.getAttribute("data-audio-file");
+      if (file) playAudio([file]);
+    }
+    body.addEventListener("click", handleClick, true);
+    return () => body.removeEventListener("click", handleClick, true);
+  }, []);
+
+  // No autoplay here: the session drives Anki's real (offscreen) reviewer,
+  // which already autoplays card audio per the deck's options — playing it
+  // from Ankitron too sounds everything twice. Our player only handles
+  // manual playback: the inline buttons and the `r` key.
 
   const updateFromSelection = useCallback(() => {
     if (availableLanguages.length === 0) return;
@@ -215,6 +251,17 @@ export function StudyCard({
       const tag = target?.tagName;
       const inEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
 
+      if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey && !inEditable) {
+        e.preventDefault();
+        const files = isRevealed
+          ? audio.answerFiles.length
+            ? audio.answerFiles
+            : audio.questionFiles
+          : audio.questionFiles;
+        if (files.length) playAudio(files);
+        return;
+      }
+
       if (!isRevealed) {
         if (inEditable) return;
         if (e.key === " " || e.key === "1" || e.key === "2") {
@@ -237,7 +284,7 @@ export function StudyCard({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isRevealed, answering, onReveal, onAnswer]);
+  }, [isRevealed, answering, onReveal, onAnswer, audio]);
 
   function handleSubmitTyped() {
     setSubmittedValue(typedValue);
@@ -246,16 +293,29 @@ export function StudyCard({
   }
 
   const [questionBefore, questionAfter] = useMemo(
-    () => (typed ? splitOnTypeCloze(question) : [question, ""]),
-    [typed, question]
+    () =>
+      typed ? splitOnTypeCloze(audio.questionHtml) : [audio.questionHtml, ""],
+    [typed, audio.questionHtml]
   );
 
   const cleanedAnswer = useMemo(
-    () => (typed ? stripTypeCloze(answer) : answer),
-    [typed, answer]
+    () => (typed ? stripTypeCloze(audio.answerHtml) : audio.answerHtml),
+    [typed, audio.answerHtml]
   );
 
   const splitAnswer = useMemo(() => splitAnkiAnswer(cleanedAnswer), [cleanedAnswer]);
+
+  // For a non-typed cloze the part before `<hr id=answer>` is the revealed
+  // sentence (cloze word filled in) — show it as its own section. A Basic
+  // card's front re-renders identically to the question, so skip it there to
+  // avoid duplicating the question section.
+  const isClozeReveal = useMemo(
+    () =>
+      !typed &&
+      splitAnswer.front.trim() !== "" &&
+      splitAnswer.front.trim() !== question.trim(),
+    [typed, splitAnswer.front, question]
+  );
 
   const expectedAnswer = useMemo(
     () => (typed ? extractExpectedClozeAnswer(question, answer) : ""),
@@ -331,7 +391,7 @@ export function StudyCard({
                 onEdit();
               }}
               className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 rounded-md p-1.5 text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 transition-all"
-              title="Edit card"
+              title="Edit card (e)"
             >
               <PencilSimple size={18} weight="regular" />
             </button>
@@ -441,22 +501,30 @@ export function StudyCard({
               </div>
             ) : (
               <HtmlContent
-                html={question}
+                html={audio.questionHtml}
                 className="prose prose-sm dark:prose-invert max-w-none"
               />
             )}
           </div>
         ) : (
           <div key="content">
-            <div className="rounded-t-xl border-b border-foreground/10 bg-foreground/[0.03] px-8 py-6">
+            {/* Section 1 — question (gray background) */}
+            <div className="rounded-t-xl bg-foreground/[0.03] px-8 py-6">
               <HtmlContent
-                html={typed ? trimTrailingBreaks(questionBefore + questionAfter) : question}
+                html={
+                  typed
+                    ? trimTrailingBreaks(questionBefore + questionAfter)
+                    : audio.questionHtml
+                }
                 className="prose prose-sm dark:prose-invert max-w-none"
               />
             </div>
-            <div className="study-answer prose prose-sm dark:prose-invert max-w-none px-8 py-6">
-            {typed && (
-              <>
+
+            {/* Section 2 — the revealed word or sentence. Each section after
+               the first carries a full-width top border so the dividers run
+               edge to edge across the card. */}
+            {typed ? (
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-3">
                 {typedDiff ? (
                   typedDiff.correct ? (
                     <div className="flex justify-center">
@@ -505,11 +573,21 @@ export function StudyCard({
                     <span className="text-foreground/70">{submittedValue || <em className="text-foreground/30">(nothing)</em>}</span>
                   </div>
                 )}
-                <hr />
-              </>
+              </div>
+            ) : (
+              isClozeReveal && (
+                <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-6">
+                  <HtmlContent html={splitAnswer.front} />
+                </div>
+              )
             )}
-            <HtmlContent html={splitAnswer.back} />
-            </div>
+
+            {/* Section 3 — back of the card */}
+            {splitAnswer.back.trim() && (
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-6">
+                <HtmlContent html={splitAnswer.back} />
+              </div>
+            )}
           </div>
         )}
       </div>

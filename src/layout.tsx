@@ -1,18 +1,37 @@
 import { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
+import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { AboutDialog } from "@/components/about-dialog";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { HeaderNav } from "@/components/header-nav";
-import { SyncButton } from "@/components/sync-button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { UpdateBadge } from "@/components/update-badge";
 import { UpdatePrompt } from "@/components/update-prompt";
+import { ankiFetch } from "@/lib/anki-fetch";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function Layout() {
   const [ankiReady, setAnkiReady] = useState(!isTauri);
+  const [startupMsg, setStartupMsg] = useState("Starting Anki…");
+
+  useEffect(() => {
+    // With the webview's native drag-drop disabled, the browser default for a
+    // file dropped anywhere is to navigate to it — replacing the app with a
+    // bare media/file viewer. Suppress that default window-wide. The editor's
+    // own drop handler sits deeper in the DOM and fires first, so we don't stop
+    // propagation — only the default navigation.
+    const prevent = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -24,13 +43,23 @@ export function Layout() {
       }
     });
 
-    // Wait for Anki to be ready before rendering pages
+    // Wait for Anki, then pull from AnkiWeb before rendering any pages so the
+    // app always opens on fresh data (Ankitron and Anki can't run at once, so
+    // a launch sync replaces the manual Sync button). Sync failure never
+    // blocks startup — we render regardless.
     import("@tauri-apps/api/core").then(({ invoke }) => {
-      invoke("wait_for_anki").then((ok) => {
-        setAnkiReady(true);
-        if (!ok) {
+      invoke("wait_for_anki").then(async (ok) => {
+        if (ok) {
+          setStartupMsg("Syncing…");
+          try {
+            await ankiFetch("sync");
+          } catch (e) {
+            console.warn("Startup sync failed:", e);
+          }
+        } else {
           console.warn("Anki did not start in time");
         }
+        setAnkiReady(true);
       });
     });
   }, []);
@@ -53,7 +82,7 @@ export function Layout() {
         <div className="flex min-h-dvh items-center justify-center">
           <div className="text-center">
             <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-            <p className="text-sm text-foreground/50">Starting Anki&hellip;</p>
+            <p className="text-sm text-foreground/50">{startupMsg}</p>
           </div>
         </div>
         <UpdatePrompt />
@@ -66,15 +95,22 @@ export function Layout() {
     <>
       <header
         onMouseDown={handleDrag}
-        className="app-header border-b border-foreground/10"
+        className="app-header sticky top-0 z-40 border-b border-foreground/10 bg-background"
       >
         <div className="app-row flex items-center justify-between gap-2 py-3">
           <div className="app-no-drag">
             <HeaderNav />
           </div>
           <div className="app-no-drag flex items-center gap-2">
-            <SyncButton />
-            <ThemeToggle />
+            <UpdateBadge />
+            <Link
+              to="/settings"
+              title="Settings"
+              aria-label="Settings"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <Gear size={16} weight="regular" />
+            </Link>
           </div>
         </div>
       </header>

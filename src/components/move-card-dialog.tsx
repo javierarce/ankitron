@@ -1,27 +1,39 @@
 import { useEffect, useState } from "react";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface MoveCardDialogProps {
-  note: Note;
+  notes: Note[];
   currentDeck: string;
   onClose: () => void;
 }
 
-export function MoveCardDialog({ note, currentDeck, onClose }: MoveCardDialogProps) {
+// "Create a new deck" sentinel. The leading space is deliberate: Anki trims
+// deck names, so no real deck path can equal this, keeping it collision-proof.
+const NEW_DECK = " new";
+
+export function MoveCardDialog({ notes, currentDeck, onClose }: MoveCardDialogProps) {
+  useScrollLock();
   const [decks, setDecks] = useState<string[] | null>(null);
-  const [pickedDeck, setPickedDeck] = useState("");
+  const [choice, setChoice] = useState("");
+  const [newDeck, setNewDeck] = useState("");
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const count = notes.length;
 
   useEffect(() => {
     let cancelled = false;
     ankiFetch<string[]>("deckNames")
       .then((names) => {
         if (cancelled) return;
-        const others = names.filter((n) => n !== currentDeck);
+        const others = names
+          .filter((n) => n !== currentDeck)
+          .sort(compareDeckPaths);
         setDecks(others);
-        if (others.length > 0) setPickedDeck(others[0]);
+        setChoice(others.length > 0 ? others[0] : NEW_DECK);
       })
       .catch(() => {
         if (!cancelled) setDecks([]);
@@ -39,21 +51,32 @@ export function MoveCardDialog({ note, currentDeck, onClose }: MoveCardDialogPro
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [moving, onClose]);
 
+  const creating = choice === NEW_DECK;
+  const target = creating ? newDeck.trim() : choice;
+  const disabled = moving || !target;
+
   async function handleMove() {
-    if (!pickedDeck) return;
+    if (!target) return;
     setMoving(true);
     setError(null);
     try {
-      let cardIds = note.cards ?? [];
+      let cardIds = notes.flatMap((n) => n.cards ?? []);
       if (cardIds.length === 0) {
         cardIds = await ankiFetch<number[]>("findCards", {
-          query: `nid:${note.noteId}`,
+          query: notes.map((n) => `nid:${n.noteId}`).join(" OR "),
         });
       }
       if (cardIds.length === 0) {
-        throw new Error("Could not find the card to move.");
+        throw new Error(
+          count === 1
+            ? "Could not find the card to move."
+            : "Could not find the cards to move."
+        );
       }
-      await ankiFetch("changeDeck", { cards: cardIds, deck: pickedDeck });
+      if (creating) {
+        await ankiFetch("createDeck", { deck: target });
+      }
+      await ankiFetch("changeDeck", { cards: cardIds, deck: target });
       // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
       // active reviewer doesn't keep serving the moved card.
       await ankiFetch("reloadCollection").catch(() => {});
@@ -65,8 +88,6 @@ export function MoveCardDialog({ note, currentDeck, onClose }: MoveCardDialogPro
     }
   }
 
-  const noOtherDecks = decks !== null && decks.length === 0;
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -74,53 +95,68 @@ export function MoveCardDialog({ note, currentDeck, onClose }: MoveCardDialogPro
         if (e.target === e.currentTarget && !moving) onClose();
       }}
     >
-      <div className="mx-4 w-full max-w-sm rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
-        <h3 className="mb-1 text-lg font-semibold">Move Card</h3>
+      <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+        <h3 className="mb-1 text-lg font-semibold">
+          {count === 1 ? "Move Card" : `Move ${count} Cards`}
+        </h3>
         <p className="mb-4 text-sm text-foreground/50">
-          From <strong className="text-foreground/70">{currentDeck}</strong>
+          From{" "}
+          <strong className="text-foreground/70">
+            {formatDeckPath(currentDeck)}
+          </strong>
         </p>
 
-        {noOtherDecks ? (
-          <p className="mb-6 text-sm text-foreground/60">
-            There are no other decks to move this card to.
-          </p>
-        ) : (
-          <div className="mb-6">
-            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-              Move to
-            </label>
-            <select
-              value={pickedDeck}
-              onChange={(e) => setPickedDeck(e.target.value)}
-              disabled={decks === null || moving}
-              autoFocus
-              className="w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
-            >
-              {(decks ?? []).map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
+        <label className="mb-1 block text-xs text-foreground/50">Move to</label>
+        <select
+          value={choice}
+          onChange={(e) => setChoice(e.target.value)}
+          disabled={decks === null || moving}
+          autoFocus
+          className="w-full rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+        >
+          {(decks ?? []).map((d) => (
+            <option key={d} value={d}>
+              {/* Indent by depth and show only the leaf so the list reads as a
+                  tree instead of exposing "::" paths. The indent uses
+                  non-breaking spaces — the browser strips leading ASCII spaces
+                  from <option> labels. */}
+              {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
+            </option>
+          ))}
+          <option value={NEW_DECK}>+ New deck…</option>
+        </select>
+
+        {creating && (
+          <input
+            type="text"
+            value={newDeck}
+            onChange={(e) => setNewDeck(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleMove();
+            }}
+            placeholder="New deck name"
+            autoFocus
+            disabled={moving}
+            className="mt-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+          />
         )}
 
-        {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
+        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
-        <div className="flex justify-end gap-3">
+        <div className="mt-6 flex justify-end gap-3">
           <button
             onClick={onClose}
             disabled={moving}
-            className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
+            className="rounded-lg px-4 py-2 text-sm text-foreground/60 transition-colors hover:text-foreground"
           >
             Cancel
           </button>
           <button
             onClick={handleMove}
-            disabled={moving || !pickedDeck || noOtherDecks}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            disabled={disabled}
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
-            {moving ? "Moving..." : "Move"}
+            {moving ? "Moving…" : "Move"}
           </button>
         </div>
       </div>

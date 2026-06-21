@@ -39,6 +39,30 @@ body {
 }
 
 
+/* Inline play button rendered in place of Anki's [anki:play:…] markers
+   (see src/lib/audio.ts). Lives inside prose content, so it sizes off the
+   surrounding text. */
+.audio-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em;
+  height: 1.7em;
+  margin: 0 0.2em;
+  vertical-align: middle;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 9999px;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.audio-tag:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
 /* Tauri integration: hidden-inset title bar on macOS. The header becomes
    the draggable region; interactive children opt out via .app-no-drag. */
 html.tauri .app-header {
@@ -85,6 +109,36 @@ summary {
 [data-nav-item]:focus-visible {
   outline: none;
   background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+/* On the Decks page the nav item is only the deck-name link, not the whole row
+   (the expand toggle and count/menu sit outside it). Lift the focus highlight to
+   the row so keyboard focus tints the full row, like the Study list. */
+.deck-nav-row:has([data-nav-item]:focus),
+.deck-nav-row:has([data-nav-item]:focus-visible) {
+  background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.deck-nav-row [data-nav-item]:focus,
+.deck-nav-row [data-nav-item]:focus-visible {
+  background-color: transparent;
+}
+
+/* Card rows carry their own selected state (a stronger border + fill). Keep the
+   keyboard-focus highlight light so a focused-but-unselected card reads as merely
+   hovered, not selected. */
+[data-note-id]:focus:not([data-selected]),
+[data-note-id]:focus-visible:not([data-selected]) {
+  background-color: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
+/* A blue border on the focused card, applied regardless of selection, so the
+   keyboard-focused card is identifiable even within a set of selected rows
+   (where the fill alone can't distinguish it). */
+[data-note-id]:focus,
+[data-note-id]:focus-visible {
+  border-color: #3b82f6;
+  outline: 3px solid rgba(0, 0, 255, 0.1);
 }
 
 /* Native selects render their chevron inconsistently across platforms
@@ -183,10 +237,11 @@ select {
   color: #fbbf24; /* amber-400 */
 }
 
-/* Card answer dividers: unify the hairline across React-rendered <hr>,
-   Anki's <hr id=answer>, and any prose default — Tailwind Typography styles
-   hr via :where() (zero specificity) plus utility ordering quirks otherwise
-   give us inconsistent rules between the two hrs in a typed-cloze answer. */
+/* Card answer dividers: unify the hairline for any <hr> that ships inside
+   rendered card HTML (e.g. Anki's <hr id=answer> or hrs in Back Extra) so it
+   matches the section dividers. Tailwind Typography styles hr via :where()
+   (zero specificity) plus utility ordering quirks otherwise give inconsistent
+   rules. Section-to-section dividers use border-t on the section wrappers. */
 .study-answer hr,
 .study-answer hr#answer {
   border: 0;

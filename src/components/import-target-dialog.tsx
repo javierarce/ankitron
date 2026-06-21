@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { formatDeckPath } from "@/lib/deck";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 import type { ExportedDeck } from "@/lib/import-export";
 
 type TargetMode = "current" | "existing" | "new";
@@ -20,6 +22,7 @@ export function ImportTargetDialog({
   onCancel,
   onConfirm,
 }: ImportTargetDialogProps) {
+  useScrollLock();
   const sourceMatchesCurrent =
     currentDeck !== undefined && parsed.deckName === currentDeck;
   const [mode, setMode] = useState<TargetMode>(
@@ -102,7 +105,10 @@ export function ImportTargetDialog({
       >
         <h3 className="mb-1 text-lg font-semibold">Import into deck</h3>
         <p className="mb-4 text-sm text-foreground/50">
-          From <strong className="text-foreground/70">{parsed.deckName}</strong>{" "}
+          From{" "}
+          <strong className="text-foreground/70">
+            {formatDeckPath(parsed.deckName)}
+          </strong>{" "}
           · {parsed.notes.length}{" "}
           {parsed.notes.length === 1 ? "card" : "cards"}
         </p>
@@ -119,7 +125,7 @@ export function ImportTargetDialog({
               />
               <span className="flex-1">
                 <span className="block">
-                  Current deck: <strong>{currentDeck}</strong>
+                  Current deck: <strong>{formatDeckPath(currentDeck)}</strong>
                 </span>
               </span>
             </label>
@@ -150,7 +156,7 @@ export function ImportTargetDialog({
                 >
                   {decks.map((d) => (
                     <option key={d} value={d}>
-                      {d}
+                      {formatDeckPath(d)}
                     </option>
                   ))}
                 </select>
@@ -199,7 +205,7 @@ export function ImportTargetDialog({
           <button
             onClick={submit}
             disabled={submitDisabled}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {importing ? "Importing…" : "Import"}
           </button>

@@ -1,70 +1,106 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
+import { Minus } from "@phosphor-icons/react/dist/ssr/Minus";
+import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { compareDeckPaths, deckLeaf, deckParent, formatDeckPath } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { CardForm } from "./card-form";
+import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { DecksImportExport } from "./decks-import-export";
 
-interface DeckTreeNode {
+interface DeckNode {
   name: string;
   fullName: string;
-  children: DeckTreeNode[];
-  isDeck: boolean;
+  children: DeckNode[];
 }
 
-function buildDeckTree(decks: string[]): DeckTreeNode[] {
-  const root: DeckTreeNode[] = [];
-  const deckSet = new Set(decks);
-  const sorted = [...decks].sort();
-  for (const deck of sorted) {
+// Build a tree from "::"-separated deck paths. Sorted by compareDeckPaths so
+// parents precede children and siblings are alphabetical; missing ancestors are
+// created implicitly (Anki normally lists them, but stay robust if not).
+function buildDeckTree(decks: string[]): DeckNode[] {
+  const roots: DeckNode[] = [];
+  const byFull = new Map<string, DeckNode>();
+  for (const deck of [...decks].sort(compareDeckPaths)) {
     const parts = deck.split("::");
-    let siblings = root;
+    let parentFull = "";
     for (let i = 0; i < parts.length; i++) {
       const fullName = parts.slice(0, i + 1).join("::");
-      let node = siblings.find((n) => n.fullName === fullName);
-      if (!node) {
-        node = {
-          name: parts[i],
-          fullName,
-          children: [],
-          isDeck: deckSet.has(fullName),
-        };
-        siblings.push(node);
+      if (!byFull.has(fullName)) {
+        const node: DeckNode = { name: parts[i], fullName, children: [] };
+        byFull.set(fullName, node);
+        if (i === 0) roots.push(node);
+        else byFull.get(parentFull)!.children.push(node);
       }
-      siblings = node.children;
+      parentFull = fullName;
     }
   }
-  return root;
+  return roots;
 }
 
 interface AllDecksListProps {
   decks: string[];
   cardCounts: Record<string, number>;
+  /** Re-fetch decks/counts after a change (e.g. a card added from the menu). */
+  onRefresh: () => void;
 }
 
-export function AllDecksList({ decks, cardCounts }: AllDecksListProps) {
+export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps) {
   const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
   const [showDialog, setShowDialog] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useVimNav({ enabled: !showDialog });
+  // Deck to add a card to (renders the CardForm when set).
+  const [addCardDeck, setAddCardDeck] = useState<string | null>(null);
+
+  // Deck pending deletion (renders the confirm dialog when set).
+  const [deletingDeck, setDeletingDeck] = useState<string | null>(null);
+
+  const hasDialog =
+    showDialog || addCardDeck !== null || deletingDeck !== null;
+  useVimNav({ enabled: !hasDialog });
+  // CardForm (addCardDeck) locks scroll itself; lock for the inline Create Deck
+  // dialog so the deck list behind it can't scroll on wheel.
+  useScrollLock(showDialog);
 
   useEffect(() => {
     if (showDialog) {
       const t = setTimeout(() => inputRef.current?.focus(), 0);
-      function handleKeyDown(e: KeyboardEvent) {
-        if (e.key === "Escape") closeDialog();
-      }
-      window.addEventListener("keydown", handleKeyDown);
-      return () => {
-        clearTimeout(t);
-        window.removeEventListener("keydown", handleKeyDown);
-      };
+      return () => clearTimeout(t);
     }
   }, [showDialog]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (hasDialog) {
+        if (e.key === "Escape") closeDialog();
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+      if (((e.metaKey || e.ctrlKey) && e.key === "f") || (e.key === "/" && !inField)) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasDialog]);
 
   function openDialog() {
     setNewDeckName("");
@@ -78,10 +114,25 @@ export function AllDecksList({ decks, cardCounts }: AllDecksListProps) {
     setError(null);
   }
 
+  function toggle(fullName: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(fullName)) next.delete(fullName);
+      else next.add(fullName);
+      return next;
+    });
+  }
+
   async function handleCreateDeck(e: React.FormEvent) {
     e.preventDefault();
     const name = newDeckName.trim();
     if (!name) return;
+    // Anki's createDeck silently returns the existing deck, so guard here —
+    // otherwise "creating" a duplicate just navigates to it with no feedback.
+    if (decks.some((d) => d.toLowerCase() === name.toLowerCase())) {
+      setError("A deck with this name already exists.");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
@@ -95,30 +146,93 @@ export function AllDecksList({ decks, cardCounts }: AllDecksListProps) {
     }
   }
 
-  const tree = buildDeckTree(decks);
+  const trimmedNewName = newDeckName.trim();
+  const deckNameExists = decks.some(
+    (d) => d.toLowerCase() === trimmedNewName.toLowerCase(),
+  );
+
+  // cardCounts comes from a recursive `deck:` search, so a deck's own entry
+  // already includes every subdeck — use it directly (summing the subdecks too
+  // would multi-count). It surfaces the hidden total so a parent that looks
+  // "Empty" but holds cards under its children can't be deleted by surprise.
+  const deletingSubdeckCount = deletingDeck
+    ? decks.filter((d) => d.startsWith(deletingDeck + "::")).length
+    : 0;
+  const deletingCardTotal = deletingDeck ? cardCounts[deletingDeck] ?? 0 : 0;
+
+  const tree = useMemo(() => buildDeckTree(decks), [decks]);
+  const q = query.trim().toLowerCase();
+  // While searching, show a flat list of matches with their full path — the
+  // collapsed tree would otherwise hide matching subdecks.
+  const matches = q
+    ? [...decks].sort(compareDeckPaths).filter((d) => d.toLowerCase().includes(q))
+    : null;
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">All decks</h2>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">Decks</h1>
         <div className="flex items-center gap-2">
           <DecksImportExport decks={decks} />
           <button
             onClick={openDialog}
-            className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-foreground/5 transition-colors"
+            className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
           >
-            <Plus size={14} weight="bold" />
             Add deck
           </button>
         </div>
       </div>
 
-      {tree.length === 0 ? (
+      <div className="mb-4">
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              if (query) setQuery("");
+              else searchRef.current?.blur();
+            }
+          }}
+          placeholder="Search decks…"
+          className="w-full rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
+        />
+      </div>
+
+      {decks.length === 0 ? (
         <p className="text-foreground/50">
           No decks found. Create one or check that Anki is running.
         </p>
+      ) : matches && matches.length === 0 ? (
+        <p className="text-foreground/50">No decks match “{query.trim()}”.</p>
       ) : (
-        <AllDecksTree tree={tree} cardCounts={cardCounts} />
+        <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+          <div className="divide-y divide-foreground/10">
+            {matches
+              ? matches.map((deck) => (
+                  <SearchRow
+                    key={deck}
+                    deck={deck}
+                    count={cardCounts[deck] ?? 0}
+                    onAddCard={() => setAddCardDeck(deck)}
+                    onDelete={() => setDeletingDeck(deck)}
+                  />
+                ))
+              : tree.map((node) => (
+                  <TreeRows
+                    key={node.fullName}
+                    node={node}
+                    depth={0}
+                    expanded={expanded}
+                    onToggle={toggle}
+                    cardCounts={cardCounts}
+                    onAddCard={setAddCardDeck}
+                    onDelete={setDeletingDeck}
+                  />
+                ))}
+          </div>
+        </div>
       )}
 
       {showDialog && (
@@ -128,9 +242,7 @@ export function AllDecksList({ decks, cardCounts }: AllDecksListProps) {
             if (e.target === e.currentTarget) closeDialog();
           }}
         >
-          <div
-            className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
-          >
+          <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
             <h3 className="mb-4 text-lg font-semibold">Create New Deck</h3>
             <form onSubmit={handleCreateDeck}>
               <input
@@ -138,10 +250,16 @@ export function AllDecksList({ decks, cardCounts }: AllDecksListProps) {
                 type="text"
                 value={newDeckName}
                 onChange={(e) => setNewDeckName(e.target.value)}
-                placeholder="Deck name..."
+                placeholder="Deck name…"
                 className="w-full rounded-lg border border-foreground/15 bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
               />
-              {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+              {deckNameExists ? (
+                <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">
+                  A deck named “{trimmedNewName}” already exists.
+                </p>
+              ) : error ? (
+                <p className="mt-2 text-sm text-red-500">{error}</p>
+              ) : null}
               <div className="mt-4 flex justify-end gap-3">
                 <button
                   type="button"
@@ -153,137 +271,270 @@ export function AllDecksList({ decks, cardCounts }: AllDecksListProps) {
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || !newDeckName.trim()}
-                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-40"
+                  disabled={creating || !trimmedNewName || deckNameExists}
+                  className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
                 >
-                  {creating ? "Creating..." : "Create Deck"}
+                  {creating ? "Creating…" : "Create Deck"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {addCardDeck && (
+        <CardForm
+          deckName={addCardDeck}
+          onClose={() => setAddCardDeck(null)}
+          onSaved={() => {
+            setAddCardDeck(null);
+            onRefresh();
+          }}
+        />
+      )}
+
+      {deletingDeck && (
+        <DeleteDeckDialog
+          deckName={deletingDeck}
+          cardCount={deletingCardTotal}
+          subdeckCount={deletingSubdeckCount}
+          onCancel={() => setDeletingDeck(null)}
+          onDeleted={() => {
+            setDeletingDeck(null);
+            onRefresh();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// A titled group card with a header bar matching the home/study page (minus
-// the NEW/LEARN/DUE column labels).
-function GroupShell({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function CountLabel({ count }: { count: number }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      <div className="border-b border-foreground/5 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-        {title}
+    <span className="shrink-0 text-sm tabular-nums text-foreground/50">
+      {count === 0 ? "Empty" : `${count} ${count === 1 ? "card" : "cards"}`}
+    </span>
+  );
+}
+
+// One tree node plus (when expanded) its descendants. Fragments keep every row a
+// direct child of the divider container so the row separators stay even.
+function TreeRows({
+  node,
+  depth,
+  expanded,
+  onToggle,
+  cardCounts,
+  onAddCard,
+  onDelete,
+}: {
+  node: DeckNode;
+  depth: number;
+  expanded: Set<string>;
+  onToggle: (fullName: string) => void;
+  cardCounts: Record<string, number>;
+  onAddCard: (deck: string) => void;
+  onDelete: (deck: string) => void;
+}) {
+  const hasChildren = node.children.length > 0;
+  const isOpen = expanded.has(node.fullName);
+
+  return (
+    <Fragment>
+      <div
+        className="deck-nav-row flex items-center gap-2 py-3 pr-4 transition-[background-color] hover:bg-foreground/5"
+        style={{ paddingLeft: 16 + depth * 24 }}
+      >
+        {hasChildren ? (
+          <button
+            onClick={() => onToggle(node.fullName)}
+            aria-label={isOpen ? "Collapse" : "Expand"}
+            aria-expanded={isOpen}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/40 transition-colors hover:bg-foreground/10 hover:text-foreground/70"
+          >
+            {isOpen ? <Minus size={14} weight="bold" /> : <Plus size={14} weight="bold" />}
+          </button>
+        ) : (
+          <span className="h-5 w-5 shrink-0" aria-hidden />
+        )}
+        <Link
+          data-nav-item
+          to={`/decks/${encodeURIComponent(node.fullName)}`}
+          className="min-w-0 flex-1 truncate font-medium"
+          title={formatDeckPath(node.fullName)}
+        >
+          {node.name}
+        </Link>
+        <CountLabel count={cardCounts[node.fullName] ?? 0} />
+        <DeckRowMenu
+          deck={node.fullName}
+          onAddCard={() => onAddCard(node.fullName)}
+          onDelete={() => onDelete(node.fullName)}
+        />
       </div>
-      <div className="p-3">{children}</div>
+      {hasChildren &&
+        isOpen &&
+        node.children.map((child) => (
+          <TreeRows
+            key={child.fullName}
+            node={child}
+            depth={depth + 1}
+            expanded={expanded}
+            onToggle={onToggle}
+            cardCounts={cardCounts}
+            onAddCard={onAddCard}
+            onDelete={onDelete}
+          />
+        ))}
+    </Fragment>
+  );
+}
+
+// Flat row used while searching — shows the full path so matches read clearly
+// even when their parent is collapsed or filtered out.
+function SearchRow({
+  deck,
+  count,
+  onAddCard,
+  onDelete,
+}: {
+  deck: string;
+  count: number;
+  onAddCard: () => void;
+  onDelete: () => void;
+}) {
+  const parent = deckParent(deck);
+  return (
+    <div className="deck-nav-row flex items-center gap-3 px-4 py-3 transition-[background-color] hover:bg-foreground/5">
+      <Link
+        data-nav-item
+        to={`/decks/${encodeURIComponent(deck)}`}
+        className="min-w-0 flex-1 truncate"
+        title={formatDeckPath(deck)}
+      >
+        {parent && (
+          <span className="text-foreground/40">{formatDeckPath(parent)} / </span>
+        )}
+        <span className="font-medium">{deckLeaf(deck)}</span>
+      </Link>
+      <CountLabel count={count} />
+      <DeckRowMenu deck={deck} onAddCard={onAddCard} onDelete={onDelete} />
     </div>
   );
 }
 
-// Top level: collect single decks (no subdecks) into one "Single decks" group;
-// decks with subdecks each get their own named group.
-function AllDecksTree({
-  tree,
-  cardCounts,
+function DeckRowMenu({
+  deck,
+  onAddCard,
+  onDelete,
 }: {
-  tree: DeckTreeNode[];
-  cardCounts: Record<string, number>;
+  deck: string;
+  onAddCard: () => void;
+  onDelete: () => void;
 }) {
-  const singles = tree.filter((n) => n.children.length === 0);
-  const groups = tree.filter((n) => n.children.length > 0);
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  // Fixed-position coordinates so the menu can render in a portal, escaping the
+  // table's overflow-hidden clip (which otherwise cuts it off).
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    // Close on scroll/resize rather than chase the button's moving position.
+    function close() {
+      setOpen(false);
+    }
+    window.addEventListener("mousedown", handleClick);
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  function openMenu() {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    setOpen(true);
+  }
+
+  const encoded = encodeURIComponent(deck);
 
   return (
-    <div className="grid gap-4">
-      {singles.length > 0 && (
-        <GroupShell title="Single decks">
-          <DeckNodeGrid nodes={singles} cardCounts={cardCounts} />
-        </GroupShell>
-      )}
-      {groups.map((node) => (
-        <DeckGroup key={node.fullName} node={node} cardCounts={cardCounts} />
-      ))}
-    </div>
-  );
-}
-
-function DeckCard({
-  node,
-  cardCounts,
-  label,
-}: {
-  node: DeckTreeNode;
-  cardCounts: Record<string, number>;
-  label?: string;
-}) {
-  const count = cardCounts[node.fullName] ?? 0;
-
-  return (
-    <Link
-      data-nav-item
-      to={`/decks/${encodeURIComponent(node.fullName)}`}
-      className="flex min-h-[5.5rem] flex-col justify-between gap-3 rounded-xl border border-foreground/10 bg-background p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors hover:bg-foreground/5"
-    >
-      <span className="font-medium">{label ?? node.name}</span>
-      <span className="self-end text-sm tabular-nums text-foreground/50">
-        {count === 0 ? "Empty" : `${count} ${count === 1 ? "card" : "cards"}`}
-      </span>
-    </Link>
-  );
-}
-
-function DeckNodeGrid({
-  nodes,
-  cardCounts,
-  leading,
-}: {
-  nodes: DeckTreeNode[];
-  cardCounts: Record<string, number>;
-  leading?: React.ReactNode;
-}) {
-  const cards = nodes.filter((n) => n.children.length === 0);
-  const groups = nodes.filter((n) => n.children.length > 0);
-
-  return (
-    <div className="grid gap-3">
-      {(leading || cards.length > 0) && (
-        <div className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-          {leading}
-          {cards.map((node) => (
-            <DeckCard key={node.fullName} node={node} cardCounts={cardCounts} />
-          ))}
-        </div>
-      )}
-      {groups.map((node) => (
-        <DeckGroup key={node.fullName} node={node} cardCounts={cardCounts} />
-      ))}
-    </div>
-  );
-}
-
-function DeckGroup({
-  node,
-  cardCounts,
-}: {
-  node: DeckTreeNode;
-  cardCounts: Record<string, number>;
-}) {
-  return (
-    <GroupShell title={node.name}>
-      <DeckNodeGrid
-        nodes={node.children}
-        cardCounts={cardCounts}
-        leading={
-          node.isDeck ? (
-            <DeckCard node={node} cardCounts={cardCounts} label="All decks" />
-          ) : undefined
-        }
-      />
-    </GroupShell>
+    <>
+      <button
+        ref={btnRef}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        aria-label="Deck actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="shrink-0 rounded-md p-1 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60"
+      >
+        <DotsThreeVertical size={22} weight="bold" />
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{ position: "fixed", top: pos.top, right: pos.right }}
+            className="z-50 min-w-[150px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg"
+          >
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate(`/decks/${encoded}/study`);
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
+            >
+              Study
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onAddCard();
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
+            >
+              Add a card
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate(`/decks/${encoded}/settings`);
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
+            >
+              Settings
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-red-500 transition-colors hover:bg-foreground/5"
+            >
+              Delete deck
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }

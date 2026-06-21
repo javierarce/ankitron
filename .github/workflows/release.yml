@@ -7,7 +7,12 @@ on:
 
 jobs:
   release:
-    runs-on: macos-latest
+    # macos-26 so the binary links against SDK 26: on macOS 26 hosts, apps
+    # built with older SDKs get the legacy title-bar appearance, where the
+    # traffic lights drift ~5px down after a system theme change (the
+    # trafficLightPosition inset is re-applied against a relaid-out title
+    # bar). New-SDK builds are immune.
+    runs-on: macos-26
     permissions:
       contents: write
     steps:
@@ -90,10 +95,10 @@ jobs:
             --wait
           xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG"
-          # Publish under a clean, stable name (AnkiTron.dmg) so the
-          # releases/latest/download/AnkiTron.dmg URL always resolves. Remove the
+          # Publish under a clean, stable name (Ankitron.dmg) so the
+          # releases/latest/download/Ankitron.dmg URL always resolves. Remove the
           # versioned dmg tauri-action uploaded, then upload the stapled copy.
-          CLEAN="$(dirname "$DMG")/AnkiTron.dmg"
+          CLEAN="$(dirname "$DMG")/Ankitron.dmg"
           mv "$DMG" "$CLEAN"
           gh release delete-asset "${{ github.ref_name }}" "$(basename "$DMG")" --yes || true
           gh release upload "${{ github.ref_name }}" "$CLEAN" --clobber
@@ -109,6 +114,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
+          # actions/checkout writes the triggering tag as a lightweight ref
+          # (the resolved commit SHA), so git sees a commit, not the annotated
+          # tag object — and the hand-written message below is never read.
+          # Re-fetch the real tag object from origin so its message is available.
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}" 2>/dev/null || true
           # Annotated tag? Use its message (subject + body, which omits any GPG
           # signature). Lightweight tags resolve to a commit, so skip them here.
           NOTES=""
@@ -116,13 +126,14 @@ jobs:
             NOTES=$(git tag -l --format='%(contents:subject)%0a%(contents:body)' "$TAG")
           fi
           # No hand-written notes — fall back to commit subjects since the
-          # previous tag, with version-bump commits (e.g. "0.15.0") filtered out.
+          # previous tag, with version-bump commits (e.g. "0.15.0" or "v0.15.0")
+          # filtered out.
           if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
             PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
             RANGE="${TAG}"
             [ -n "$PREV" ] && RANGE="${PREV}..${TAG}"
             NOTES=$(git log --no-merges --pretty='- %s' "$RANGE" \
-              | grep -vE '^- [0-9]+\.[0-9]+\.[0-9]+$' || true)
+              | grep -vE '^- v?[0-9]+\.[0-9]+\.[0-9]+$' || true)
           fi
           [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ] && NOTES="- Maintenance release."
           printf '%s\n' "$NOTES" > notes.md

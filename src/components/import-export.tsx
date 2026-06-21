@@ -4,14 +4,15 @@ import { ankiFetch } from "@/lib/anki-fetch";
 import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import {
   buildExport,
+  downloadDeckJson,
   fetchCardDecksByNoteId,
   importDeck,
   isExportedDeck,
-  sanitizeFilename,
   type ExportedDeck,
   type ImportResult,
 } from "@/lib/import-export";
 import { ImportTargetDialog } from "./import-target-dialog";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface ImportExportProps {
   deckName: string;
@@ -24,6 +25,12 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Kept after a successful import so "Overwrite anyway" can re-run it, and as
+  // the signal that Anki changed and the page needs a reload on dismiss.
+  const [lastImport, setLastImport] = useState<{
+    target: string;
+    parsed: ExportedDeck;
+  } | null>(null);
 
   async function handleExport() {
     setError(null);
@@ -75,8 +82,8 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
         { addOnly },
       );
       setResult(runResult);
+      setLastImport({ target, parsed: pending });
       setPending(null);
-      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed.");
       setPending(null);
@@ -85,7 +92,33 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
     }
   }
 
+  async function runOverwrite() {
+    if (!lastImport) return;
+    setImporting(true);
+    try {
+      const addOnly = lastImport.target !== lastImport.parsed.deckName;
+      const runResult = await importDeck(
+        lastImport.target,
+        lastImport.parsed,
+        { ankiFetch, ensureClozeTypedModel },
+        { addOnly, overwriteStale: true },
+      );
+      setResult(runResult);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function dismissResult() {
+    // Reload only when an import actually ran, so the page reflects the new
+    // cards; a parse/validation error changed nothing.
+    if (lastImport) {
+      window.location.reload();
+      return;
+    }
     setResult(null);
     setError(null);
   }
@@ -102,7 +135,7 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
       <button
         onClick={handleExport}
         disabled={importing}
-        className="rounded-lg border border-foreground/15 px-3 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
         title="Download a JSON file with all cards in this deck"
       >
         Export
@@ -110,7 +143,7 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={importing}
-        className="rounded-lg border border-foreground/15 px-3 py-2 text-sm font-medium hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
         title="Import cards from a JSON file"
       >
         {importing ? "Importing…" : "Import"}
@@ -130,6 +163,8 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
         <ImportResultModal
           result={result}
           error={error}
+          importing={importing}
+          onOverwriteStale={runOverwrite}
           onClose={dismissResult}
         />
       )}
@@ -137,61 +172,26 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
   );
 }
 
-const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-/**
- * Save a deck export to disk. In the Tauri app this opens a native save dialog
- * so the user picks the destination folder and filename; in the browser it
- * falls back to a plain anchor download into the default Downloads folder.
- * Resolves to false if the user cancels the dialog, true otherwise.
- */
-export async function downloadDeckJson(
-  payload: ExportedDeck,
-  name: string,
-): Promise<boolean> {
-  const json = JSON.stringify(payload, null, 2);
-  const date = new Date().toISOString().slice(0, 10);
-  const defaultName = `${sanitizeFilename(name)}-${date}.json`;
-
-  if (isTauri) {
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const path = await save({
-      defaultPath: defaultName,
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (!path) return false; // user cancelled
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("save_text_file", { path, contents: json });
-    return true;
-  }
-
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = defaultName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  return true;
-}
-
 export function ImportResultModal({
   result,
   error,
+  importing,
+  onOverwriteStale,
   onClose,
 }: {
   result: ImportResult | null;
   error: string | null;
+  importing?: boolean;
+  onOverwriteStale?: () => void;
   onClose: () => void;
 }) {
+  useScrollLock();
+  const staleSkipped = result?.staleSkipped ?? 0;
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && !importing) onClose();
       }}
     >
       <div
@@ -208,6 +208,15 @@ export function ImportResultModal({
               {result.skipped > 0 &&
                 ` · Skipped ${result.skipped} (duplicates)`}
             </p>
+            {staleSkipped > 0 && (
+              <p>
+                {staleSkipped} note{staleSkipped === 1 ? " was" : "s were"} not
+                updated because the copy in Anki is newer than this export.
+                Overwriting replaces {staleSkipped === 1 ? "it" : "them"} with
+                the file&apos;s version, discarding any edits made in Anki
+                since the export.
+              </p>
+            )}
             {result.errors.length > 0 && (
               <details className="text-xs">
                 <summary className="cursor-pointer text-red-500">
@@ -223,10 +232,20 @@ export function ImportResultModal({
             )}
           </div>
         )}
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex justify-end gap-3">
+          {staleSkipped > 0 && onOverwriteStale && (
+            <button
+              onClick={onOverwriteStale}
+              disabled={importing}
+              className="rounded-lg border border-red-500/40 px-4 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+            >
+              {importing ? "Overwriting…" : "Overwrite anyway"}
+            </button>
+          )}
           <button
             onClick={onClose}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+            disabled={importing}
+            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             Close
           </button>

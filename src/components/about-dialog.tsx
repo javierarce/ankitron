@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -6,13 +7,15 @@ const isTauri =
 const WEBSITE = "https://javier.computer";
 
 /**
- * In-app About panel, opened from the "About AnkiTron" menu item (the Rust
+ * In-app About panel, opened from the "About Ankitron" menu item (the Rust
  * side replaces the native panel and emits "show-about" instead, so the
  * credits can include a clickable link).
  */
 export function AboutDialog() {
   const [open, setOpen] = useState(false);
   const [version, setVersion] = useState("");
+
+  useScrollLock(open);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -68,7 +71,7 @@ export function AboutDialog() {
           alt=""
           className="mx-auto mb-4 h-20 w-20 rounded-[1.25rem]"
         />
-        <h3 className="text-lg font-semibold">AnkiTron</h3>
+        <h3 className="text-lg font-semibold">Ankitron</h3>
         {version && (
           <p className="mt-0.5 text-sm text-foreground/50">Version {version}</p>
         )}
@@ -84,7 +87,7 @@ export function AboutDialog() {
           .
         </p>
         <p className="mt-4 text-xs text-foreground/50">
-          AnkiTron is an unofficial third-party app and is not affiliated with
+          Ankitron is an unofficial third-party app and is not affiliated with
           the official Anki project or Ankitects Pty Ltd.
         </p>
         <p className="mt-3 text-xs text-foreground/50">
