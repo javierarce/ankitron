@@ -32,7 +32,7 @@ import {
 } from "@/lib/edit-sequence";
 import { stripSoundTags } from "@/lib/audio";
 import { noteDisplayFields } from "@/lib/note-fields";
-import { deckLeaf, formatDeckPath } from "@/lib/deck";
+import { deckLeaf, formatDeckPath, isCardInDeck } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
 
 /**
@@ -243,6 +243,14 @@ interface CardListProps {
   /** Add-card form visibility, owned by the page so the button can live in its header. */
   showAddForm: boolean;
   onShowAddForm: (show: boolean) => void;
+  /** Segments to pre-select on mount, e.g. when returning from a scoped study session. */
+  initialSegments?: string[];
+  /**
+   * Called with the currently selected segment deck names whenever they change,
+   * so the page header's Study button can scope a session to those subdecks.
+   * Empty = "All" selected.
+   */
+  onSegmentsChange?: (segments: string[]) => void;
 }
 
 export function CardList({
@@ -256,6 +264,8 @@ export function CardList({
   onChanged,
   showAddForm,
   onShowAddForm,
+  initialSegments,
+  onSegmentsChange,
 }: CardListProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
@@ -346,7 +356,9 @@ export function CardList({
   // the union of these exact deck names. Cmd/Ctrl+click toggles a segment into
   // the set; Shift+click extends a range from the last-clicked one; a plain
   // click selects just one (or clears it back to "All").
-  const [activeSegments, setActiveSegments] = useState<Set<string>>(() => new Set());
+  const [activeSegments, setActiveSegments] = useState<Set<string>>(
+    () => new Set(initialSegments),
+  );
   // The last segment clicked, used as the anchor for Shift+click ranges.
   const [lastSegment, setLastSegment] = useState<string | null>(null);
   // Reset back to "All" whenever we navigate to a different deck.
@@ -356,6 +368,12 @@ export function CardList({
     setActiveSegments(new Set());
     setLastSegment(null);
   }
+
+  // Surface the active segment selection to the page so its Study button can
+  // scope a session to those subdecks.
+  useEffect(() => {
+    onSegmentsChange?.([...activeSegments]);
+  }, [activeSegments, onSegmentsChange]);
 
   function handleSegmentClick(deck: string, e: ReactMouseEvent) {
     const anchor = lastSegment;
@@ -400,9 +418,12 @@ export function CardList({
   // The off-screen element used as the drag preview, torn down on drag end.
   const dragImageRef = useRef<HTMLElement | null>(null);
 
-  // The segmented control covers this deck plus every nested subdeck.
+  // One chip per subdeck. The root deck isn't a chip: studying it would pull in
+  // every subdeck anyway (Anki reviews a deck's whole subtree), so scoping to it
+  // is exactly what "All" does — a separate root chip just sets a count that the
+  // study session can't honour.
   const hasSegments = (subdecks?.length ?? 0) > 0;
-  const segmentDecks = [deckName, ...(subdecks ?? [])];
+  const segmentDecks = subdecks ?? [];
 
   const hasDialog =
     showAddForm ||
@@ -539,12 +560,18 @@ export function CardList({
   }, [hasDialog, selectedIds]);
 
   // Scope to the active segments first; "All" (empty set) keeps every note. A
-  // note's deck falls back to the viewed deck if cardsInfo hasn't loaded its
-  // mapping yet.
+  // segment covers its whole subtree, so a chip for a parent deck (e.g.
+  // "Deutsch") includes every note under it — matching the count on the chip
+  // and what a study session for it would review. A note's deck falls back to
+  // the viewed deck if cardsInfo hasn't loaded its mapping yet.
+  const activeSegmentList = [...activeSegments];
   const segmentNotes =
     activeSegments.size === 0
       ? notes
-      : notes.filter((note) => activeSegments.has(decks[note.noteId] ?? deckName));
+      : notes.filter((note) => {
+          const home = decks[note.noteId] ?? deckName;
+          return activeSegmentList.some((seg) => isCardInDeck(home, seg));
+        });
 
   const trimmedQuery = query.trim().toLowerCase();
   const matchedNotes = trimmedQuery
@@ -692,11 +719,18 @@ export function CardList({
     }
   }
 
-  // How many notes live directly in each (sub)deck, for the segment badges.
+  // How many notes live in each subdeck's subtree, for the segment badges. A
+  // parent deck counts every note beneath it, so the badge matches what
+  // selecting the chip scopes the list to (and what studying it would review)
+  // rather than only the notes filed directly in that deck.
   const countByDeck = new Map<string, number>();
   for (const note of notes) {
-    const deck = decks[note.noteId] ?? deckName;
-    countByDeck.set(deck, (countByDeck.get(deck) ?? 0) + 1);
+    const home = decks[note.noteId] ?? deckName;
+    for (const seg of segmentDecks) {
+      if (isCardInDeck(home, seg)) {
+        countByDeck.set(seg, (countByDeck.get(seg) ?? 0) + 1);
+      }
+    }
   }
 
   // When the selected segment(s) hold no notes, hide the search field, count,
@@ -817,8 +851,8 @@ export function CardList({
   return (
     <div>
       {hasSegments && (
-        // A horizontal segmented control: one chip per (sub)deck plus "All".
-        // Tap to scope the list to a single deck; drag cards onto a chip to move
+        // A horizontal segmented control: "All" plus one chip per subdeck.
+        // Tap to scope the list to a subdeck; drag cards onto a chip to move
         // them there. Scrolls sideways when the decks overflow the row.
         <div className="mb-4 -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
           <button
@@ -826,10 +860,29 @@ export function CardList({
               setActiveSegments(new Set());
               setLastSegment(null);
             }}
+            // Dropping onto "All" moves cards to the root deck — the only way to
+            // reach it by drag now that the root has no chip of its own.
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              setDragOverDeck(deckName);
+            }}
+            onDragLeave={() =>
+              setDragOverDeck((prev) => (prev === deckName ? null : prev))
+            }
+            onDrop={(e) => {
+              e.preventDefault();
+              handleSegmentDrop(deckName);
+            }}
+            title={`Drop here to move to ${deckLeaf(deckName)}`}
             className={`shrink-0 rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
               activeSegments.size === 0
                 ? "border-foreground bg-foreground text-background"
                 : "border-foreground/15 hover:bg-foreground/5"
+            } ${
+              dragOverDeck === deckName
+                ? "ring-2 ring-foreground/40 ring-offset-1 ring-offset-background"
+                : ""
             }`}
           >
             All
@@ -837,6 +890,11 @@ export function CardList({
           </button>
           {segmentDecks.map((d) => {
             const active = activeSegments.has(d);
+            // A subdeck sitting under a selected parent is part of the scope
+            // without being picked itself — give it a lighter highlight so the
+            // covered subtree reads at a glance.
+            const covered =
+              !active && activeSegmentList.some((seg) => isCardInDeck(d, seg));
             const isDragOver = dragOverDeck === d;
             const { prefix, leaf } = segmentLabelParts(d, deckName);
             return (
@@ -859,7 +917,9 @@ export function CardList({
                 className={`shrink-0 rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
                   active
                     ? "border-foreground bg-foreground text-background"
-                    : "border-foreground/15 hover:bg-foreground/5"
+                    : covered
+                      ? "border-foreground/30 bg-foreground/10 hover:bg-foreground/15"
+                      : "border-foreground/15 hover:bg-foreground/5"
                 } ${
                   isDragOver
                     ? "ring-2 ring-foreground/40 ring-offset-1 ring-offset-background"

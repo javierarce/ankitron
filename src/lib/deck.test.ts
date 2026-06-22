@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   compareDeckPaths,
+  coveringDecks,
   deckDeleteMessage,
   deckDepth,
   deckLeaf,
@@ -327,5 +328,42 @@ describe("renameDeck", () => {
     await expect(
       renameDeck("Spanish", "spanish::Archive", fetch),
     ).rejects.toThrow(/inside itself/);
+  });
+});
+
+describe("coveringDecks", () => {
+  it("returns an empty list for no selection", () => {
+    expect(coveringDecks([])).toEqual([]);
+  });
+
+  it("keeps disjoint subtrees, sorted as a tree", () => {
+    expect(
+      coveringDecks(["Spanish::Verbs", "Spanish::Nouns"]),
+    ).toEqual(["Spanish::Nouns", "Spanish::Verbs"]);
+  });
+
+  it("drops a deck that is a descendant of another selected deck", () => {
+    expect(
+      coveringDecks(["Spanish::Verbs", "Spanish::Verbs::Irregular"]),
+    ).toEqual(["Spanish::Verbs"]);
+  });
+
+  it("collapses to the root when the parent is selected with its children", () => {
+    expect(
+      coveringDecks(["Spanish", "Spanish::Verbs", "Spanish::Nouns"]),
+    ).toEqual(["Spanish"]);
+  });
+
+  it("does not treat a similarly-named sibling as a descendant", () => {
+    expect(coveringDecks(["Spanish", "Spanish 2"])).toEqual([
+      "Spanish",
+      "Spanish 2",
+    ]);
+  });
+
+  it("dedupes repeated entries", () => {
+    expect(coveringDecks(["Spanish::Verbs", "Spanish::Verbs"])).toEqual([
+      "Spanish::Verbs",
+    ]);
   });
 });

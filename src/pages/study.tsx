@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Ease, Note, NoteField } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
 import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
-import { isCardInDeck } from "@/lib/deck";
+import { coveringDecks, isCardInDeck } from "@/lib/deck";
 import { canUndo } from "@/lib/study";
 
 // Duration of the card fade transitions (must match the CSS transition below).
@@ -26,7 +26,28 @@ interface CurrentCard {
 export function StudyPage() {
   const params = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const deckName = decodeURIComponent(params.deckName as string);
+
+  // The selected segments this session is scoped to, from the "seg" query
+  // params. Carried back to the deck page on exit so the selection survives a
+  // round-trip into study.
+  const segParams = useMemo(
+    () => searchParams.getAll("seg").filter((d) => isCardInDeck(d, deckName)),
+    [searchParams, deckName],
+  );
+
+  // The decks this session reviews, in order. The selected segments are reduced
+  // to disjoint subtrees so none is studied twice; with none, the whole deck is
+  // studied. Anki reviews one deck at a time, so we step through them,
+  // re-entering review as each empties.
+  const studyDecks = useMemo(() => {
+    const cover = coveringDecks(segParams);
+    return cover.length > 0 ? cover : [deckName];
+  }, [segParams, deckName]);
+  // Index into studyDecks of the deck currently being reviewed. A ref so the
+  // async review loop always reads the latest value without re-subscribing.
+  const deckIdxRef = useRef(0);
 
   const [card, setCard] = useState<CurrentCard | null>(null);
   const [isRevealed, setIsRevealed] = useState(false);
@@ -38,9 +59,13 @@ export function StudyPage() {
   const [initialTotal, setInitialTotal] = useState(0);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  // Destination of a pending "leave study" navigation while its confirm dialog
-  // is up (null = no dialog). Shared by Cmd+←, Cmd+1, and Cmd+2.
-  const [pendingExit, setPendingExit] = useState<string | null>(null);
+  // A pending "leave study" navigation while its confirm dialog is up (null =
+  // no dialog). Shared by Cmd+←, Cmd+1, and Cmd+2. `state` carries router state
+  // along — e.g. the selected segments back to the deck page.
+  const [pendingExit, setPendingExit] = useState<{
+    to: string;
+    state?: unknown;
+  } | null>(null);
   const [cardVisible, setCardVisible] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   const languages = useMemo<DeckLanguages>(
@@ -59,50 +84,69 @@ export function StudyPage() {
 
   const loadCurrentCard = useCallback(async () => {
     try {
-      let result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
-      // A foreign card here usually means the reviewer queue is stale —
-      // changeDeck writes raw SQL, so moving the current card to another deck
-      // leaves it queued. Rebuild the queues and re-enter review once before
-      // concluding the session is over.
-      if (result?.deckName && !isCardInDeck(result.deckName, deckName)) {
-        await ankiFetch("reloadCollection").catch(() => {});
-        await ankiFetch("guiDeckReview", { name: deckName });
-        result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+      // Walk the remaining decks from the active one, serving the first card
+      // we find. Each deck's queue is reviewed in turn; when one empties we
+      // re-enter review on the next and keep going, only completing the session
+      // once every deck is exhausted.
+      for (let i = deckIdxRef.current; i < studyDecks.length; i++) {
+        const deck = studyDecks[i];
+        // The first deck is already in review (entered by startReview/the prior
+        // card); enter each subsequent deck as we reach it.
+        if (i !== deckIdxRef.current) {
+          await ankiFetch("guiDeckReview", { name: deck });
+        }
+        let result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+        // A foreign card here usually means the reviewer queue is stale —
+        // changeDeck writes raw SQL, so moving the current card to another deck
+        // leaves it queued. Rebuild the queues and re-enter review once before
+        // moving on from this deck.
+        if (result?.deckName && !isCardInDeck(result.deckName, deck)) {
+          await ankiFetch("reloadCollection").catch(() => {});
+          await ankiFetch("guiDeckReview", { name: deck });
+          result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+        }
+        // Anki's "current card" is collection-wide; only show one that belongs
+        // to this deck (or its breadcrumb would mismatch the card). Anything
+        // else means this deck is done — advance to the next.
+        if (result && result.deckName && isCardInDeck(result.deckName, deck)) {
+          deckIdxRef.current = i;
+          setCard(result);
+          setIsRevealed(false);
+          await ankiFetch("guiStartCardTimer");
+          return;
+        }
       }
-      // Anki's "current card" is collection-wide; never show a card that
-      // belongs to another deck (or its breadcrumb would mismatch the card).
-      if (!result || (result.deckName && !isCardInDeck(result.deckName, deckName))) {
-        setCompleted(true);
-        setCard(null);
-      } else {
-        setCard(result);
-        setIsRevealed(false);
-        await ankiFetch("guiStartCardTimer");
-      }
+      setCompleted(true);
+      setCard(null);
     } catch {
       setCompleted(true);
       setCard(null);
     }
-  }, [deckName]);
+  }, [studyDecks]);
 
   useEffect(() => {
     async function startReview() {
       setLoading(true);
       setError(null);
+      deckIdxRef.current = 0;
       try {
-        await ankiFetch("guiDeckReview", { name: deckName });
+        await ankiFetch("guiDeckReview", { name: studyDecks[0] });
         try {
+          // Sum across every deck in the session. The covering decks are
+          // disjoint subtrees and getDeckStats counts are subtree-inclusive, so
+          // adding them up gives the queue size without double-counting.
           const stats = await ankiFetch<
             Record<string, { new_count: number; learn_count: number; review_count: number }>
-          >("getDeckStats", { decks: [deckName] });
-          const deckStats = Object.values(stats)[0];
-          if (deckStats) {
-            setInitialTotal(
-              (deckStats.new_count ?? 0) +
-                (deckStats.learn_count ?? 0) +
-                (deckStats.review_count ?? 0)
-            );
-          }
+          >("getDeckStats", { decks: studyDecks });
+          const total = Object.values(stats).reduce(
+            (sum, s) =>
+              sum +
+              (s.new_count ?? 0) +
+              (s.learn_count ?? 0) +
+              (s.review_count ?? 0),
+            0,
+          );
+          setInitialTotal(total);
         } catch {
           // progress bar will simply not show — non-fatal
         }
@@ -116,7 +160,7 @@ export function StudyPage() {
       }
     }
     startReview();
-  }, [deckName, loadCurrentCard]);
+  }, [studyDecks, loadCurrentCard]);
 
   const handleUndo = useCallback(async () => {
     // Undo only steps back through this session's reviews (see canUndo): not
@@ -134,14 +178,15 @@ export function StudyPage() {
     // own refresh until focused — guiCurrentCard would keep returning the
     // already-advanced card. Re-enter review to rebuild the queue; the
     // collection is back in its pre-answer state, so the undone card is
-    // served again.
+    // served again. (Undo steps back within the deck being reviewed; it doesn't
+    // cross back into an earlier deck of a multi-deck session.)
     try {
-      await ankiFetch("guiDeckReview", { name: deckName });
+      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
     } catch {
       // ignore — loadCurrentCard will surface any real failure
     }
     await loadCurrentCard();
-  }, [completed, reviewed, deckName, loadCurrentCard]);
+  }, [completed, reviewed, studyDecks, loadCurrentCard]);
 
   const handleEdit = useCallback(async () => {
     if (!card) return;
@@ -160,14 +205,14 @@ export function StudyPage() {
   }, [card]);
 
   const requestExit = useCallback(
-    (to: string) => {
+    (to: string, state?: unknown) => {
       // Leaving mid-session loses no review data — answers persist the moment
       // they're graded — but it abandons the queue and any revealed-not-graded
       // card. Confirm only once there's progress worth protecting.
       if (reviewed > 0 || isRevealed) {
-        setPendingExit(to);
+        setPendingExit({ to, state });
       } else {
-        navigate(to);
+        navigate(to, state ? { state } : undefined);
       }
     },
     [reviewed, isRevealed, navigate],
@@ -183,7 +228,11 @@ export function StudyPage() {
         setShowAddForm(true);
       } else if ((e.metaKey || e.ctrlKey) && e.key === "ArrowLeft") {
         e.preventDefault();
-        requestExit(`/decks/${encodeURIComponent(deckName)}`);
+        // Carry the selected segments back so the deck page restores them.
+        requestExit(
+          `/decks/${encodeURIComponent(deckName)}`,
+          segParams.length ? { segments: segParams } : undefined,
+        );
       } else if ((e.metaKey || e.ctrlKey) && e.key === "1") {
         e.preventDefault();
         requestExit("/");
@@ -200,7 +249,7 @@ export function StudyPage() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm, pendingExit, deckName, requestExit, handleEdit, handleUndo]);
+  }, [editingNote, showAddForm, pendingExit, deckName, segParams, requestExit, handleEdit, handleUndo]);
 
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
@@ -245,7 +294,7 @@ export function StudyPage() {
     const wasRevealed = isRevealed;
     setEditingNote(null);
     try {
-      await ankiFetch("guiDeckReview", { name: deckName });
+      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
     } catch {
       // ignore
     }
@@ -269,7 +318,7 @@ export function StudyPage() {
     setShowAddForm(false);
     // Re-enter review so the freshly added card can join this session's queue.
     try {
-      await ankiFetch("guiDeckReview", { name: deckName });
+      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
     } catch {
       // ignore
     }
@@ -375,7 +424,12 @@ export function StudyPage() {
           title="Exit study session?"
           message="Cards you've graded are already saved. The rest of the queue will restart the next time you study this deck."
           confirmLabel="Exit"
-          onConfirm={() => navigate(pendingExit)}
+          onConfirm={() =>
+            navigate(
+              pendingExit.to,
+              pendingExit.state ? { state: pendingExit.state } : undefined,
+            )
+          }
           onCancel={() => setPendingExit(null)}
         />
       )}

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
-import { ankiFetch } from "@/lib/anki-fetch";
-import { compareDeckPaths, deckLeaf } from "@/lib/deck";
+import { ankiFetch, fetchAllDueCounts } from "@/lib/anki-fetch";
+import { compareDeckPaths, coveringDecks, deckLeaf, isCardInDeck } from "@/lib/deck";
 import { resolveDeckRedirect } from "@/lib/deck-redirects";
 import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
@@ -55,6 +55,11 @@ export function DeckDetailPage() {
   const { deckName: rawName } = useParams<{ deckName: string }>();
   const deckName = decodeURIComponent(rawName!);
   const navigate = useNavigate();
+  // Segments to pre-select, carried in router state when returning from a
+  // scoped study session (Cmd+← in study), so the selection survives the trip.
+  const location = useLocation();
+  const restoredSegments = (location.state as { segments?: string[] } | null)
+    ?.segments;
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [suspendedCardIds, setSuspendedCardIds] = useState<number[]>([]);
@@ -65,6 +70,14 @@ export function DeckDetailPage() {
   // Every deck nested under this one ("Spanish::Verbs", …), sorted as a tree.
   const [subdecks, setSubdecks] = useState<string[]>([]);
   const [due, setDue] = useState<DueCounts>({ new: 0, learn: 0, review: 0 });
+  // Due counts for this deck and each subdeck (subtree-inclusive, as Anki
+  // reports them), so the Study button can total a selected scope.
+  const [dueBySegment, setDueBySegment] = useState<Record<string, DueCounts>>({});
+  // The segments currently selected in the card list; empty = "All". Seeded
+  // from any restored selection so the Study button is scoped on first render.
+  const [selectedSegments, setSelectedSegments] = useState<string[]>(
+    restoredSegments ?? [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -78,17 +91,14 @@ export function DeckDetailPage() {
 
   const refreshDue = useCallback(async () => {
     try {
-      const stats = await ankiFetch<
-        Record<string, { name: string; new_count: number; learn_count: number; review_count: number }>
-      >("getDeckStats", { decks: [deckName] });
-      const deckStats = Object.values(stats)[0];
-      if (deckStats) {
-        setDue({
-          new: deckStats.new_count ?? 0,
-          learn: deckStats.learn_count ?? 0,
-          review: deckStats.review_count ?? 0,
-        });
-      }
+      const allNames = await ankiFetch<string[]>("deckNames");
+      const segments = [
+        deckName,
+        ...allNames.filter((n) => n.startsWith(deckName + "::")),
+      ];
+      const counts = await fetchAllDueCounts(segments);
+      setDueBySegment(counts);
+      setDue(counts[deckName] ?? { new: 0, learn: 0, review: 0 });
     } catch {
       // keep the previous counts
     }
@@ -161,6 +171,33 @@ export function DeckDetailPage() {
 
   const totalDue = due.new + due.learn + due.review;
 
+  // When segments are selected, the Study button scopes the session to them.
+  // Reduce the selection to disjoint subtrees (studying a deck covers its
+  // descendants) and total their due counts.
+  const totalOf = (d?: DueCounts) => (d ? d.new + d.learn + d.review : 0);
+  const selectedCover = coveringDecks(
+    selectedSegments.filter((s) => isCardInDeck(s, deckName)),
+  );
+  const studyingSelection = selectedCover.length > 0;
+  const selectionDue = selectedCover.reduce(
+    (sum, d) => sum + totalOf(dueBySegment[d]),
+    0,
+  );
+  const studyDue = studyingSelection ? selectionDue : totalDue;
+  const studyParams = new URLSearchParams();
+  for (const d of selectedCover) studyParams.append("seg", d);
+  const studyTo = `/decks/${encodeURIComponent(deckName)}/study${
+    studyingSelection ? `?${studyParams}` : ""
+  }`;
+  // Name the scope so a selection reads differently from the unselected deck:
+  // one deck shows its name, several show a count, none is just "Study".
+  const studyLabel =
+    selectedCover.length > 1
+      ? `Study ${selectedCover.length} decks`
+      : selectedCover.length === 1
+        ? `Study ${deckLeaf(selectedCover[0])}`
+        : "Study";
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-3">
@@ -178,12 +215,12 @@ export function DeckDetailPage() {
           >
             Add note
           </button>
-          {totalDue > 0 ? (
+          {studyDue > 0 ? (
             <Link
-              to={`/decks/${encodeURIComponent(deckName)}/study`}
+              to={studyTo}
               className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
             >
-              Study ({totalDue})
+              {studyLabel}
             </Link>
           ) : (
             <span className="rounded-lg border border-foreground/10 px-4 py-2 text-sm text-foreground/30 cursor-not-allowed">
@@ -207,6 +244,8 @@ export function DeckDetailPage() {
           onChanged={refresh}
           showAddForm={showAddForm}
           onShowAddForm={setShowAddForm}
+          initialSegments={restoredSegments}
+          onSegmentsChange={setSelectedSegments}
         />
       )}
     </div>
