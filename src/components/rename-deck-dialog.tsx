@@ -64,10 +64,10 @@ export function RenameDeckDialog({
               <strong className="text-foreground/70">
                 {formatDeckPath(parent)}
               </strong>
-              . Subdecks and their cards come along.
+              . Subdecks and their notes come along.
             </>
           ) : (
-            <>Subdecks and their cards come along with the deck.</>
+            <>Subdecks and their notes come along with the deck.</>
           )}
         </p>
 

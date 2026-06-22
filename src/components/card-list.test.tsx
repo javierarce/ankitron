@@ -4,6 +4,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
+import type { Note } from "@/lib/types";
 
 // Anki is unavailable in tests; the add flow under test never calls it (the
 // stubbed form below stands in for the real save), but mock it so any stray
@@ -103,5 +104,37 @@ describe("CardList add flow", () => {
     await user.click(screen.getByText("stub-save"));
 
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("CardList count label", () => {
+  const notes = [
+    {
+      noteId: 1,
+      modelName: "Basic",
+      tags: [],
+      cards: [11],
+      fields: { Front: { value: "Hola", order: 0 }, Back: { value: "Hello", order: 1 } },
+    },
+    {
+      noteId: 2,
+      modelName: "Basic",
+      tags: [],
+      cards: [12],
+      fields: { Front: { value: "Adiós", order: 0 }, Back: { value: "Bye", order: 1 } },
+    },
+  ] as Note[];
+
+  it("labels the count in notes (one row per note), not cards", () => {
+    renderInRouter(
+      <CardList
+        deckName="Spanish"
+        notes={notes}
+        showAddForm={false}
+        onShowAddForm={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("2 notes")).toBeTruthy();
   });
 });

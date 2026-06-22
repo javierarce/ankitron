@@ -4,6 +4,7 @@ import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { AboutDialog } from "@/components/about-dialog";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
+import { FullScreenSpinner } from "@/components/full-screen-spinner";
 import { HeaderNav } from "@/components/header-nav";
 import { SyncProvider } from "@/components/sync-provider";
 import { UpdateBadge } from "@/components/update-badge";
@@ -68,12 +69,7 @@ export function Layout() {
   if (!ankiReady) {
     return (
       <>
-        <div className="flex min-h-dvh items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-            <p className="text-sm text-foreground/50">Starting Anki…</p>
-          </div>
-        </div>
+        <FullScreenSpinner label="Starting Anki…" />
         <UpdatePrompt />
         <AboutDialog />
       </>

@@ -444,7 +444,7 @@ export function CardForm({
         <div className="mb-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-semibold">
-              {isEdit ? "Edit Card" : "Add Card"}
+              {isEdit ? "Edit Note" : "Add Note"}
             </h3>
             {position && (
               <span className="text-sm tabular-nums text-foreground/40">
@@ -458,7 +458,7 @@ export function CardForm({
                 type="button"
                 onClick={onPrev}
                 disabled={saving || position.index === 0}
-                aria-label="Previous card"
+                aria-label="Previous note"
                 className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
               >
                 <CaretLeft size={18} weight="bold" />
@@ -467,7 +467,7 @@ export function CardForm({
                 type="button"
                 onClick={onSkip}
                 disabled={saving || position.index === position.total - 1}
-                aria-label="Next card"
+                aria-label="Next note"
                 className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
               >
                 <CaretRight size={18} weight="bold" />
@@ -478,7 +478,7 @@ export function CardForm({
 
         {isEdit && cardType !== initialType && (
           <p className="mb-4 text-xs text-amber-600 dark:text-amber-500">
-            Changing the card type creates a new card and resets its review history.
+            Changing the note type creates a new note and resets its review history.
           </p>
         )}
 
@@ -559,13 +559,13 @@ export function CardForm({
                 <label className="mb-1.5 block text-sm font-medium text-foreground/70">
                   Front
                 </label>
-                <CardEditor content={front} onChange={setFront} placeholder="Front of card..." />
+                <CardEditor content={front} onChange={setFront} placeholder="Front side..." />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground/70">
                   Back
                 </label>
-                <CardEditor content={back} onChange={setBack} placeholder="Back of card..." />
+                <CardEditor content={back} onChange={setBack} placeholder="Back side..." />
               </div>
             </>
           ) : (
@@ -629,7 +629,7 @@ export function CardForm({
               )}
               {destDeck && destDeck !== deckName && (
                 <p className="mt-1 text-xs text-foreground/50">
-                  The card will be moved to {formatDeckPath(destDeck)} when you
+                  The note will be moved to {formatDeckPath(destDeck)} when you
                   save.
                 </p>
               )}
@@ -666,7 +666,7 @@ export function CardForm({
                 disabled={saving}
                 className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
               >
-                {saving ? "Saving..." : isEdit ? "Update Card" : "Add Card"}
+                {saving ? "Saving..." : isEdit ? "Update Note" : "Add Note"}
               </button>
             </div>
           </div>

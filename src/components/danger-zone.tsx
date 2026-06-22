@@ -10,9 +10,10 @@ interface DangerZoneProps {
 export function DangerZone({ deckName }: DangerZoneProps) {
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
-  // Counts power the same "removes N cards" warning the decks list shows. Loaded
-  // up front so the dialog is accurate the moment it opens; default to 0 until then.
-  const [cardCount, setCardCount] = useState(0);
+  // Counts power the same "removes N notes" warning the decks list shows — note
+  // counts, to match it. Loaded up front so the dialog is accurate the moment it
+  // opens; default to 0 until then.
+  const [noteCount, setNoteCount] = useState(0);
   const [subdeckCount, setSubdeckCount] = useState(0);
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export function DangerZone({ deckName }: DangerZoneProps) {
           ankiFetch<string[]>("deckNames"),
         ]);
         if (cancelled) return;
-        setCardCount(noteIds.length);
+        setNoteCount(noteIds.length);
         setSubdeckCount(
           allDecks.filter((d) => d.startsWith(deckName + "::")).length,
         );
@@ -46,7 +47,7 @@ export function DangerZone({ deckName }: DangerZoneProps) {
       <section className="mt-16 border-t border-red-500/20 pt-6">
         <h2 className="mb-1 text-sm font-semibold text-red-500">Danger Zone</h2>
         <p className="mb-4 text-sm text-foreground/50">
-          Permanently delete this deck and all its cards from Anki.
+          Permanently delete this deck and all its notes from Anki.
         </p>
         <button
           onClick={() => setShowConfirm(true)}
@@ -59,7 +60,7 @@ export function DangerZone({ deckName }: DangerZoneProps) {
       {showConfirm && (
         <DeleteDeckDialog
           deckName={deckName}
-          cardCount={cardCount}
+          noteCount={noteCount}
           subdeckCount={subdeckCount}
           onCancel={() => setShowConfirm(false)}
           onDeleted={() => navigate("/")}

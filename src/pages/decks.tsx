@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { AllDecksList } from "@/components/all-decks-list";
 import { useSync } from "@/lib/sync-context";
-import { ankiFetch, fetchAllCardCounts } from "@/lib/anki-fetch";
+import { ankiFetch, fetchAllNoteCounts } from "@/lib/anki-fetch";
 
 export function DecksPage() {
   const [decks, setDecks] = useState<string[]>([]);
-  const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
   const { syncedAt, registerPageLoad } = useSync();
@@ -16,37 +16,41 @@ export function DecksPage() {
     if (loading) return registerPageLoad();
   }, [loading, registerPageLoad]);
 
-  const fetchData = useCallback(async () => {
-    const deckNames = await ankiFetch<string[]>("deckNames");
-    const counts = deckNames.length
-      ? await fetchAllCardCounts(deckNames)
-      : {};
-    return { deckNames, counts };
-  }, []);
-
   // Used by the list to refresh after a change (e.g. a card added via the menu).
+  // No spinner here (loading is already false), so it's fine to await counts.
   const reload = useCallback(async () => {
     try {
-      const { deckNames, counts } = await fetchData();
+      const deckNames = await ankiFetch<string[]>("deckNames");
       setDecks(deckNames);
-      setCardCounts(counts);
       setHasError(false);
+      setNoteCounts(deckNames.length ? await fetchAllNoteCounts(deckNames) : {});
     } catch {
       setHasError(true);
-    } finally {
-      setLoading(false);
     }
-  }, [fetchData]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const { deckNames, counts } = await fetchData();
+        const deckNames = await ankiFetch<string[]>("deckNames");
         if (cancelled) return;
         setDecks(deckNames);
-        setCardCounts(counts);
         setHasError(false);
+
+        // Note counts need one findNotes request per deck, serialised on Anki's
+        // main thread, so they can lag on a large collection. Show the list as
+        // soon as the deck names land and fill counts in off the critical path;
+        // rows show a placeholder until their count arrives.
+        if (deckNames.length > 0) {
+          fetchAllNoteCounts(deckNames)
+            .then((counts) => {
+              if (!cancelled) setNoteCounts(counts);
+            })
+            .catch(() => {
+              // Counts are non-critical — leave the placeholders in place.
+            });
+        }
       } catch {
         if (!cancelled) setHasError(true);
       } finally {
@@ -59,7 +63,7 @@ export function DecksPage() {
     };
     // Re-run silently when a sync completes (`loading` is already false by then,
     // so no spinner) to pick up changes pulled from AnkiWeb.
-  }, [fetchData, syncedAt]);
+  }, [syncedAt]);
 
   if (loading) {
     return (
@@ -78,6 +82,6 @@ export function DecksPage() {
   }
 
   return (
-    <AllDecksList decks={decks} cardCounts={cardCounts} onRefresh={reload} />
+    <AllDecksList decks={decks} noteCounts={noteCounts} onRefresh={reload} />
   );
 }

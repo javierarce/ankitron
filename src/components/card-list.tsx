@@ -171,7 +171,7 @@ function CardMenu({
     <div ref={menuRef} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label="Card actions"
+        aria-label="Note actions"
         aria-haspopup="menu"
         aria-expanded={open}
         className="shrink-0 rounded-md p-1 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60"
@@ -287,8 +287,8 @@ export function CardList({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
-  // Sequential edit run: the card editor opens one selected note at a time, and
-  // "Update Card" (or Skip) advances. The cursor logic lives in lib/edit-sequence
+  // Sequential edit run: the note editor opens one selected note at a time, and
+  // "Update Note" (or Skip) advances. The cursor logic lives in lib/edit-sequence
   // so it can be tested without rendering the editor.
   const [editSeq, setEditSeq] = useState<EditSequence | null>(null);
   // Confirmation for deleting the card currently open in the edit run.
@@ -699,7 +699,7 @@ export function CardList({
     countByDeck.set(deck, (countByDeck.get(deck) ?? 0) + 1);
   }
 
-  // When the selected segment(s) hold no cards, hide the search field, count,
+  // When the selected segment(s) hold no notes, hide the search field, count,
   // and "no match" message and show a dedicated empty state instead.
   const segmentScopeEmpty = activeSegments.size > 0 && segmentNotes.length === 0;
   // Nothing to search or count: a fresh empty deck, or an empty segment scope.
@@ -785,7 +785,7 @@ export function CardList({
       pointerEvents: "none",
     });
     const badge = document.createElement("div");
-    badge.textContent = ids.length === 1 ? "1 card" : `${ids.length} cards`;
+    badge.textContent = ids.length === 1 ? "1 note" : `${ids.length} notes`;
     Object.assign(badge.style, {
       padding: "0.375rem 0.75rem",
       borderRadius: "9999px",
@@ -896,7 +896,7 @@ export function CardList({
             // Cards being dragged onto a segment carry their note ids as
             // text/plain; block dropping that onto the search box.
             onDrop={(e) => e.preventDefault()}
-            placeholder="Search cards…"
+            placeholder="Search notes…"
             className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
           />
         </div>
@@ -909,7 +909,7 @@ export function CardList({
             <>
               <p className="text-sm font-medium">
                 {selectedNotes.length}{" "}
-                {selectedNotes.length === 1 ? "card" : "cards"} selected
+                {selectedNotes.length === 1 ? "note" : "notes"} selected
               </p>
               {!allVisibleSelected && (
                 <button
@@ -931,8 +931,8 @@ export function CardList({
           ) : (
             <p className="text-sm text-foreground/50">
               {trimmedQuery
-                ? `${filteredNotes.length} of ${segmentNotes.length} ${segmentNotes.length === 1 ? "card" : "cards"}`
-                : `${segmentNotes.length} ${segmentNotes.length === 1 ? "card" : "cards"}`}
+                ? `${filteredNotes.length} of ${segmentNotes.length} ${segmentNotes.length === 1 ? "note" : "notes"}`
+                : `${segmentNotes.length} ${segmentNotes.length === 1 ? "note" : "notes"}`}
             </p>
           )}
         </div>
@@ -940,7 +940,7 @@ export function CardList({
           <select
             value={sortMode}
             onChange={(e) => handleSortChange(e.target.value as SortMode)}
-            aria-label="Sort cards"
+            aria-label="Sort notes"
             className="rounded-lg border border-foreground/15 bg-transparent px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-foreground/5 focus:outline-none focus:border-foreground/30 transition-colors cursor-pointer"
           >
             {SORT_OPTIONS.map((o) => (
@@ -1002,16 +1002,16 @@ export function CardList({
 
       {segmentScopeEmpty ? (
         <EmptyState
-          heading={`No cards in ${emptySegmentLabel}`}
-          hint="Drag cards from another deck onto it to move them here."
+          heading={`No notes in ${emptySegmentLabel}`}
+          hint="Drag notes from another deck onto it to move them here."
         />
       ) : notes.length === 0 ? (
         <EmptyState
-          heading={`No cards in ${deckLeaf(deckName)}`}
-          hint="Add your first card to get started."
+          heading={`No notes in ${deckLeaf(deckName)}`}
+          hint="Add your first note to get started."
         />
       ) : filteredNotes.length === 0 ? (
-        <p className="text-foreground/50">No cards match &ldquo;{query}&rdquo;.</p>
+        <p className="text-foreground/50">No notes match &ldquo;{query}&rdquo;.</p>
       ) : (
         <div className="space-y-2">
           {filteredNotes.map((note) => {
@@ -1047,7 +1047,7 @@ export function CardList({
               >
                 <button
                   onClick={(e) => handleCheckboxClick(e, note)}
-                  aria-label={selected ? "Deselect card" : "Select card"}
+                  aria-label={selected ? "Deselect note" : "Select note"}
                   aria-pressed={selected}
                   className="relative z-10 -m-2 flex shrink-0 items-center justify-center self-start p-2"
                 >
@@ -1159,8 +1159,8 @@ export function CardList({
             : "";
           return (
             <ConfirmDialog
-              title="Delete Card"
-              message={preview ? `Delete "${preview}"?` : "Delete this card?"}
+              title="Delete Note"
+              message={preview ? `Delete "${preview}"?` : "Delete this note?"}
               onConfirm={handleSeqDelete}
               onCancel={() => setSeqDeleteOpen(false)}
               loading={seqDeleting}
@@ -1196,12 +1196,12 @@ export function CardList({
       {bulkDeleteOpen && (
         <ConfirmDialog
           title={
-            selectedNotes.length === 1 ? "Delete Card" : "Delete Cards"
+            selectedNotes.length === 1 ? "Delete Note" : "Delete Notes"
           }
           message={
             selectedNotes.length === 1
-              ? "Delete the selected card?"
-              : `Delete ${selectedNotes.length} selected cards?`
+              ? "Delete the selected note?"
+              : `Delete ${selectedNotes.length} selected notes?`
           }
           onConfirm={handleBulkDelete}
           onCancel={() => setBulkDeleteOpen(false)}
@@ -1211,7 +1211,7 @@ export function CardList({
 
       {deletingNote && (
         <ConfirmDialog
-          title="Delete Card"
+          title="Delete Note"
           message={`Delete "${truncate(
             stripCloze(stripHtml(noteDisplayFields(deletingNote).primary)),
             50

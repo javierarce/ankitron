@@ -134,7 +134,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
         onClick={() => fileInputRef.current?.click()}
         disabled={importing}
         className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
-        title="Import cards from a JSON file"
+        title="Import notes from a JSON file"
       >
         {importing ? "Importing…" : "Import"}
       </button>
