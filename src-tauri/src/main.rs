@@ -66,10 +66,20 @@ async fn stop_anki_for_update(state: tauri::State<'_, Arc<AnkiState>>) -> Result
         .map(|g| g.is_some())
         .unwrap_or(false);
 
-    stop_spawned_anki(&state);
+    // stop_spawned_anki is blocking (SIGTERM, std::thread::sleep while waiting
+    // for the process to exit, then SIGKILL, plus synchronous `kill`/`ps`
+    // subprocesses). Run it on the blocking pool so it can't stall other Tauri
+    // commands on the async runtime while the update dialog waits on us.
+    let kill_state = state.clone();
+    tokio::task::spawn_blocking(move || stop_spawned_anki(&kill_state))
+        .await
+        .map_err(|e| format!("Anki shutdown task failed: {}", e))?;
 
+    // graceful_kill above already waits for the process to actually exit, so
+    // :8765 is normally clear by now; this is a short belt-and-suspenders wait
+    // for the port to release before the relaunched app spawns its own Anki.
     if we_spawned {
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(8);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
         while is_ankiconnect_up().await {
             if tokio::time::Instant::now() >= deadline {
                 break;
