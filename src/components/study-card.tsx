@@ -10,6 +10,7 @@ import {
   extractExpectedClozeAnswer,
   groupRuns,
 } from "@/lib/typed-answer-diff";
+import { isScrollLocked } from "@/hooks/use-scroll-lock";
 
 interface StudyCardProps {
   question: string;
@@ -246,12 +247,17 @@ export function StudyCard({
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (answering) return;
+      // Inert while answering, or while an overlay (card editor, confirm
+      // dialog, command palette) is up over the card.
+      if (answering || isScrollLocked()) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       const inEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      // Reveal/grade keys are single-key shortcuts; a held modifier means the
+      // user meant something else (e.g. Cmd+1/Cmd+2 nav), not a grade.
+      const plainKey = !e.metaKey && !e.ctrlKey && !e.altKey;
 
-      if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey && !inEditable) {
+      if (e.key === "r" && plainKey && !inEditable) {
         e.preventDefault();
         const files = isRevealed
           ? audio.answerFiles.length
@@ -261,6 +267,8 @@ export function StudyCard({
         if (files.length) playAudio(files);
         return;
       }
+
+      if (!plainKey) return;
 
       if (!isRevealed) {
         if (inEditable) return;

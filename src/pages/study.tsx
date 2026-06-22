@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Ease, Note, NoteField } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
 import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
@@ -37,6 +38,9 @@ export function StudyPage() {
   const [initialTotal, setInitialTotal] = useState(0);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  // Destination of a pending "leave study" navigation while its confirm dialog
+  // is up (null = no dialog). Shared by Cmd+←, Cmd+1, and Cmd+2.
+  const [pendingExit, setPendingExit] = useState<string | null>(null);
   const [cardVisible, setCardVisible] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   const languages = useMemo<DeckLanguages>(
@@ -155,17 +159,37 @@ export function StudyPage() {
     }
   }, [card]);
 
+  const requestExit = useCallback(
+    (to: string) => {
+      // Leaving mid-session loses no review data — answers persist the moment
+      // they're graded — but it abandons the queue and any revealed-not-graded
+      // card. Confirm only once there's progress worth protecting.
+      if (reviewed > 0 || isRevealed) {
+        setPendingExit(to);
+      } else {
+        navigate(to);
+      }
+    },
+    [reviewed, isRevealed, navigate],
+  );
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (editingNote || showAddForm) return;
+      if (editingNote || showAddForm || pendingExit !== null) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setShowAddForm(true);
-      } else if (e.key === "h" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "ArrowLeft") {
         e.preventDefault();
-        navigate(`/decks/${encodeURIComponent(deckName)}`);
+        requestExit(`/decks/${encodeURIComponent(deckName)}`);
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "1") {
+        e.preventDefault();
+        requestExit("/");
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "2") {
+        e.preventDefault();
+        requestExit("/decks");
       } else if (e.key === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         handleEdit();
@@ -176,7 +200,7 @@ export function StudyPage() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm, navigate, deckName, handleEdit, handleUndo]);
+  }, [editingNote, showAddForm, pendingExit, deckName, requestExit, handleEdit, handleUndo]);
 
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
@@ -343,6 +367,16 @@ export function StudyPage() {
           note={editingNote}
           onClose={handleEditClose}
           onSaved={handleEditClose}
+        />
+      )}
+
+      {pendingExit !== null && (
+        <ConfirmDialog
+          title="Exit study session?"
+          message="Cards you've graded are already saved. The rest of the queue will restart the next time you study this deck."
+          confirmLabel="Exit"
+          onConfirm={() => navigate(pendingExit)}
+          onCancel={() => setPendingExit(null)}
         />
       )}
 

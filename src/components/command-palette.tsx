@@ -8,7 +8,7 @@ import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { useScrollLock, isScrollLocked } from "@/hooks/use-scroll-lock";
 import { CardForm } from "./card-form";
 
 type Mode = "search" | "pickDeckForCard";
@@ -68,11 +68,26 @@ export function CommandPalette() {
         setQuery("");
         setSelected(0);
         setOpen(true);
+      } else if (mod && e.key === ",") {
+        // Open settings, like a native app. Skip while a dialog is up so we
+        // don't yank the user out of an open card editor and lose their edits.
+        if (isScrollLocked()) return;
+        e.preventDefault();
+        navigate("/settings");
+      } else if (mod && (e.key === "1" || e.key === "2")) {
+        // Quick-nav to Study (1) / Decks (2). Skip while editing a card (any
+        // dialog holds the scroll lock) or mid-study, where these would
+        // interrupt what the user is doing.
+        if (isScrollLocked() || window.location.pathname.endsWith("/study")) {
+          return;
+        }
+        e.preventDefault();
+        navigate(e.key === "1" ? "/" : "/decks");
       }
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (!open) return;

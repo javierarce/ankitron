@@ -56,6 +56,9 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 | --- | --- |
 | `Cmd` + `K` | Open the command palette |
 | `Cmd` + `N` | New card |
+| `Cmd` + `,` | Open settings |
+| `Cmd` + `1` | Go to Study |
+| `Cmd` + `2` | Go to Decks |
 
 ## Command palette (when open)
 
@@ -69,11 +72,12 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 
 | Shortcut | Action |
 | --- | --- |
-| `j` | Move down |
-| `k` | Move up |
+| `j` / `↓` | Move down |
+| `k` / `↑` | Move up |
 | `g` `g` | Jump to the top (press `g` twice within 500 ms) |
 | `G` (`Shift` + `g`) | Jump to the bottom |
-| `h` | Go back (where a back target exists) |
+| `l` / `→` | Expand the focused deck (in the deck list) |
+| `h` / `←` | Collapse the focused deck, or jump to its parent (in the deck list) |
 
 ## Decks page
 
@@ -103,7 +107,7 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 | `r` | Play the card's audio (answer side once revealed, otherwise the question) |
 | `e` | Edit the current card |
 | `a` | Add a card to the session |
-| `h` | Return to the deck |
+| `Cmd` + `←` | Return to the deck (confirms once you've started reviewing) |
 | `Cmd` + `Z` | Undo the last review |
 
 
