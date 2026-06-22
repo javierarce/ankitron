@@ -2,7 +2,59 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import { useCallback, useRef, useState } from "react";
-import { storeAudioFile } from "@/lib/audio";
+import {
+  getMediaUrl,
+  mediaFilenameFromSrc,
+  storeAudioFile,
+} from "@/lib/audio";
+
+// Anki stores images as bare collection-media filenames (`<img src="x.jpg">`)
+// the app origin can't serve. This NodeView shows the file by resolving it to
+// an object URL for display only — the node keeps `src` = filename, so
+// serialization (editor.getHTML(), the source view) stays lossless and saving
+// never writes a blob: URL back into the note.
+const MediaImage = Image.extend({
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement("img");
+      const { src, alt, title } = node.attrs as {
+        src?: string;
+        alt?: string;
+        title?: string;
+      };
+      if (alt) dom.alt = alt;
+      if (title) dom.title = title;
+      const filename = src ? mediaFilenameFromSrc(src) : null;
+      if (filename) {
+        dom.style.opacity = "0";
+        dom.style.transition = "opacity 200ms ease";
+        getMediaUrl(filename).then((url) => {
+          if (url) {
+            dom.onload = () => {
+              dom.style.opacity = "1";
+            };
+            dom.src = url;
+          } else {
+            dom.style.opacity = "1";
+          }
+        });
+      } else if (src) {
+        dom.src = src;
+      }
+      dom.style.borderRadius = "3px";
+      // Block, not inline: an inline <img>'s line box spans the full editor
+      // width, so selecting the node paints the native selection highlight into
+      // the empty trailing space beside it. Block confines it to the image.
+      dom.style.display = "block";
+      dom.style.maxWidth = "100%";
+      // No selectNode/deselectNode: letting ProseMirror toggle its own
+      // `.ProseMirror-selectednode` class lets us scope the selection ring to
+      // the focused editor in CSS (see globals.css), so opening the form
+      // doesn't outline every editor's initially-selected image at once.
+      return { dom };
+    };
+  },
+});
 
 interface CardEditorProps {
   content: string;
@@ -44,7 +96,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         blockquote: false,
         horizontalRule: false,
       }),
-      Image,
+      MediaImage,
     ],
     content,
     onUpdate: ({ editor }) => {

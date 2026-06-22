@@ -113,7 +113,8 @@ export function resolveCardAudio(
 
 // --- Playback ---------------------------------------------------------------
 
-const AUDIO_MIME: Record<string, string> = {
+const MEDIA_MIME: Record<string, string> = {
+  // audio
   mp3: "audio/mpeg",
   wav: "audio/wav",
   ogg: "audio/ogg",
@@ -125,18 +126,80 @@ const AUDIO_MIME: Record<string, string> = {
   flac: "audio/flac",
   webm: "audio/webm",
   "3gp": "audio/3gpp",
+  // images
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  tif: "image/tiff",
+  tiff: "image/tiff",
 };
 
 function mimeFor(filename: string): string {
   const ext = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
-  return AUDIO_MIME[ext] ?? "audio/mpeg";
+  return MEDIA_MIME[ext] ?? "application/octet-stream";
 }
 
-/** filename → object-URL promise; kept for the app's lifetime (card audio is
+/**
+ * If an HTML media `src`/`href` points at a bare collection-media filename (the
+ * form Anki stores — e.g. `karte.jpg`), return the filename to hand to
+ * `retrieveMediaFile`. Returns null for URLs the browser can already load
+ * (http(s)/data/blob/file and protocol-relative), so we never round-trip those
+ * through Anki. Percent-escapes are decoded since Anki's filename is the
+ * decoded form.
+ */
+export function mediaFilenameFromSrc(src: string): string | null {
+  const trimmed = src.trim();
+  if (!trimmed) return null;
+  // Any explicit scheme (http:, data:, blob:, file:) or protocol-relative URL.
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(trimmed)) return null;
+  try {
+    return decodeURIComponent(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+/** Attribute that carries a collection-media filename awaiting resolution. */
+export const MEDIA_ATTR = "data-anki-media";
+
+/**
+ * Rewrite card HTML so collection-media `<img>`s don't flash a broken-image
+ * icon: their bare-filename `src` is moved to {@link MEDIA_ATTR} and they start
+ * transparent. The caller resolves each to an object URL and fades it in. URLs
+ * the browser can load on its own are left untouched. Parsing happens in an
+ * inert `<template>`, so no image load is triggered by this step.
+ */
+export function prepareCardHtml(html: string): string {
+  if (typeof document === "undefined") return html;
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  let changed = false;
+  tpl.content.querySelectorAll("img").forEach((img) => {
+    const filename = mediaFilenameFromSrc(img.getAttribute("src") ?? "");
+    if (!filename) return;
+    img.removeAttribute("src");
+    img.setAttribute(MEDIA_ATTR, filename);
+    img.style.opacity = "0";
+    img.style.transition = "opacity 200ms ease";
+    changed = true;
+  });
+  return changed ? tpl.innerHTML : html;
+}
+
+/** filename → object-URL promise; kept for the app's lifetime (card media is
  * small and decks repeat files heavily). */
 const urlCache = new Map<string, Promise<string | null>>();
 
-async function getAudioUrl(filename: string): Promise<string | null> {
+/** Fetch a collection-media file from Anki and expose it as an object URL.
+ * Works for any media type (audio, images); the blob MIME is derived from the
+ * filename extension. */
+export async function getMediaUrl(filename: string): Promise<string | null> {
   let pending = urlCache.get(filename);
   if (!pending) {
     pending = (async () => {
@@ -178,7 +241,7 @@ export async function playAudio(files: string[]): Promise<void> {
   stopAudio();
   const token = playToken;
   for (const file of files) {
-    const url = await getAudioUrl(file);
+    const url = await getMediaUrl(file);
     if (token !== playToken) return;
     if (!url) continue;
     await new Promise<void>((resolve) => {
