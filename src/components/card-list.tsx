@@ -31,6 +31,7 @@ import {
   type SequenceStep,
 } from "@/lib/edit-sequence";
 import { stripSoundTags } from "@/lib/audio";
+import { noteDisplayFields } from "@/lib/note-fields";
 import { deckLeaf, formatDeckPath } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
 
@@ -94,14 +95,6 @@ function stripCloze(text: string): string {
     const hintIdx = inner.lastIndexOf("::");
     return hintIdx === -1 ? inner : inner.slice(0, hintIdx);
   });
-}
-
-function isClozeNote(note: Note): boolean {
-  return (
-    note.modelName === "Cloze" ||
-    note.modelName === "Cloze (typed)" ||
-    "Text" in note.fields
-  );
 }
 
 type SortMode = "modified-desc" | "created-desc" | "created-asc";
@@ -420,7 +413,7 @@ export function CardList({
     bulkDeleteOpen ||
     !!editSeq;
 
-  useVimNav({ back: "/", enabled: !hasDialog });
+  useVimNav({ enabled: !hasDialog });
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -556,12 +549,8 @@ export function CardList({
   const trimmedQuery = query.trim().toLowerCase();
   const matchedNotes = trimmedQuery
     ? segmentNotes.filter((note) => {
-        const haystack = [
-          note.fields.Front?.value,
-          note.fields.Back?.value,
-          note.fields.Text?.value,
-          note.fields["Back Extra"]?.value,
-        ]
+        const haystack = Object.values(note.fields)
+          .map((field) => field?.value)
           .filter(Boolean)
           .map((v) => stripCloze(stripHtml(v as string)))
           .concat(note.tags)
@@ -1073,27 +1062,21 @@ export function CardList({
                   </span>
                 </button>
                 <div className={`flex-1 min-w-0 ${noteSuspended ? "opacity-50" : ""}`}>
-                  {isClozeNote(note) ? (
-                    <>
-                      <p className="text-sm font-medium">
-                        {truncate(stripCloze(stripHtml(note.fields.Text?.value ?? "")), 80)}
-                      </p>
-                      {note.fields["Back Extra"]?.value && (
-                        <p className="text-sm text-foreground/50 mt-0.5">
-                          {truncate(stripHtml(note.fields["Back Extra"].value), 80)}
+                  {(() => {
+                    const { primary, secondary } = noteDisplayFields(note);
+                    return (
+                      <>
+                        <p className="text-sm font-medium">
+                          {truncate(stripCloze(stripHtml(primary)), 80)}
                         </p>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-medium">
-                        {truncate(stripHtml(note.fields.Front?.value ?? ""), 80)}
-                      </p>
-                      <p className="text-sm text-foreground/50 mt-0.5">
-                        {truncate(stripHtml(note.fields.Back?.value ?? ""), 80)}
-                      </p>
-                    </>
-                  )}
+                        {secondary && (
+                          <p className="text-sm text-foreground/50 mt-0.5">
+                            {truncate(stripCloze(stripHtml(secondary)), 80)}
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                   {note.tags.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {note.tags.map((tag) => (
@@ -1172,12 +1155,7 @@ export function CardList({
         (() => {
           const note = editSequenceCurrentNote(editSeq, notes);
           const preview = note
-            ? truncate(
-                isClozeNote(note)
-                  ? stripCloze(stripHtml(note.fields.Text?.value ?? ""))
-                  : stripHtml(note.fields.Front?.value ?? ""),
-                50,
-              )
+            ? truncate(stripCloze(stripHtml(noteDisplayFields(note).primary)), 50)
             : "";
           return (
             <ConfirmDialog
@@ -1235,9 +1213,7 @@ export function CardList({
         <ConfirmDialog
           title="Delete Note"
           message={`Delete "${truncate(
-            isClozeNote(deletingNote)
-              ? stripCloze(stripHtml(deletingNote.fields.Text?.value ?? ""))
-              : stripHtml(deletingNote.fields.Front?.value ?? ""),
+            stripCloze(stripHtml(noteDisplayFields(deletingNote).primary)),
             50
           )}"?`}
           onConfirm={handleDelete}

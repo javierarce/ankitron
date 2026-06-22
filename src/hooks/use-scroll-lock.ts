@@ -9,6 +9,15 @@ let lockCount = 0;
 let prevOverflow = "";
 
 /**
+ * Whether a dialog/overlay currently holds the scroll lock (the command
+ * palette, a card editor, a confirm dialog…). Global key handlers use this to
+ * skip navigation that would yank the user out of an open editor.
+ */
+export function isScrollLocked() {
+  return lockCount > 0;
+}
+
+/**
  * Locks `document.body` scroll while `active` is true. Pass the dialog's open
  * state; mounted-only-when-open dialogs can call it with no argument.
  */

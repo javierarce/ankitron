@@ -4,12 +4,20 @@ import { SpeakerHigh } from "@phosphor-icons/react/dist/ssr/SpeakerHigh";
 import { Stop } from "@phosphor-icons/react/dist/ssr/Stop";
 import { Ease } from "@/lib/types";
 import { DeckLanguages, speak, stopSpeaking } from "@/lib/deck-settings";
-import { playAudio, resolveCardAudio, stopAudio } from "@/lib/audio";
+import {
+  getMediaUrl,
+  MEDIA_ATTR,
+  playAudio,
+  prepareCardHtml,
+  resolveCardAudio,
+  stopAudio,
+} from "@/lib/audio";
 import {
   diffTypedAnswer,
   extractExpectedClozeAnswer,
   groupRuns,
 } from "@/lib/typed-answer-diff";
+import { isScrollLocked } from "@/hooks/use-scroll-lock";
 
 interface StudyCardProps {
   question: string;
@@ -83,10 +91,40 @@ function HtmlContent({
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const renderedHtml = useRef<string | null>(null);
   useEffect(() => {
-    if (ref.current && ref.current.innerHTML !== html) {
-      ref.current.innerHTML = html;
+    const el = ref.current;
+    if (!el) return;
+    // Card media (<img>) references bare collection-media filenames the app
+    // origin can't serve. prepareCardHtml strips those srcs (so no broken-image
+    // icon flashes) and we pull each file from Anki, then fade the image in.
+    // Only rewrite innerHTML when the html actually changes (avoids clobbering
+    // selection); image resolution runs every invocation so StrictMode's
+    // double-mount can't leave images stuck transparent. `cancelled` guards
+    // against the html changing before a fetch resolves.
+    if (renderedHtml.current !== html) {
+      renderedHtml.current = html;
+      el.innerHTML = prepareCardHtml(html);
     }
+    let cancelled = false;
+    el.querySelectorAll<HTMLImageElement>(`img[${MEDIA_ATTR}]`).forEach((img) => {
+      const filename = img.getAttribute(MEDIA_ATTR) ?? "";
+      getMediaUrl(filename).then((url) => {
+        if (cancelled) return;
+        if (url) {
+          img.onload = () => {
+            img.style.opacity = "1";
+          };
+          img.src = url;
+        } else {
+          // Missing/unreachable: reveal anyway so any alt text shows.
+          img.style.opacity = "1";
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [html]);
   return <div ref={ref} className={className} />;
 }
@@ -246,12 +284,17 @@ export function StudyCard({
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (answering) return;
+      // Inert while answering, or while an overlay (card editor, confirm
+      // dialog, command palette) is up over the card.
+      if (answering || isScrollLocked()) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       const inEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      // Reveal/grade keys are single-key shortcuts; a held modifier means the
+      // user meant something else (e.g. Cmd+1/Cmd+2 nav), not a grade.
+      const plainKey = !e.metaKey && !e.ctrlKey && !e.altKey;
 
-      if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey && !inEditable) {
+      if (e.key === "r" && plainKey && !inEditable) {
         e.preventDefault();
         const files = isRevealed
           ? audio.answerFiles.length
@@ -261,6 +304,8 @@ export function StudyCard({
         if (files.length) playAudio(files);
         return;
       }
+
+      if (!plainKey) return;
 
       if (!isRevealed) {
         if (inEditable) return;

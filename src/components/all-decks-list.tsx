@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
@@ -54,6 +54,10 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  // Mirror of `expanded` the keyboard callbacks can read without being rebuilt
+  // (and re-subscribing useVimNav) on every toggle.
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
 
   const [showDialog, setShowDialog] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
@@ -69,7 +73,54 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
 
   const hasDialog =
     showDialog || addCardDeck !== null || deletingDeck !== null;
-  useVimNav({ enabled: !hasDialog });
+
+  // Every deck that has at least one subdeck (each proper ancestor prefix), so
+  // h/l (and ←/→) know whether a focused row is collapsible.
+  const decksWithChildren = useMemo(() => {
+    const s = new Set<string>();
+    for (const d of decks) {
+      const parts = d.split("::");
+      for (let i = 1; i < parts.length; i++) s.add(parts.slice(0, i).join("::"));
+    }
+    return s;
+  }, [decks]);
+
+  const expandRow = useCallback(
+    (el: HTMLElement) => {
+      const name = el.dataset.deck;
+      if (!name || !decksWithChildren.has(name)) return;
+      setExpanded((prev) => (prev.has(name) ? prev : new Set(prev).add(name)));
+    },
+    [decksWithChildren],
+  );
+
+  const collapseRow = useCallback(
+    (el: HTMLElement) => {
+      const name = el.dataset.deck;
+      if (!name) return;
+      // Open parent → collapse it; otherwise hop focus up to the parent row,
+      // matching how h behaves in a file tree.
+      if (decksWithChildren.has(name) && expandedRef.current.has(name)) {
+        setExpanded((prev) => {
+          const next = new Set(prev);
+          next.delete(name);
+          return next;
+        });
+        return;
+      }
+      const parent = deckParent(name);
+      if (!parent) return;
+      const rows = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-deck]"),
+      );
+      const parentRow = rows.find((r) => r.dataset.deck === parent);
+      parentRow?.focus();
+      parentRow?.scrollIntoView({ block: "nearest" });
+    },
+    [decksWithChildren],
+  );
+
+  useVimNav({ enabled: !hasDialog, onExpand: expandRow, onCollapse: collapseRow });
   // CardForm (addCardDeck) locks scroll itself; lock for the inline Create Deck
   // dialog so the deck list behind it can't scroll on wheel.
   useScrollLock(showDialog);
@@ -364,6 +415,7 @@ function TreeRows({
         )}
         <Link
           data-nav-item
+          data-deck={node.fullName}
           to={`/decks/${encodeURIComponent(node.fullName)}`}
           className="min-w-0 flex-1 truncate font-medium"
           title={formatDeckPath(node.fullName)}

@@ -7,7 +7,7 @@ import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
-import { basicFieldKeys } from "@/lib/note-fields";
+import { basicFieldKeys, orderedFieldNames } from "@/lib/note-fields";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 
@@ -15,6 +15,16 @@ type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
 
 // Anki's stock note type that generates a forward and a reverse card per note.
 const BASIC_REVERSED_MODEL = "Basic (and reversed card)";
+
+// The note types whose fields the curated Front/Back and Text/Back Extra
+// editors understand. Anything else (a shared deck's own note type) is edited
+// generically: its real fields, in order, under their real names.
+const KNOWN_MODELS = new Set<string>([
+  "Basic",
+  BASIC_REVERSED_MODEL,
+  "Cloze",
+  CLOZE_TYPED_MODEL,
+]);
 
 const CARD_TYPE_OPTIONS: { value: CardType; label: string }[] = [
   { value: "Basic", label: "Basic" },
@@ -141,6 +151,21 @@ export function CardForm({
   const [clozeText, setClozeText] = useState(initialClozeText);
   const [backExtra, setBackExtra] = useState(initialBackExtra);
 
+  // Editing a note built on a custom note type (the deck author's own, not one
+  // of our four canonical types): we can't map it onto Front/Back, so we edit
+  // its real fields in order under their real names. Adding always uses the
+  // curated types, so this only applies to existing notes.
+  const customModel = isEdit && !!note && !KNOWN_MODELS.has(note.modelName);
+  const customFields = customModel
+    ? orderedFieldNames(noteFields).map((name) => ({
+        name,
+        initial: extractValue(noteFields[name]),
+      }))
+    : [];
+  const [customValues, setCustomValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(customFields.map((f) => [f.name, f.initial])),
+  );
+
   const initialTags = note?.tags ?? [];
   const [tags, setTags] = useState<string[]>(initialTags);
   const [saving, setSaving] = useState(false);
@@ -209,7 +234,13 @@ export function CardForm({
 
     const isClozeForm = !isBasicForm;
 
-    if (isBasicForm) {
+    if (customModel) {
+      const first = customFields[0];
+      if (first && !(customValues[first.name] ?? "").trim()) {
+        setError(`${first.name} is required.`);
+        return;
+      }
+    } else if (isBasicForm) {
       if (!front.trim() || !back.trim()) {
         setError("Front and back are required.");
         return;
@@ -259,24 +290,33 @@ export function CardForm({
         // Only write what actually changed. Walking a selection and hitting
         // "Update Card" on every card would otherwise bump `mod` and re-sync
         // each one even when untouched.
-        const fieldsChanged = isClozeForm
-          ? clozeText !== initialClozeText || backExtra !== initialBackExtra
-          : front !== initialFront || back !== initialBack;
+        const fieldsChanged = customModel
+          ? customFields.some((f) => (customValues[f.name] ?? "") !== f.initial)
+          : isClozeForm
+            ? clozeText !== initialClozeText || backExtra !== initialBackExtra
+            : front !== initialFront || back !== initialBack;
         const tagsChanged =
           [...tags].sort().join(" ") !==
           [...initialTags].sort().join(" ");
         const deckChanged = destDeck !== deckName;
 
         if (fieldsChanged) {
-          if (isClozeForm) {
-            await ankiFetch("updateNoteFields", {
-              note: { id: note.noteId, fields: { Text: clozeText, "Back Extra": backExtra } },
-            });
+          let fields: Record<string, string>;
+          if (customModel) {
+            // Only send the fields that actually changed.
+            fields = {};
+            for (const f of customFields) {
+              const value = customValues[f.name] ?? "";
+              if (value !== f.initial) fields[f.name] = value;
+            }
+          } else if (isClozeForm) {
+            fields = { Text: clozeText, "Back Extra": backExtra };
           } else {
-            await ankiFetch("updateNoteFields", {
-              note: { id: note.noteId, fields: { [frontKey]: front, [backKey]: back } },
-            });
+            fields = { [frontKey]: front, [backKey]: back };
           }
+          await ankiFetch("updateNoteFields", {
+            note: { id: note.noteId, fields },
+          });
         }
         if (tagsChanged) {
           for (const tag of note.tags) {
@@ -305,7 +345,15 @@ export function CardForm({
         }
         if (fieldsChanged || tagsChanged || deckChanged) {
           const updatedFields = { ...note.fields };
-          if (isClozeForm) {
+          if (customModel) {
+            for (const f of customFields) {
+              if (updatedFields[f.name])
+                updatedFields[f.name] = {
+                  ...updatedFields[f.name],
+                  value: customValues[f.name] ?? "",
+                };
+            }
+          } else if (isClozeForm) {
             if (updatedFields.Text)
               updatedFields.Text = { ...updatedFields.Text, value: clozeText };
             if (updatedFields["Back Extra"])
@@ -463,20 +511,49 @@ export function CardForm({
             <label className="mb-1.5 block text-sm font-medium text-foreground/70">
               Type
             </label>
-            <select
-              value={cardType}
-              onChange={(e) => changeCardType(e.target.value as CardType)}
-              className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
-            >
-              {CARD_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            {customModel ? (
+              // A custom note type can't be remapped onto our curated types
+              // without losing fields, so the type is shown but not editable.
+              <div className="w-full rounded-md border border-foreground/10 bg-foreground/[0.03] px-2 py-1.5 text-sm text-foreground/70">
+                {note?.modelName}
+              </div>
+            ) : (
+              <select
+                value={cardType}
+                onChange={(e) => changeCardType(e.target.value as CardType)}
+                className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+              >
+                {CARD_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {isBasicForm ? (
+          {customModel ? (
+            customFields.map((f) => {
+              const isClozeField =
+                f.name === "Text" ||
+                /\{\{c\d+::/.test(customValues[f.name] ?? "");
+              return (
+                <div key={f.name}>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                    {f.name}
+                  </label>
+                  <CardEditor
+                    content={customValues[f.name] ?? ""}
+                    onChange={(v) =>
+                      setCustomValues((prev) => ({ ...prev, [f.name]: v }))
+                    }
+                    placeholder={`${f.name}…`}
+                    clozeMode={isClozeField}
+                  />
+                </div>
+              );
+            })
+          ) : isBasicForm ? (
             <>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground/70">

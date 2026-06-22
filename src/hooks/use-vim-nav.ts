@@ -1,14 +1,18 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 
 interface UseVimNavOptions {
-  back?: string;
   enabled?: boolean;
+  /** `l` / `→` on the focused item — e.g. expand a deck in a tree. */
+  onExpand?: (focused: HTMLElement) => void;
+  /** `h` / `←` on the focused item — e.g. collapse a deck or move to its parent. */
+  onCollapse?: (focused: HTMLElement) => void;
 }
 
-export function useVimNav({ back, enabled = true }: UseVimNavOptions = {}) {
-  const navigate = useNavigate();
-
+export function useVimNav({
+  enabled = true,
+  onExpand,
+  onCollapse,
+}: UseVimNavOptions = {}) {
   useEffect(() => {
     if (!enabled) return;
 
@@ -47,11 +51,11 @@ export function useVimNav({ back, enabled = true }: UseVimNavOptions = {}) {
         el.scrollIntoView({ block: "nearest" });
       };
 
-      if (e.key === "j") {
+      if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
         clearGPending();
         focus(currentIndex < 0 ? 0 : Math.min(currentIndex + 1, items.length - 1));
-      } else if (e.key === "k") {
+      } else if (e.key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
         clearGPending();
         focus(currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0));
@@ -68,10 +72,24 @@ export function useVimNav({ back, enabled = true }: UseVimNavOptions = {}) {
           gPending = true;
           gTimer = setTimeout(clearGPending, 500);
         }
-      } else if (e.key === "h" && back !== undefined) {
-        e.preventDefault();
-        clearGPending();
-        navigate(back);
+      } else if (e.key === "l" || e.key === "ArrowRight") {
+        if (onExpand && active && currentIndex >= 0) {
+          e.preventDefault();
+          clearGPending();
+          onExpand(active);
+        } else {
+          clearGPending();
+        }
+      } else if (e.key === "h" || e.key === "ArrowLeft") {
+        // h/← collapses the focused row in a tree (via onCollapse). It never
+        // navigates — these are list keys only, not a "go back" shortcut.
+        if (onCollapse && active && currentIndex >= 0) {
+          e.preventDefault();
+          clearGPending();
+          onCollapse(active);
+        } else {
+          clearGPending();
+        }
       } else {
         clearGPending();
       }
@@ -82,5 +100,5 @@ export function useVimNav({ back, enabled = true }: UseVimNavOptions = {}) {
       window.removeEventListener("keydown", handleKey);
       clearGPending();
     };
-  }, [navigate, back, enabled]);
+  }, [enabled, onExpand, onCollapse]);
 }
