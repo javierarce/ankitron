@@ -1,9 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
   extractSoundFilenames,
+  mediaFilenameFromSrc,
   resolveCardAudio,
   stripSoundTags,
 } from "./audio";
+
+describe("mediaFilenameFromSrc", () => {
+  it("returns bare collection-media filenames", () => {
+    expect(mediaFilenameFromSrc("karte.jpg")).toBe("karte.jpg");
+    expect(mediaFilenameFromSrc("img/bayern.png")).toBe("img/bayern.png");
+  });
+
+  it("decodes percent-escapes to Anki's real filename", () => {
+    expect(mediaFilenameFromSrc("My%20Karte.jpg")).toBe("My Karte.jpg");
+  });
+
+  it("ignores URLs the browser can already load", () => {
+    expect(mediaFilenameFromSrc("https://example.com/a.png")).toBeNull();
+    expect(mediaFilenameFromSrc("data:image/png;base64,AAAA")).toBeNull();
+    expect(mediaFilenameFromSrc("blob:abc")).toBeNull();
+    expect(mediaFilenameFromSrc("//cdn/x.png")).toBeNull();
+  });
+
+  it("ignores empty/whitespace src", () => {
+    expect(mediaFilenameFromSrc("")).toBeNull();
+    expect(mediaFilenameFromSrc("   ")).toBeNull();
+  });
+});
 
 describe("extractSoundFilenames", () => {
   it("collects filenames across fields in Anki field order", () => {

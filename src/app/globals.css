@@ -227,6 +227,27 @@ select {
   font-style: italic;
 }
 
+/* Image selection ring in the rich editor. ProseMirror toggles
+   `.ProseMirror-selectednode` on the selected node; scope it to the focused
+   editor so opening the form — where each field's editor can start with its
+   sole image node-selected — doesn't ring every image at once. */
+.tiptap.ProseMirror-focused .ProseMirror-selectednode {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* When a node (e.g. an image) is selected, ProseMirror adds this class to
+   suppress the browser's native selection highlight so the outline ring above
+   is the only affordance. The rules that do the suppressing ship in
+   prosemirror-view's stylesheet, which we don't import — so define them here. */
+.tiptap.ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+.tiptap.ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
 /* Cloze deletions: Anki ships them as blue, which is hard to read in dark mode. */
 .cloze {
   color: #2563eb; /* blue-600 */
