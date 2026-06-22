@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ankitron — Study Anki decks on your Mac</title>
+    <meta
+      name="description"
+      content="A simple, lightweight Mac app for managing and studying Anki decks."
+    />
+    <link rel="icon" href="https://github.com/javierarce/ankitron/raw/main/src-tauri/icons/32x32.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Ankitron" />
+    <meta
+      property="og:description"
+      content="A simple, lightweight Mac app for managing and studying Anki decks."
+    />
+    <meta
+      property="og:image"
+      content="https://github.com/user-attachments/assets/9e1f1988-b034-401d-a482-b2b7a6158032"
+    />
+    <meta property="og:type" content="website" />
+
+    <!-- Geist, matching the app's --font-sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* Mirror the app's theme tokens (see src/app/globals.css). The theme is
+         driven by a .dark class on <html>, toggled by the button below. */
+      :root {
+        --background: #ffffff;
+        --foreground: #171717;
+      }
+
+      :root.dark {
+        --background: #0a0a0a;
+        --foreground: #ededed;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2.5rem;
+        padding: 4rem 1.5rem;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-align: center;
+        transition: background-color 0.35s ease, color 0.35s ease;
+      }
+
+      /* Ease the themed text colors when switching modes (transition isn't
+         inherited, so each element that reads a theme token needs its own). */
+      .brand h1,
+      .tagline,
+      .version,
+      .version a,
+      .prereq,
+      .prereq a {
+        transition: color 0.35s ease;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .brand img {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .tagline {
+        max-width: 34rem;
+        margin: -1rem 0 0;
+        font-size: 1.125rem;
+        line-height: 1.6;
+        color: color-mix(in srgb, var(--foreground) 65%, transparent);
+        /* Balance the wrap so no single word is left orphaned on its own line. */
+        text-wrap: balance;
+      }
+
+      /* Centered screenshot slideshow */
+      .shot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.25rem;
+        width: 100%;
+        max-width: 64rem; /* matches the app's .app-row max-width */
+      }
+
+      .slides {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 2524 / 1732; /* all screenshots share this ratio */
+        user-select: none;
+        transition: opacity 0.2s ease; /* crossfade the screenshot on theme change */
+      }
+
+      .slide {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        /* The screenshots carry their own border and rounded corners (with
+           transparent corner pixels), so drop-shadow — which follows the
+           image's actual shape — instead of a rectangular box-shadow. */
+        filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.18));
+        opacity: 0;
+        transition: opacity 0.5s ease;
+      }
+
+      .slide.active {
+        opacity: 1;
+      }
+
+      /* Click zones over the screenshot: left half goes back, right half
+         advances. Custom chevron cursors hint the direction. */
+      .nav-zone {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 50%;
+        border: none;
+        background: transparent;
+        padding: 0;
+      }
+
+      .nav-zone.prev {
+        left: 0;
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 34 34'%3E%3Cpath d='M21 8l-9 9 9 9' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M21 8l-9 9 9 9' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+            17 17,
+          w-resize;
+      }
+
+      .nav-zone.next {
+        right: 0;
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 34 34'%3E%3Cpath d='M13 8l9 9-9 9' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M13 8l9 9-9 9' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+            17 17,
+          e-resize;
+      }
+
+      .dots {
+        display: flex;
+        gap: 0.625rem;
+      }
+
+      .dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        padding: 0;
+        border: none;
+        border-radius: 9999px;
+        background: color-mix(in srgb, var(--foreground) 22%, transparent);
+        cursor: pointer;
+        transition: background-color 0.2s, transform 0.2s;
+      }
+
+      .dot:hover {
+        background: color-mix(in srgb, var(--foreground) 45%, transparent);
+      }
+
+      .dot.active {
+        background: var(--foreground);
+        transform: scale(1.15);
+      }
+
+      /* Light/dark toggle, pinned to the top-right corner. */
+      .theme-toggle {
+        position: fixed;
+        top: 1.25rem;
+        right: 1.25rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+        border-radius: 9999px;
+        background: color-mix(in srgb, var(--background) 70%, transparent);
+        color: color-mix(in srgb, var(--foreground) 70%, transparent);
+        cursor: pointer;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+      }
+
+      .theme-toggle:hover {
+        color: var(--foreground);
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+      }
+
+      .theme-toggle svg {
+        width: 1.125rem;
+        height: 1.125rem;
+      }
+
+      /* Show the icon for the mode you'd switch to: moon in light, sun in dark. */
+      .theme-toggle .icon-sun {
+        display: none;
+      }
+
+      :root.dark .theme-toggle .icon-sun {
+        display: block;
+      }
+
+      :root.dark .theme-toggle .icon-moon {
+        display: none;
+      }
+
+      .actions {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      /* Primary button — same recipe as the app's:
+         rounded-lg bg-foreground px-... py-... font-medium text-background */
+      .download {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        background: var(--foreground);
+        color: var(--background);
+        font-size: 0.95rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: opacity 0.15s, transform 0.1s,
+          background-color 0.35s ease, color 0.35s ease;
+      }
+
+      .download:hover {
+        opacity: 0.9;
+      }
+
+      .download:active {
+        transform: scale(0.98);
+      }
+
+      .version {
+        font-size: 0.8125rem;
+        color: color-mix(in srgb, var(--foreground) 50%, transparent);
+      }
+
+      .version a {
+        color: inherit;
+      }
+
+      .prereq {
+        max-width: 34rem;
+        margin: 0;
+        font-size: 0.8125rem;
+        line-height: 1.6;
+        color: color-mix(in srgb, var(--foreground) 50%, transparent);
+      }
+
+      .prereq a {
+        color: inherit;
+      }
+    </style>
+
+    <!-- Apply the saved (or system-default) theme before first paint to avoid a
+         flash of the wrong colors. The toggle only ever stores light/dark. -->
+    <script>
+      (function () {
+        try {
+          var t =
+            localStorage.getItem("theme") ||
+            (window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light");
+          if (t === "dark") document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+
+  <body>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light or dark mode">
+      <svg
+        class="icon-moon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      </svg>
+      <svg
+        class="icon-sun"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="5" />
+        <path
+          d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+        />
+      </svg>
+    </button>
+
+    <div class="brand">
+      <img
+        src="https://github.com/javierarce/ankitron/raw/main/src-tauri/icons/128x128@2x.png"
+        alt="Ankitron icon"
+      />
+      <h1>Ankitron</h1>
+    </div>
+
+    <p class="tagline">
+      A simple, lightweight Mac app for managing and studying Anki decks.
+    </p>
+
+    <div class="shot">
+      <div class="slides" id="slides">
+        <img class="slide active" data-shot="study" alt="Study view" />
+        <img class="slide" data-shot="decks" alt="Decks view" />
+        <img class="slide" data-shot="deck" alt="Deck detail view" />
+        <img class="slide" data-shot="study-session" alt="Study session" />
+        <img class="slide" data-shot="settings" alt="Settings" />
+        <button class="nav-zone prev" type="button" aria-label="Previous screenshot"></button>
+        <button class="nav-zone next" type="button" aria-label="Next screenshot"></button>
+      </div>
+      <div class="dots" id="dots" role="tablist" aria-label="Screenshots"></div>
+    </div>
+
+    <div class="actions">
+      <a
+        class="download"
+        href="https://github.com/javierarce/ankitron/releases/latest/download/Ankitron.dmg"
+      >
+        Download for macOS
+      </a>
+      <p class="version">
+        Version <span id="version">0.33.0</span> ·
+        <a href="https://github.com/javierarce/ankitron/releases/latest"
+          >Release notes</a
+        >
+      </p>
+    </div>
+
+    <p class="prereq">
+      Requires the
+      <a href="https://apps.ankiweb.net">Anki desktop</a> app and the
+      <a href="https://ankiweb.net/shared/info/2055492159">AnkiConnect</a>
+      add-on.<br />
+      Ankitron is an unofficial third-party app and is not affiliated with the
+      official Anki project.
+    </p>
+
+    <script>
+      // --- Theme: manual light/dark toggle, persisted. No "system" option;
+      // the system preference is only the first-visit default. ---
+      const root = document.documentElement;
+      const slideEls = Array.from(document.querySelectorAll(".slide"));
+      const slidesBox = document.getElementById("slides");
+
+      const applyTheme = (theme) => {
+        root.classList.toggle("dark", theme === "dark");
+        // Swap each slideshow image to the theme-matched screenshot.
+        slideEls.forEach((img) => {
+          img.src = "screenshots/" + theme + "/" + img.dataset.shot + ".png";
+        });
+      };
+
+      let theme =
+        localStorage.getItem("theme") ||
+        (window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light");
+      applyTheme(theme); // initial paint — no animation
+
+      document.getElementById("theme-toggle").addEventListener("click", () => {
+        theme = root.classList.contains("dark") ? "light" : "dark";
+        localStorage.setItem("theme", theme);
+        // Crossfade the screenshot over the swap while the page colors ease.
+        slidesBox.style.opacity = "0";
+        setTimeout(() => {
+          applyTheme(theme);
+          slidesBox.style.opacity = "1";
+        }, 200);
+      });
+
+      // --- Screenshot slideshow: build a dot per slide, crossfade between them,
+      // and auto-advance until the visitor takes control. ---
+      (function () {
+        const slides = slideEls;
+        const dotsWrap = document.getElementById("dots");
+        let current = 0;
+        let timer;
+
+        const show = (i) => {
+          current = (i + slides.length) % slides.length;
+          slides.forEach((s, n) => s.classList.toggle("active", n === current));
+          dots.forEach((d, n) => {
+            const on = n === current;
+            d.classList.toggle("active", on);
+            d.setAttribute("aria-selected", on ? "true" : "false");
+          });
+        };
+
+        const dots = slides.map((slide, i) => {
+          const dot = document.createElement("button");
+          dot.className = "dot" + (i === 0 ? " active" : "");
+          dot.type = "button";
+          dot.setAttribute("role", "tab");
+          dot.setAttribute("aria-label", slide.alt);
+          dot.addEventListener("click", () => {
+            clearInterval(timer); // hand control to the visitor
+            show(i);
+          });
+          dotsWrap.appendChild(dot);
+          return dot;
+        });
+
+        // Left half goes back, right half advances (both cycle). Each is its
+        // own button with a directional cursor; a click hands control over.
+        const step = (delta) => {
+          clearInterval(timer);
+          show(current + delta);
+        };
+        document
+          .querySelector(".nav-zone.prev")
+          .addEventListener("click", () => step(-1));
+        document
+          .querySelector(".nav-zone.next")
+          .addEventListener("click", () => step(1));
+        // Don't let a drag select or ghost-drag the screenshot.
+        document
+          .getElementById("slides")
+          .addEventListener("dragstart", (e) => e.preventDefault());
+
+        timer = setInterval(() => show(current + 1), 4000);
+      })();
+
+      // Keep the version label in sync with the latest GitHub release. Falls
+      // back to the hardcoded version above if the request fails (e.g. offline
+      // or rate-limited).
+      fetch("https://api.github.com/repos/javierarce/ankitron/releases/latest")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data && data.tag_name) {
+            document.getElementById("version").textContent =
+              data.tag_name.replace(/^v/, "");
+          }
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>
