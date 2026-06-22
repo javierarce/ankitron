@@ -399,12 +399,16 @@
       const slideEls = Array.from(document.querySelectorAll(".slide"));
       const slidesBox = document.getElementById("slides");
 
-      const applyTheme = (theme) => {
-        root.classList.toggle("dark", theme === "dark");
-        // Swap each slideshow image to the theme-matched screenshot.
+      // Swap each slideshow image to the theme-matched screenshot.
+      const swapShots = (theme) => {
         slideEls.forEach((img) => {
           img.src = "screenshots/" + theme + "/" + img.dataset.shot + ".png";
         });
+      };
+
+      const applyTheme = (theme) => {
+        root.classList.toggle("dark", theme === "dark");
+        swapShots(theme);
       };
 
       let theme =
@@ -417,21 +421,22 @@
       document.getElementById("theme-toggle").addEventListener("click", () => {
         theme = root.classList.contains("dark") ? "light" : "dark";
         localStorage.setItem("theme", theme);
-        // Crossfade the screenshot over the swap while the page colors ease.
+        // Start the page-color ease and the screenshot fade-out together, then
+        // swap the screenshot at the fade's midpoint and fade it back in.
+        root.classList.toggle("dark", theme === "dark");
         slidesBox.style.opacity = "0";
         setTimeout(() => {
-          applyTheme(theme);
+          swapShots(theme);
           slidesBox.style.opacity = "1";
         }, 200);
       });
 
-      // --- Screenshot slideshow: build a dot per slide, crossfade between them,
-      // and auto-advance until the visitor takes control. ---
+      // --- Screenshot slideshow: build a dot per slide and crossfade between
+      // them. Advancing is visitor-driven (dots and side click zones). ---
       (function () {
         const slides = slideEls;
         const dotsWrap = document.getElementById("dots");
         let current = 0;
-        let timer;
 
         const show = (i) => {
           current = (i + slides.length) % slides.length;
@@ -449,20 +454,14 @@
           dot.type = "button";
           dot.setAttribute("role", "tab");
           dot.setAttribute("aria-label", slide.alt);
-          dot.addEventListener("click", () => {
-            clearInterval(timer); // hand control to the visitor
-            show(i);
-          });
+          dot.addEventListener("click", () => show(i));
           dotsWrap.appendChild(dot);
           return dot;
         });
 
         // Left half goes back, right half advances (both cycle). Each is its
-        // own button with a directional cursor; a click hands control over.
-        const step = (delta) => {
-          clearInterval(timer);
-          show(current + delta);
-        };
+        // own button with a directional cursor.
+        const step = (delta) => show(current + delta);
         document
           .querySelector(".nav-zone.prev")
           .addEventListener("click", () => step(-1));
@@ -474,7 +473,11 @@
           .getElementById("slides")
           .addEventListener("dragstart", (e) => e.preventDefault());
 
-        timer = setInterval(() => show(current + 1), 4000);
+        // Left/right arrow keys mirror the side click zones.
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowLeft") step(-1);
+          else if (e.key === "ArrowRight") step(1);
+        });
       })();
 
       // Keep the version label in sync with the latest GitHub release. Falls
