@@ -110,7 +110,7 @@ export function ImportTargetDialog({
             {formatDeckPath(parsed.deckName)}
           </strong>{" "}
           · {parsed.notes.length}{" "}
-          {parsed.notes.length === 1 ? "card" : "cards"}
+          {parsed.notes.length === 1 ? "note" : "notes"}
         </p>
 
         <div className="space-y-3 text-sm">
@@ -189,8 +189,8 @@ export function ImportTargetDialog({
 
           <p className="rounded-md bg-foreground/5 px-3 py-2 text-xs text-foreground/60">
             {willMatchByNoteId
-              ? "Cards with matching noteIds will be updated; new ones added."
-              : "All cards will be added as new — noteId matching is skipped for cross-deck imports."}
+              ? "Notes with matching noteIds will be updated; new ones added."
+              : "All notes will be added as new — noteId matching is skipped for cross-deck imports."}
           </p>
         </div>
 

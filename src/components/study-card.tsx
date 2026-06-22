@@ -391,7 +391,7 @@ export function StudyCard({
                 onEdit();
               }}
               className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 rounded-md p-1.5 text-foreground/30 hover:text-foreground/60 hover:bg-foreground/5 transition-all"
-              title="Edit card (e)"
+              title="Edit note (e)"
             >
               <PencilSimple size={18} weight="regular" />
             </button>

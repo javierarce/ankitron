@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DeckList } from "@/components/deck-list";
+import { FullScreenSpinner } from "@/components/full-screen-spinner";
 import { StudySummary } from "@/components/study-summary";
 import { useSync } from "@/lib/sync-context";
 import {
@@ -12,12 +13,19 @@ import type { DueCounts, StudyStats } from "@/lib/types";
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+// The first home load of a session happens during app startup, right after the
+// layout's "Starting Anki…" spinner — so it reuses that same full-screen
+// spinner to read as one continuous launch. Later visits to this tab use a
+// lightweight in-content spinner instead of re-covering the whole app chrome.
+let hasLoadedOnce = false;
+
 export function HomePage() {
   const [decks, setDecks] = useState<string[]>([]);
   const [dueCounts, setDueCounts] = useState<Record<string, DueCounts>>({});
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isFirstLoad] = useState(() => !hasLoadedOnce);
   const { syncedAt, registerPageLoad } = useSync();
 
   // While our blocking spinner is up, suppress the corner sync indicator so the
@@ -36,14 +44,21 @@ export function HomePage() {
         setDecks(deckNames);
 
         if (deckNames.length > 0) {
-          const [counts, stats] = await Promise.all([
-            fetchAllDueCounts(deckNames),
-            // Stats are non-critical — never fail the page over them.
-            fetchTodayStudyStats(deckNames).catch(() => null),
-          ]);
+          // Today's-study summary is non-critical and still costs one
+          // cardReviews request per deck — the last per-deck fan-out. Fire it
+          // off but don't await it, so the spinner clears as soon as the
+          // (batched) due counts land; the footer pops in when it's ready.
+          fetchTodayStudyStats(deckNames)
+            .then((stats) => {
+              if (!cancelled) setStudyStats(stats);
+            })
+            .catch(() => {
+              // Non-critical — leave the summary hidden rather than failing.
+            });
+
+          const counts = await fetchAllDueCounts(deckNames);
           if (cancelled) return;
           setDueCounts(counts);
-          setStudyStats(stats);
         }
         // Clear any earlier failure so a recovered background refetch (on a
         // syncedAt bump) drops the "Anki isn't connected" overlay.
@@ -53,6 +68,7 @@ export function HomePage() {
         if (!cancelled) setHasError(true);
       } finally {
         if (!cancelled) setLoading(false);
+        hasLoadedOnce = true;
       }
     }
 
@@ -65,7 +81,11 @@ export function HomePage() {
   }, [syncedAt]);
 
   if (loading) {
-    return (
+    // Boot load: keep the launch spinner up. Later visits: a small in-content
+    // spinner so the tab doesn't blank out the whole app on every navigation.
+    return isFirstLoad ? (
+      <FullScreenSpinner label="Starting Anki…" />
+    ) : (
       <div className="flex min-h-[calc(100dvh-10rem)] items-center justify-center">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
       </div>

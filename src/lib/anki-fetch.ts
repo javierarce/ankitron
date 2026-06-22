@@ -97,24 +97,18 @@ export async function fetchTodayStudyStats(
 
 /**
  * Number of notes in each deck, including its subdecks (Anki's `deck:` search
- * matches descendants), fetched in parallel. We count notes rather than cards so
- * the figure matches the deck detail page, which lists one row per note — a
- * "Basic (and reversed card)" note is one row here, not two.
+ * matches descendants). We count notes — not cards — so this matches the
+ * deck-detail page, which lists one row per note: the count on the deck list
+ * agrees with what you see after opening the deck. (Cards are reserved for
+ * scheduling/study, where the unit genuinely is the card.) There's no bulk
+ * per-deck note count, so this is one `findNotes` per deck; the Decks page
+ * fetches it off its critical path (see decks.tsx) to stay instant.
  */
-export async function fetchAllCardCounts(
+export async function fetchAllNoteCounts(
   deckNames: string[],
 ): Promise<Record<string, number>> {
   const results = await Promise.all(
-    deckNames.map(async (deck) => {
-      try {
-        const ids = await ankiFetch<number[]>("findNotes", {
-          query: `deck:"${deck}"`,
-        });
-        return { deck, count: ids.length };
-      } catch {
-        return { deck, count: 0 };
-      }
-    }),
+    deckNames.map(async (deck) => ({ deck, count: await fetchNoteCount(deck) })),
   );
   const counts: Record<string, number> = {};
   for (const { deck, count } of results) {
@@ -123,16 +117,77 @@ export async function fetchAllCardCounts(
   return counts;
 }
 
-/** Fetch due counts for multiple decks in parallel. */
+/**
+ * Notes in a single deck, including its subdecks (`deck:` matches descendants).
+ * Returns 0 on failure so a count never blocks or breaks the caller. Used both
+ * by the bulk count above and, on demand, by the delete-deck confirmation when
+ * it opens before the bulk counts have loaded.
+ */
+export async function fetchNoteCount(deckName: string): Promise<number> {
+  try {
+    const ids = await ankiFetch<number[]>("findNotes", {
+      query: `deck:"${deckName}"`,
+    });
+    return ids.length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Due counts for many decks in a single round trip. getDeckStats accepts every
+ * deck at once and returns a map keyed by deck id; each entry's `name` is only
+ * the leaf, so we resolve ids back to full deck paths via deckNamesAndIds. This
+ * replaces a per-deck fan-out — since AnkiConnect serialises requests on Anki's
+ * main thread, that grew linearly with the number of decks; this stays at two
+ * requests no matter how many decks (or subdecks) exist.
+ */
 export async function fetchAllDueCounts(
   deckNames: string[],
 ): Promise<Record<string, DueCounts>> {
-  const results = await Promise.all(
-    deckNames.map(async (deck) => ({ deck, due: await fetchDueCount(deck) })),
-  );
+  // Zero-initialise so a missing entry (or an outright failure) leaves the deck
+  // list intact with blank counts rather than dropping rows.
   const counts: Record<string, DueCounts> = {};
-  for (const { deck, due } of results) {
-    counts[deck] = due;
+  for (const deck of deckNames) {
+    counts[deck] = { new: 0, learn: 0, review: 0 };
   }
+
+  try {
+    const [stats, namesAndIds] = await Promise.all([
+      ankiFetch<
+        Record<
+          string,
+          {
+            deck_id: number;
+            new_count: number;
+            learn_count: number;
+            review_count: number;
+          }
+        >
+      >("getDeckStats", { decks: deckNames }),
+      ankiFetch<Record<string, number>>("deckNamesAndIds"),
+    ]);
+
+    // getDeckStats keys by deck id and only gives the leaf name; invert
+    // deckNamesAndIds (fullName -> id) to recover each entry's full path.
+    const nameById = new Map<number, string>();
+    for (const [name, id] of Object.entries(namesAndIds)) {
+      nameById.set(id, name);
+    }
+
+    for (const s of Object.values(stats)) {
+      const name = nameById.get(s.deck_id);
+      if (name && name in counts) {
+        counts[name] = {
+          new: s.new_count ?? 0,
+          learn: s.learn_count ?? 0,
+          review: s.review_count ?? 0,
+        };
+      }
+    }
+  } catch {
+    // Keep the zero-initialised counts — a stats failure shouldn't blank the page.
+  }
+
   return counts;
 }

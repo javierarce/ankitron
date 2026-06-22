@@ -75,8 +75,8 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
       if (cardIds.length === 0) {
         throw new Error(
           count === 1
-            ? "Could not find the card to move."
-            : "Could not find the cards to move."
+            ? "Could not find the note to move."
+            : "Could not find the notes to move."
         );
       }
       if (creating) {
@@ -93,7 +93,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
         window.location.reload();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to move card");
+      setError(err instanceof Error ? err.message : "Failed to move note");
       setMoving(false);
     }
   }
@@ -107,7 +107,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
     >
       <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
         <h3 className="mb-1 text-lg font-semibold">
-          {count === 1 ? "Move Card" : `Move ${count} Cards`}
+          {count === 1 ? "Move Note" : `Move ${count} Notes`}
         </h3>
         <p className="mb-4 text-sm text-foreground/50">
           From{" "}

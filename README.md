@@ -3,7 +3,7 @@
 [![Latest release](https://img.shields.io/github/v/release/javierarce/ankitron?label=latest%20release)](https://github.com/javierarce/ankitron/releases/latest)
 
 
-A simple, lightweight Mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Browse decks, create and edit cards, and run study sessions in a simple and clean interface.
+A simple, lightweight Mac app for managing and studying [Anki](https://apps.ankiweb.net) decks. Browse decks, create and edit notes, and run study sessions in a simple and clean interface.
 
 <img width="2800" height="2048" alt="image" src="https://github.com/user-attachments/assets/9e1f1988-b034-401d-a482-b2b7a6158032" />
 
@@ -13,23 +13,23 @@ A simple, lightweight Mac app for managing and studying [Anki](https://apps.anki
 - Browse all decks with new/learning/review due counts.
 - Create, rename, and move decks and subdecks.
 
-**Cards**
-- Create, edit, and delete cards in four note types: Basic, Basic (and reversed), Cloze, and Cloze (typed)
+**Notes**
+- Create, edit, and delete notes in four note types: Basic, Basic (and reversed), Cloze, and Cloze (typed)
 - Rich-text editor with bold, italic, lists, image insertion, and a cloze helper (with hints)
 - Toggle a raw HTML source view to edit the underlying markup
 - Add and remove tags
 - Suspend and unsuspend cards
-- Bulk-select cards to delete, move, suspend, or edit them one at a time in sequence
+- Bulk-select notes to delete, move, suspend, or edit them one at a time in sequence
 
 **Audio & speech**
 - `[sound:…]` audio plays during study — automatically and via inline play buttons (`R` to replay)
-- Attach audio to a card by dragging a file onto the editor or picking one
+- Attach audio to a note by dragging a file onto the editor or picking one
 - Select text on a card to have it read aloud (text-to-speech) in a configurable primary/secondary language
 
 **Sync, import & more**
 - JSON import/export — edit decks offline and re-import them to update existing notes or add new ones (see the [deck file format](docs/deck-file-format.md))
 - Manual "Sync now", plus automatic sync on launch and after each session
-- Command palette (`Cmd`/`Ctrl-K`) to jump between decks or add a card, with vim-style `j`/`k` navigation throughout
+- Command palette (`Cmd`/`Ctrl-K`) to jump between decks or add a note, with vim-style `j`/`k` navigation throughout
 - Light/dark theme toggle with system-preference detection
 - Built-in update checks.
 
@@ -55,7 +55,7 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 | Shortcut | Action |
 | --- | --- |
 | `Cmd` + `K` | Open the command palette |
-| `Cmd` + `N` | New card |
+| `Cmd` + `N` | New note |
 
 ## Command palette (when open)
 
@@ -81,16 +81,16 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 | --- | --- |
 | `Cmd` + `F` or `/` | Focus the search box |
 
-## Card list (deck detail)
+## Note list (deck detail)
 
 | Shortcut | Action |
 | --- | --- |
 | `Cmd` + `F` or `/` | Focus the search box |
-| `Cmd` + `A` | Select all cards |
-| `Space` | Toggle selection of the focused card |
+| `Cmd` + `A` | Select all notes |
+| `Space` | Toggle selection of the focused note |
 | `Shift` + `J` / `Shift` + `K` | Move down/up, extending the selection |
-| `a` | Add a new card |
-| `e` | Edit the selected cards in sequence (or the focused card if none are selected) |
+| `a` | Add a new note |
+| `e` | Edit the selected notes in sequence (or the focused note if none are selected) |
 
 
 ## Study session
@@ -101,8 +101,8 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 | `1` | Grade **Fail** (after reveal) |
 | `Space` or `2` | Grade **Pass** (after reveal) |
 | `r` | Play the card's audio (answer side once revealed, otherwise the question) |
-| `e` | Edit the current card |
-| `a` | Add a card to the session |
+| `e` | Edit the current note |
+| `a` | Add a note to the session |
 | `h` | Return to the deck |
 | `Cmd` + `Z` | Undo the last review |
 

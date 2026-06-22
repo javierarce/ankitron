@@ -20,7 +20,7 @@ type Item =
   | { kind: "deck"; label: string; deck: string };
 
 const ACTIONS: { id: ActionId; label: string; keywords: string }[] = [
-  { id: "new-card", label: "New card…", keywords: "new card add card" },
+  { id: "new-card", label: "New note…", keywords: "new note add note new card add card" },
   {
     id: "settings",
     label: "Settings",
@@ -33,7 +33,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("search");
   // True only when the deck picker was reached from the search step (via the
-  // "New card…" action), so Esc has a previous step to return to. When the
+  // "New note…" action), so Esc has a previous step to return to. When the
   // picker is opened directly (cmd+N) there's no step to go back to.
   const [deckPickFromSearch, setDeckPickFromSearch] = useState(false);
   const [query, setQuery] = useState("");
@@ -200,7 +200,7 @@ export function CommandPalette() {
                 }}
                 onKeyDown={onKeyDown}
                 placeholder={
-                  mode === "search" ? "Search decks or actions\u2026" : "Pick a deck for the new card\u2026"
+                  mode === "search" ? "Search decks or actions\u2026" : "Pick a deck for the new note\u2026"
                 }
                 className="w-full bg-transparent py-3 text-sm placeholder:text-foreground/40 focus:outline-none"
               />
@@ -240,7 +240,7 @@ export function CommandPalette() {
                           {item.kind === "action"
                             ? item.id === "settings"
                               ? "open"
-                              : "new card"
+                              : "new note"
                             : mode === "pickDeckForCard"
                               ? "add here"
                               : "go"}

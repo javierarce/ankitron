@@ -141,7 +141,7 @@ export function DeckDetailPage() {
         if (cancelled) return;
         await refreshDue();
       } catch {
-        if (!cancelled) setError("Could not load cards. Make sure Anki is running.");
+        if (!cancelled) setError("Could not load notes. Make sure Anki is running.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -176,7 +176,7 @@ export function DeckDetailPage() {
             onClick={() => setShowAddForm(true)}
             className="rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
           >
-            Add card
+            Add note
           </button>
           {totalDue > 0 ? (
             <Link

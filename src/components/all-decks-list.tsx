@@ -43,12 +43,12 @@ function buildDeckTree(decks: string[]): DeckNode[] {
 
 interface AllDecksListProps {
   decks: string[];
-  cardCounts: Record<string, number>;
-  /** Re-fetch decks/counts after a change (e.g. a card added from the menu). */
+  noteCounts: Record<string, number>;
+  /** Re-fetch decks/counts after a change (e.g. a note added from the menu). */
   onRefresh: () => void;
 }
 
-export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps) {
+export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -151,14 +151,16 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
     (d) => d.toLowerCase() === trimmedNewName.toLowerCase(),
   );
 
-  // cardCounts comes from a recursive `deck:` search, so a deck's own entry
-  // already includes every subdeck — use it directly (summing the subdecks too
-  // would multi-count). It surfaces the hidden total so a parent that looks
-  // "Empty" but holds cards under its children can't be deleted by surprise.
+  // noteCounts already spans subdecks (the `deck:` search matches descendants),
+  // so a deck's own entry is the full total — use it directly. It surfaces the
+  // hidden total so a parent that looks "Empty" but holds notes under its
+  // children can't be deleted by surprise. Counts load after the rows, so this
+  // may be undefined; pass it through and let the dialog count on demand rather
+  // than warning about "0 notes".
   const deletingSubdeckCount = deletingDeck
     ? decks.filter((d) => d.startsWith(deletingDeck + "::")).length
     : 0;
-  const deletingCardTotal = deletingDeck ? cardCounts[deletingDeck] ?? 0 : 0;
+  const deletingNoteTotal = deletingDeck ? noteCounts[deletingDeck] : undefined;
 
   const tree = useMemo(() => buildDeckTree(decks), [decks]);
   const q = query.trim().toLowerCase();
@@ -214,7 +216,7 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
                   <SearchRow
                     key={deck}
                     deck={deck}
-                    count={cardCounts[deck] ?? 0}
+                    count={noteCounts[deck]}
                     onAddCard={() => setAddCardDeck(deck)}
                     onDelete={() => setDeletingDeck(deck)}
                   />
@@ -226,7 +228,7 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
                     depth={0}
                     expanded={expanded}
                     onToggle={toggle}
-                    cardCounts={cardCounts}
+                    noteCounts={noteCounts}
                     onAddCard={setAddCardDeck}
                     onDelete={setDeletingDeck}
                   />
@@ -296,7 +298,7 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
       {deletingDeck && (
         <DeleteDeckDialog
           deckName={deletingDeck}
-          cardCount={deletingCardTotal}
+          noteCount={deletingNoteTotal}
           subdeckCount={deletingSubdeckCount}
           onCancel={() => setDeletingDeck(null)}
           onDeleted={() => {
@@ -309,10 +311,13 @@ export function AllDecksList({ decks, cardCounts, onRefresh }: AllDecksListProps
   );
 }
 
-function CountLabel({ count }: { count: number }) {
+function CountLabel({ count }: { count: number | undefined }) {
+  // Counts load after the deck names. Show nothing until a deck's count arrives
+  // (no placeholder), then fade the number in rather than popping it.
+  if (count === undefined) return null;
   return (
-    <span className="shrink-0 text-sm tabular-nums text-foreground/50">
-      {count === 0 ? "Empty" : `${count} ${count === 1 ? "card" : "cards"}`}
+    <span className="count-fade-in shrink-0 text-sm tabular-nums text-foreground/50">
+      {count === 0 ? "Empty" : `${count} ${count === 1 ? "note" : "notes"}`}
     </span>
   );
 }
@@ -324,7 +329,7 @@ function TreeRows({
   depth,
   expanded,
   onToggle,
-  cardCounts,
+  noteCounts,
   onAddCard,
   onDelete,
 }: {
@@ -332,7 +337,7 @@ function TreeRows({
   depth: number;
   expanded: Set<string>;
   onToggle: (fullName: string) => void;
-  cardCounts: Record<string, number>;
+  noteCounts: Record<string, number>;
   onAddCard: (deck: string) => void;
   onDelete: (deck: string) => void;
 }) {
@@ -365,7 +370,7 @@ function TreeRows({
         >
           {node.name}
         </Link>
-        <CountLabel count={cardCounts[node.fullName] ?? 0} />
+        <CountLabel count={noteCounts[node.fullName]} />
         <DeckRowMenu
           deck={node.fullName}
           onAddCard={() => onAddCard(node.fullName)}
@@ -381,7 +386,7 @@ function TreeRows({
             depth={depth + 1}
             expanded={expanded}
             onToggle={onToggle}
-            cardCounts={cardCounts}
+            noteCounts={noteCounts}
             onAddCard={onAddCard}
             onDelete={onDelete}
           />
@@ -399,7 +404,7 @@ function SearchRow({
   onDelete,
 }: {
   deck: string;
-  count: number;
+  count: number | undefined;
   onAddCard: () => void;
   onDelete: () => void;
 }) {
@@ -512,7 +517,7 @@ function DeckRowMenu({
               }}
               className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
             >
-              Add a card
+              Add a note
             </button>
             <button
               onClick={() => {

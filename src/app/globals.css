@@ -124,6 +124,21 @@ summary {
   background-color: transparent;
 }
 
+/* Decks page note counts load after the rows, so fade each one in when it
+   arrives instead of popping in (or showing a placeholder). */
+@keyframes count-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.count-fade-in {
+  animation: count-fade-in 160ms ease-out;
+}
+
 /* Card rows carry their own selected state (a stronger border + fill). Keep the
    keyboard-focus highlight light so a focused-but-unselected card reads as merely
    hovered, not selected. */

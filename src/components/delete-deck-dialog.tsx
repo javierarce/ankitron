@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConfirmDialog } from "./confirm-dialog";
-import { ankiFetch } from "@/lib/anki-fetch";
-import { deckDeleteMessage } from "@/lib/deck";
+import { ankiFetch, fetchNoteCount } from "@/lib/anki-fetch";
+import { deckDeleteMessage, formatDeckPath } from "@/lib/deck";
 
 interface DeleteDeckDialogProps {
   deckName: string;
-  /** Cards removed by the delete (deck + subdecks), shown in the warning. */
-  cardCount: number;
+  /**
+   * Notes removed by the delete (deck + subdecks), shown in the warning. May be
+   * undefined when the caller hasn't loaded counts yet — the Decks page fetches
+   * them off its critical path, so the dialog can open first. In that case the
+   * dialog counts on demand rather than warning "removes 0 notes" for a deck
+   * that actually has notes.
+   */
+  noteCount?: number;
   /** Subdecks removed alongside it, shown in the warning. */
   subdeckCount: number;
   onCancel: () => void;
@@ -21,12 +27,36 @@ interface DeleteDeckDialogProps {
  */
 export function DeleteDeckDialog({
   deckName,
-  cardCount,
+  noteCount,
   subdeckCount,
   onCancel,
   onDeleted,
 }: DeleteDeckDialogProps) {
   const [deleting, setDeleting] = useState(false);
+  // When the caller didn't pass a count, fetch it on demand so the warning never
+  // understates how much is being destroyed.
+  const [fetchedCount, setFetchedCount] = useState<number | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    if (noteCount !== undefined) return;
+    let cancelled = false;
+    fetchNoteCount(deckName).then((count) => {
+      if (!cancelled) setFetchedCount(count);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deckName, noteCount]);
+
+  const count = noteCount ?? fetchedCount;
+  // While the on-demand count is in flight, warn without asserting a number
+  // rather than flashing a misleading "0 notes".
+  const message =
+    count === undefined
+      ? `Permanently delete “${formatDeckPath(deckName)}” and everything in it? This cannot be undone.`
+      : deckDeleteMessage(deckName, count, subdeckCount);
 
   async function handleDelete() {
     setDeleting(true);
@@ -42,7 +72,7 @@ export function DeleteDeckDialog({
   return (
     <ConfirmDialog
       title="Delete Deck"
-      message={deckDeleteMessage(deckName, cardCount, subdeckCount)}
+      message={message}
       onConfirm={handleDelete}
       onCancel={onCancel}
       loading={deleting}
