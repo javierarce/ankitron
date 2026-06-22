@@ -16,6 +16,12 @@ describe("mediaFilenameFromSrc", () => {
     expect(mediaFilenameFromSrc("My%20Karte.jpg")).toBe("My Karte.jpg");
   });
 
+  it("keeps a percent-encoded colon as a filename, not a scheme", () => {
+    // Anki escapes the colon (illegal in filenames), so the raw src has no
+    // literal `:` to trip the scheme check — it decodes back to the real name.
+    expect(mediaFilenameFromSrc("a%3Ab.jpg")).toBe("a:b.jpg");
+  });
+
   it("ignores URLs the browser can already load", () => {
     expect(mediaFilenameFromSrc("https://example.com/a.png")).toBeNull();
     expect(mediaFilenameFromSrc("data:image/png;base64,AAAA")).toBeNull();
