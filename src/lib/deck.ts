@@ -70,6 +70,20 @@ export function compareDeckPaths(a: string, b: string): number {
   return as.length - bs.length;
 }
 
+/**
+ * The minimal set of decks whose subtrees cover `selected`, dropping any deck
+ * that is a descendant of another selected deck. Studying a deck already pulls
+ * in its whole subtree (Anki reviews descendants too), so keeping a child
+ * alongside its ancestor would study those cards twice and double-count the
+ * queue. The result is a set of disjoint subtrees, sorted as a tree.
+ */
+export function coveringDecks(selected: string[]): string[] {
+  const unique = [...new Set(selected)];
+  return unique
+    .filter((d) => !unique.some((other) => other !== d && isCardInDeck(d, other)))
+    .sort(compareDeckPaths);
+}
+
 /** A single deck's old → new name as part of a rename. */
 export interface DeckRename {
   from: string;
