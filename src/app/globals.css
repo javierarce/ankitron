@@ -27,18 +27,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Hide the native browser selection highlight inside study cards when
-   voices are configured; StudyCard renders its own yellow overlay
-   rectangles plus the speaker button instead. Without voices there is
-   no overlay, so the native highlight stays and text can be selected
-   and copied normally. */
-.study-card-body.has-voice-selection ::selection,
-.study-card-body.has-voice-selection *::selection {
-  background-color: transparent !important;
-  color: inherit !important;
-}
-
-
 /* Inline play button rendered in place of Anki's [anki:play:…] markers
    (see src/lib/audio.ts). Lives inside prose content, so it sizes off the
    surrounding text. */

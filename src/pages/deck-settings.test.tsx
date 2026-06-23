@@ -31,8 +31,8 @@ vi.mock("@/lib/deck", async (orig) => ({
   renameDeck: vi.fn(),
 }));
 
-// The other settings sections aren't under test and pull in speech synthesis,
-// Anki config, and localStorage — stub them so the test stays about the dialog.
+// The other settings sections aren't under test and pull in Anki config and
+// localStorage — stub them so the test stays about the dialog.
 vi.mock("@/components/deck-settings", () => ({ DeckSettings: () => null }));
 vi.mock("@/components/danger-zone", () => ({ DangerZone: () => null }));
 vi.mock("@/components/import-export", () => ({ ImportExport: () => null }));
@@ -56,15 +56,6 @@ function renderPage() {
 describe("DeckSettingsPage rename", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // jsdom's localStorage is unreliable in this harness; provide a clean one
-    // so migrateDeckLanguages (run on the success path) works.
-    const store = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
-      getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => void store.set(k, v),
-      removeItem: (k: string) => void store.delete(k),
-      clear: () => store.clear(),
-    });
   });
 
   afterEach(() => {

@@ -6,7 +6,6 @@ import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
-import { DeckLanguages, getDeckLanguages } from "@/lib/deck-settings";
 import { coveringDecks, isCardInDeck } from "@/lib/deck";
 import { canUndo } from "@/lib/study";
 
@@ -68,10 +67,6 @@ export function StudyPage() {
   } | null>(null);
   const [cardVisible, setCardVisible] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
-  const languages = useMemo<DeckLanguages>(
-    () => getDeckLanguages(deckName),
-    [deckName]
-  );
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
 
@@ -396,7 +391,6 @@ export function StudyPage() {
             onAnswer={handleAnswer}
             onEdit={handleEdit}
             answering={answering}
-            languages={languages}
             sounds={sounds}
           />
         </div>

@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
-import { SpeakerHigh } from "@phosphor-icons/react/dist/ssr/SpeakerHigh";
-import { Stop } from "@phosphor-icons/react/dist/ssr/Stop";
 import { Ease } from "@/lib/types";
-import { DeckLanguages, speak, stopSpeaking } from "@/lib/deck-settings";
 import {
   getMediaUrl,
   MEDIA_ATTR,
@@ -27,23 +24,8 @@ interface StudyCardProps {
   onAnswer: (ease: Ease) => void;
   onEdit: () => void;
   answering: boolean;
-  languages: DeckLanguages;
   /** Ordered [sound:…] filenames from the note's raw fields. */
   sounds: string[];
-}
-
-function describeLanguage(lang: string): string {
-  try {
-    const display = new Intl.DisplayNames(
-      [typeof navigator !== "undefined" ? navigator.language : "en"],
-      { type: "language" }
-    );
-    const name = display.of(lang);
-    if (name && name !== lang) return name;
-  } catch {
-    // fall through
-  }
-  return lang;
 }
 
 const TYPE_CLOZE_RE = /\[\[type:cloze:[^\]]+\]\]/g;
@@ -137,7 +119,6 @@ export function StudyCard({
   onAnswer,
   onEdit,
   answering,
-  languages,
   sounds,
 }: StudyCardProps) {
   const typed = useMemo(() => hasTypeCloze(question), [question]);
@@ -150,34 +131,11 @@ export function StudyCard({
   const [typedValue, setTypedValue] = useState("");
   const [submittedValue, setSubmittedValue] = useState("");
   const [prevQuestion, setPrevQuestion] = useState(question);
-  const [speaking, setSpeaking] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [prevRevealed, setPrevRevealed] = useState(isRevealed);
-  const [selectionInfo, setSelectionInfo] = useState<{
-    text: string;
-    top: number;
-    left: number;
-    rects: { top: number; left: number; width: number; height: number }[];
-  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardBodyRef = useRef<HTMLDivElement>(null);
-  const speakingRef = useRef(false);
-
-  useEffect(() => {
-    speakingRef.current = speaking;
-  }, [speaking]);
-
-  const availableLanguages = useMemo(
-    () =>
-      [languages.primary, languages.secondary].filter(
-        (l): l is string => !!l
-      ),
-    [languages]
-  );
 
   useEffect(() => {
     return () => {
-      stopSpeaking();
       stopAudio();
     };
   }, [question]);
@@ -205,75 +163,10 @@ export function StudyCard({
   // from Ankitron too sounds everything twice. Our player only handles
   // manual playback: the inline buttons and the `r` key.
 
-  const updateFromSelection = useCallback(() => {
-    if (availableLanguages.length === 0) return;
-    const body = cardBodyRef.current;
-    if (!body) return;
-    const sel = window.getSelection();
-    const text = sel?.toString().trim() ?? "";
-    if (!sel || !text || sel.rangeCount === 0) {
-      if (!speakingRef.current) {
-        setSelectionInfo(null);
-        setMenuOpen(false);
-      }
-      return;
-    }
-    const anchor = sel.anchorNode;
-    if (!anchor || !body.contains(anchor)) {
-      if (!speakingRef.current) {
-        setSelectionInfo(null);
-        setMenuOpen(false);
-      }
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    const bodyRect = body.getBoundingClientRect();
-    const rects = Array.from(range.getClientRects()).map((r) => ({
-      top: r.top - bodyRect.top,
-      left: r.left - bodyRect.left,
-      width: r.width,
-      height: r.height,
-    }));
-    setSelectionInfo({
-      text,
-      top: rect.top - bodyRect.top,
-      left: rect.left - bodyRect.left + rect.width / 2,
-      rects,
-    });
-  }, [availableLanguages.length]);
-
-  useEffect(() => {
-    if (availableLanguages.length === 0) return;
-    document.addEventListener("selectionchange", updateFromSelection);
-    return () => {
-      document.removeEventListener("selectionchange", updateFromSelection);
-    };
-  }, [availableLanguages.length, updateFromSelection]);
-
-  useEffect(() => {
-    function handleEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setMenuOpen(false);
-        if (!speakingRef.current) setSelectionInfo(null);
-      }
-    }
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, []);
-
   if (prevQuestion !== question) {
     setPrevQuestion(question);
     setTypedValue("");
     setSubmittedValue("");
-    setMenuOpen(false);
-    setSelectionInfo(null);
-  }
-
-  if (prevRevealed !== isRevealed) {
-    setPrevRevealed(isRevealed);
-    setMenuOpen(false);
-    setSelectionInfo(null);
   }
 
   useEffect(() => {
@@ -372,40 +265,6 @@ export function StudyCard({
     return diffTypedAnswer(submittedValue.trim(), expectedAnswer);
   }, [typed, submittedValue, expectedAnswer]);
 
-  function speakText(text: string, lang: string) {
-    if (!text) return;
-    setSpeaking(true);
-    speak(text, lang, {
-      onEnd: () => {
-        setSpeaking(false);
-        setSelectionInfo(null);
-        setMenuOpen(false);
-      },
-    });
-  }
-
-  function handleSpeakerClick() {
-    if (speaking) {
-      stopSpeaking();
-      setSpeaking(false);
-      setMenuOpen(false);
-      setSelectionInfo(null);
-      return;
-    }
-    if (!selectionInfo || availableLanguages.length === 0) return;
-    if (availableLanguages.length === 1) {
-      speakText(selectionInfo.text, availableLanguages[0]);
-      return;
-    }
-    setMenuOpen((open) => !open);
-  }
-
-  function handleMenuPick(lang: string) {
-    if (!selectionInfo) return;
-    setMenuOpen(false);
-    speakText(selectionInfo.text, lang);
-  }
-
   return (
     <div className="w-full max-w-2xl">
       <div
@@ -420,8 +279,6 @@ export function StudyCard({
             : undefined
         }
         className={`study-card-body group relative rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
-          availableLanguages.length > 0 ? "has-voice-selection " : ""
-        }${
           !isRevealed && !typed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >
@@ -441,87 +298,6 @@ export function StudyCard({
               <PencilSimple size={18} weight="regular" />
             </button>
           )}
-        </div>
-
-        {/* Highlight overlay slot — always present, conditionally filled. */}
-        <div key="highlight-slot" aria-hidden>
-          {selectionInfo &&
-            availableLanguages.length > 0 &&
-            selectionInfo.rects.map((r, i) => (
-              <div
-                key={i}
-                style={{
-                  position: "absolute",
-                  top: r.top,
-                  left: r.left,
-                  width: r.width,
-                  height: r.height,
-                  backgroundColor: "rgba(250, 204, 21, 0.4)",
-                  pointerEvents: "none",
-                  borderRadius: 2,
-                  zIndex: 10,
-                }}
-              />
-            ))}
-        </div>
-
-        {/* Speaker icon slot — always present, conditionally filled. */}
-        <div key="speaker-slot">
-        {selectionInfo && availableLanguages.length > 0 && (
-          <div
-            style={{
-              position: "absolute",
-              top: selectionInfo.top - 40,
-              left: selectionInfo.left,
-              transform: "translateX(-50%)",
-              zIndex: 20,
-            }}
-          >
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSpeakerClick();
-              }}
-              className={`flex h-8 w-8 items-center justify-center rounded-full border border-foreground/15 bg-background shadow-md transition-colors ${
-                speaking
-                  ? "text-foreground/80"
-                  : "text-foreground/60 hover:text-foreground"
-              }`}
-              title={speaking ? "Stop" : "Speak selection"}
-              aria-label={speaking ? "Stop" : "Speak selection"}
-              aria-haspopup={availableLanguages.length > 1 ? "menu" : undefined}
-              aria-expanded={availableLanguages.length > 1 ? menuOpen : undefined}
-            >
-              {speaking ? (
-                <Stop size={14} weight="fill" />
-              ) : (
-                <SpeakerHigh size={14} weight="regular" />
-              )}
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute left-1/2 top-full mt-1 -translate-x-1/2 min-w-[140px] rounded-md border border-foreground/10 bg-background py-1 shadow-lg"
-              >
-                {availableLanguages.map((lang) => (
-                  <button
-                    key={lang}
-                    role="menuitem"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMenuPick(lang);
-                    }}
-                    className="block w-full px-3 py-1.5 text-left text-sm text-foreground/80 hover:bg-foreground/5"
-                  >
-                    {describeLanguage(lang)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
         </div>
 
         {!isRevealed ? (

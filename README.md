@@ -21,10 +21,9 @@ A simple, lightweight Mac app for managing and studying [Anki](https://apps.anki
 - Suspend and unsuspend cards
 - Bulk-select notes to delete, move, suspend, or edit them one at a time in sequence
 
-**Audio & speech**
+**Audio**
 - `[sound:…]` audio plays during study — automatically and via inline play buttons (`R` to replay)
 - Attach audio to a note by dragging a file onto the editor or picking one
-- Select text on a card to have it read aloud (text-to-speech) in a configurable primary/secondary language
 
 **Sync, import & more**
 - JSON import/export — edit decks offline and re-import them to update existing notes or add new ones (see the [deck file format](docs/deck-file-format.md))
