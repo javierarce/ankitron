@@ -2,7 +2,7 @@ name: Deploy site
 
 on:
   push:
-    branches: [main, javierarce/add-plausible-analytics]
+    branches: [main]
     # Only redeploy when the site (or this workflow) actually changes.
     paths:
       - "docs/**"
