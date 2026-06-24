@@ -94,6 +94,8 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 | `Shift` + `J` / `Shift` + `K` | Move down/up, extending the selection |
 | `a` | Add a new note |
 | `e` | Edit the selected notes in sequence (or the focused note if none are selected) |
+| `t` | Add or remove tags on the selected notes (or the focused note if none are selected) |
+| `Cmd` + `Z` | Undo the last tag change |
 
 
 ## Study session
