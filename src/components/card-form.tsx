@@ -10,6 +10,7 @@ import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/dec
 import { basicFieldKeys, orderedFieldNames } from "@/lib/note-fields";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { useAllTags } from "@/hooks/use-all-tags";
 
 type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
 
@@ -168,6 +169,7 @@ export function CardForm({
 
   const initialTags = note?.tags ?? [];
   const [tags, setTags] = useState<string[]>(initialTags);
+  const allTags = useAllTags();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -594,7 +596,7 @@ export function CardForm({
             <label className="mb-1.5 block text-sm font-medium text-foreground/70">
               Tags
             </label>
-            <TagInput tags={tags} onChange={setTags} />
+            <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
           </div>
 
           {isEdit && (

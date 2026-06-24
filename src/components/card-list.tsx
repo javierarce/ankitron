@@ -13,11 +13,13 @@ import { Pause } from "@phosphor-icons/react/dist/ssr/Pause";
 import { Play } from "@phosphor-icons/react/dist/ssr/Play";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
+import { Tag } from "@phosphor-icons/react/dist/ssr/Tag";
 import { X } from "@phosphor-icons/react/dist/ssr/X";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
+import { BulkTagDialog, type TagChange } from "./bulk-tag-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
 import {
   createEditSequence,
@@ -294,6 +296,45 @@ export function CardList({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const lastSelectedRef = useRef<number | null>(null);
   const [bulkMoving, setBulkMoving] = useState(false);
+  const [bulkTagging, setBulkTagging] = useState(false);
+
+  // The last bulk tag change, kept briefly so Cmd+Z can reverse it. Auto-expires
+  // so the undo window is short and predictable rather than reaching back across
+  // unrelated edits.
+  const [tagUndo, setTagUndo] = useState<TagChange | null>(null);
+  const tagUndoTimer = useRef<number | null>(null);
+
+  function clearTagUndo() {
+    if (tagUndoTimer.current !== null) {
+      window.clearTimeout(tagUndoTimer.current);
+      tagUndoTimer.current = null;
+    }
+    setTagUndo(null);
+  }
+
+  function armTagUndo(change: TagChange | null) {
+    if (tagUndoTimer.current !== null) window.clearTimeout(tagUndoTimer.current);
+    setTagUndo(change);
+    tagUndoTimer.current = change
+      ? window.setTimeout(() => setTagUndo(null), 10000)
+      : null;
+  }
+
+  async function handleTagUndo() {
+    const change = tagUndo;
+    if (!change) return;
+    clearTagUndo();
+    try {
+      for (const c of change.changes) {
+        await ankiFetch(change.action, { notes: c.noteIds, tags: c.tag });
+      }
+      refreshAfterChange();
+    } catch {
+      // A failed undo just stays undone rather than retrying in a loop.
+    }
+  }
+
+  useEffect(() => () => clearTagUndo(), []);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
@@ -367,6 +408,7 @@ export function CardList({
     setPrevDeckName(deckName);
     setActiveSegments(new Set());
     setLastSegment(null);
+    setTagUndo(null);
   }
 
   // Surface the active segment selection to the page so its Study button can
@@ -431,6 +473,7 @@ export function CardList({
     !!deletingNote ||
     !!movingNote ||
     bulkMoving ||
+    bulkTagging ||
     bulkDeleteOpen ||
     !!editSeq;
 
@@ -455,6 +498,16 @@ export function CardList({
         return;
       }
       if (inField) return;
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        (e.key === "z" || e.key === "Z") &&
+        !e.shiftKey &&
+        tagUndo
+      ) {
+        e.preventDefault();
+        handleTagUndo();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A")) {
         const rows = Array.from(
           document.querySelectorAll<HTMLElement>("[data-note-id]")
@@ -553,11 +606,33 @@ export function CardList({
           e.preventDefault();
           beginEdit(ids);
         }
+        return;
+      }
+      if (e.key === "t" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Tag the selection; with nothing selected, tag the focused row by
+        // selecting it first so the dialog (which reads the selection) has it.
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-note-id]")
+        );
+        let ids = rows
+          .map((el) => Number(el.dataset.noteId))
+          .filter((id) => selectedIds.has(id));
+        if (ids.length === 0) {
+          const focusedRow = (
+            document.activeElement as HTMLElement | null
+          )?.closest?.("[data-note-id]") as HTMLElement | null;
+          if (focusedRow) ids = [Number(focusedRow.dataset.noteId)];
+        }
+        if (ids.length > 0) {
+          e.preventDefault();
+          setSelectedIds(new Set(ids));
+          setBulkTagging(true);
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasDialog, selectedIds]);
+  }, [hasDialog, selectedIds, tagUndo]);
 
   // Scope to the active segments first; "All" (empty set) keeps every note. A
   // segment covers its whole subtree, so a chip for a parent deck (e.g.
@@ -1049,6 +1124,13 @@ export function CardList({
                 Move
               </button>
               <button
+                onClick={() => setBulkTagging(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+              >
+                <Tag size={16} weight="bold" />
+                Tag
+              </button>
+              <button
                 onClick={() => setBulkDeleteOpen(true)}
                 className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
               >
@@ -1248,6 +1330,20 @@ export function CardList({
           onMoved={() => {
             setBulkMoving(false);
             clearSelection();
+            refreshAfterChange();
+          }}
+        />
+      )}
+
+      {bulkTagging && (
+        <BulkTagDialog
+          notes={selectedNotes}
+          onClose={() => setBulkTagging(false)}
+          onTagged={(change) => {
+            // Tagging leaves the notes in place, so keep the selection — unlike
+            // Move/Delete, the user is likely to act on the same set again.
+            setBulkTagging(false);
+            armTagUndo(change);
             refreshAfterChange();
           }}
         />
