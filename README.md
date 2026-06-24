@@ -49,67 +49,7 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 
 # Ankitron Keyboard Shortcuts
 
-## Global
-
-| Shortcut | Action |
-| --- | --- |
-| `Cmd` + `K` | Open the command palette |
-| `Cmd` + `N` | New note |
-| `Cmd` + `,` | Open settings |
-| `Cmd` + `1` | Go to Study |
-| `Cmd` + `2` | Go to Decks |
-
-## Command palette (when open)
-
-| Shortcut | Action |
-| --- | --- |
-| `↑` / `↓` | Move the selection |
-| `Enter` | Open the selected deck / run the action |
-| `Esc` | Go back a level, or close the palette |
-
-## List navigation 
-
-| Shortcut | Action |
-| --- | --- |
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
-| `g` `g` | Jump to the top (press `g` twice within 500 ms) |
-| `G` (`Shift` + `g`) | Jump to the bottom |
-| `l` / `→` | Expand the focused deck (in the deck list) |
-| `h` / `←` | Collapse the focused deck, or jump to its parent (in the deck list) |
-
-## Decks page
-
-| Shortcut | Action |
-| --- | --- |
-| `Cmd` + `F` or `/` | Focus the search box |
-
-## Note list (deck detail)
-
-| Shortcut | Action |
-| --- | --- |
-| `Cmd` + `F` or `/` | Focus the search box |
-| `Cmd` + `A` | Select all notes |
-| `Space` | Toggle selection of the focused note |
-| `Shift` + `J` / `Shift` + `K` | Move down/up, extending the selection |
-| `a` | Add a new note |
-| `e` | Edit the selected notes in sequence (or the focused note if none are selected) |
-| `t` | Add or remove tags on the selected notes (or the focused note if none are selected) |
-| `Cmd` + `Z` | Undo the last tag change |
-
-
-## Study session
-
-| Shortcut | Action |
-| --- | --- |
-| `Space`, `1`, or `2` | Reveal the answer |
-| `1` | Grade **Fail** (after reveal) |
-| `Space` or `2` | Grade **Pass** (after reveal) |
-| `r` | Play the card's audio (answer side once revealed, otherwise the question) |
-| `e` | Edit the current note |
-| `a` | Add a note to the session |
-| `Cmd` + `←` | Return to the deck (confirms once you've started reviewing) |
-| `Cmd` + `Z` | Undo the last review |
+See [SHORTCUTS.md](SHORTCUTS.md]
 
 
 ## Contributing
