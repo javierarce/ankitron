@@ -2,8 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod anki;
+mod elevenlabs;
 
 use anki::{ensure_anki_running, is_ankiconnect_up, stop_spawned_anki, AnkiState};
+use elevenlabs::{elevenlabs_tts, elevenlabs_voices, set_elevenlabs_api_key};
 use std::sync::Arc;
 
 /// Wait until AnkiConnect is responding (called by the frontend on startup).
@@ -160,7 +162,10 @@ fn main() {
             ensure_anki,
             anki_request,
             save_text_file,
-            stop_anki_for_update
+            stop_anki_for_update,
+            set_elevenlabs_api_key,
+            elevenlabs_tts,
+            elevenlabs_voices
         ])
         .build(tauri::generate_context!())
         .expect("error while running Ankitron")
