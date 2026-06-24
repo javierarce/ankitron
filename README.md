@@ -15,22 +15,20 @@ A simple, lightweight Mac app for managing and studying [Anki](https://apps.anki
 
 **Notes**
 - Create, edit, and delete notes in four note types: Basic, Basic (and reversed), Cloze, and Cloze (typed)
-- Rich-text editor with bold, italic, lists, image insertion, and a cloze helper (with hints)
-- Toggle a raw HTML source view to edit the underlying markup
-- Add and remove tags
+- Rich-text editor with bold, italic, lists, image insertion, HTML source view, and a cloze helper
+- Add and remove tags 
 - Suspend and unsuspend cards
-- Bulk-select notes to delete, move, suspend, or edit them one at a time in sequence
+- Bulk-select notes to delete, move, suspend or edit them one at a time in sequence
 
 **Audio**
-- `[sound:…]` audio plays during study — automatically and via inline play buttons (`R` to replay)
+- `[sound:…]` audio plays during study (automatically and via inline play buttons)
 - Attach audio to a note by dragging a file onto the editor or picking one
 
 **Sync, import & more**
-- JSON import/export — edit decks offline and re-import them to update existing notes or add new ones (see the [deck file format](docs/deck-file-format.md))
-- Manual "Sync now", plus automatic sync on launch and after each session
-- Command palette (`Cmd`/`Ctrl-K`) to jump between decks or add a note, with vim-style `j`/`k` navigation throughout
-- Light/dark theme toggle with system-preference detection
-- Built-in update checks.
+- JSON import/export (see the [deck file format](docs/deck-file-format.md))
+- Manual and automatic sync.
+- Command palette (`Cmd`/`Ctrl-K`) for quick navigation.
+- Light/dark themes.
 
 ## Prerequisites
 
