@@ -135,7 +135,7 @@ export function SettingsPage() {
         )}
       </div>
 
-      {/* Keychain-backed; the commands only exist in the desktop app. */}
+      {/* The ElevenLabs commands only exist in the desktop app. */}
       {isTauri && (
         <div className="mt-8">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/40">
