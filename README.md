@@ -49,7 +49,7 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 
 # Ankitron Keyboard Shortcuts
 
-See [SHORTCUTS.md](SHORTCUTS.md]
+See [SHORTCUTS.md](SHORTCUTS.md)
 
 
 ## Contributing
