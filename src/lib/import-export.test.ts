@@ -7,8 +7,10 @@ import {
   isExportedDeck,
   resolveTargetDeck,
   sanitizeFilename,
+  summarizeImport,
   type ExportedDeck,
   type ImportDeps,
+  type ImportResult,
 } from "./import-export";
 import { CLOZE_TYPED_MODEL } from "./cloze-typed-model";
 import { Note } from "./types";
@@ -184,6 +186,41 @@ describe("buildExport", () => {
     const exported = buildExport("D", notes);
     const reparsed = JSON.parse(JSON.stringify(exported));
     expect(isExportedDeck(reparsed)).toBe(true);
+  });
+});
+
+describe("summarizeImport", () => {
+  const result = (over: Partial<ImportResult>): ImportResult => ({
+    updated: 0,
+    added: 0,
+    skipped: 0,
+    staleSkipped: 0,
+    errors: [],
+    ...over,
+  });
+
+  it("drops zero counts", () => {
+    expect(summarizeImport(result({ added: 15 }))).toBe("15 notes added");
+  });
+
+  it("uses the singular for a count of one", () => {
+    expect(summarizeImport(result({ added: 1 }))).toBe("1 note added");
+  });
+
+  it("joins multiple non-zero counts", () => {
+    expect(summarizeImport(result({ updated: 2, added: 3 }))).toBe(
+      "2 notes updated · 3 notes added",
+    );
+  });
+
+  it("includes skipped duplicates", () => {
+    expect(summarizeImport(result({ added: 4, skipped: 1 }))).toBe(
+      "4 notes added · 1 note skipped (duplicates)",
+    );
+  });
+
+  it("falls back when nothing changed", () => {
+    expect(summarizeImport(result({}))).toBe("No notes imported");
   });
 });
 
