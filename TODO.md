@@ -1,6 +1,11 @@
 # TODO
 
-Deferred features, with enough context to pick them up later.
+- [ ] Custom study sessions
+- [ ] Support for LaTeX/MathJax and JavaScript in the cards
+- [ ] Audio in JSON import/export
+- [ ] Clean up unused media
+
+---
 
 ## Audio in JSON import/export
 
