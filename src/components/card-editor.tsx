@@ -1,12 +1,15 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getMediaUrl,
   mediaFilenameFromSrc,
   storeAudioFile,
 } from "@/lib/audio";
+import { isConfigured } from "@/lib/elevenlabs";
+import { isExperimentalEnabled } from "@/lib/experimental";
+import { TtsDialog } from "./tts-dialog";
 
 // Anki stores images as bare collection-media filenames (`<img src="x.jpg">`)
 // the app origin can't serve. This NodeView shows the file by resolving it to
@@ -86,6 +89,22 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
   // the original imported HTML before TipTap had a chance to degrade it.
   const [sourceMode, setSourceMode] = useState(false);
   const [sourceHtml, setSourceHtml] = useState("");
+  // The selected text the TTS dialog is open for (null = closed). The insertion
+  // point is captured alongside it so opening the dialog — which drops the
+  // visual selection — doesn't lose where the audio should land.
+  const [ttsText, setTtsText] = useState<string | null>(null);
+  const ttsInsertPos = useRef<number | null>(null);
+  // The TTS button appears only when the experimental feature is enabled and an
+  // ElevenLabs key is configured. Both read from non-secret flags (see
+  // isConfigured) so opening the editor never prompts for keychain access.
+  const [ttsAvailable] = useState(
+    () => isExperimentalEnabled() && isConfigured()
+  );
+  // The TTS button enables only with a selection. Tracked via editor events
+  // rather than read inline during render: useEditor doesn't reliably re-render
+  // on selection-only changes, so an inline read would go stale and leave the
+  // button stuck disabled.
+  const [hasSelection, setHasSelection] = useState(false);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -106,6 +125,15 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       attributes: {
         class:
           "min-h-[100px] px-3 py-2 text-sm focus:outline-none prose prose-sm dark:prose-invert max-w-none",
+      },
+      handleKeyDown: (_view, event) => {
+        // Cmd/Ctrl+Enter is the form's save-and-close shortcut. Claim it here so
+        // ProseMirror doesn't insert a newline first; returning true stops its
+        // default, and the event still bubbles to the form, which submits.
+        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          return true;
+        }
+        return false;
       },
       handleDrop: (view, event, _slice, moved) => {
         // Let ProseMirror handle internal node drags (e.g. moving an image).
@@ -139,6 +167,18 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       },
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    const sync = () => setHasSelection(!editor.state.selection.empty);
+    sync();
+    editor.on("selectionUpdate", sync);
+    editor.on("transaction", sync);
+    return () => {
+      editor.off("selectionUpdate", sync);
+      editor.off("transaction", sync);
+    };
+  }, [editor]);
 
   const addImage = useCallback(() => {
     if (!editor) return;
@@ -210,6 +250,35 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       editor.chain().setTextSelection(pos).run();
     }
   }, [editor]);
+
+  const openTts = useCallback(() => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    // textBetween with a " " block separator keeps multi-paragraph selections
+    // readable as a sentence rather than gluing words across line breaks.
+    const text = editor.state.doc.textBetween(from, to, " ").trim();
+    if (!text) return;
+    ttsInsertPos.current = to;
+    setTtsText(text);
+  }, [editor]);
+
+  const insertTtsAudio = useCallback(
+    (filename: string) => {
+      if (!editor) return;
+      // Insert at the captured selection end, clamped — mirrors handleDrop:
+      // schema.text() with no marks keeps the [sound:] tag out of any bold/
+      // italic formatting active at that position.
+      const to = ttsInsertPos.current ?? editor.state.selection.to;
+      const pos = Math.min(to, editor.state.doc.content.size);
+      // Space before, none after: keeps the tag off the selected word and tight
+      // against any following punctuation ("word [sound:…].").
+      const node = editor.state.schema.text(` [sound:${filename}]`);
+      editor.view.dispatch(editor.state.tr.insert(pos, node));
+      editor.view.focus();
+      setTtsText(null);
+    },
+    [editor]
+  );
 
   const enterSource = useCallback(() => {
     if (!editor) return;
@@ -350,6 +419,22 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
           className="hidden"
           onChange={handleAudioFile}
         />
+        {ttsAvailable && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={openTts}
+            disabled={!hasSelection}
+            className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-foreground/50"
+            title={
+              hasSelection
+                ? "Generate audio for the selection with ElevenLabs"
+                : "Select text to generate audio"
+            }
+          >
+            TTS
+          </button>
+        )}
         {clozeMode && (
           <button
             type="button"
@@ -379,6 +464,13 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         )}
         <EditorContent editor={editor} />
       </div>
+      {ttsText !== null && (
+        <TtsDialog
+          text={ttsText}
+          onInsert={insertTtsAudio}
+          onClose={() => setTtsText(null)}
+        />
+      )}
     </div>
   );
 }

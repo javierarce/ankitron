@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTheme, type Theme } from "@/lib/theme-context";
 import { useUpdate } from "@/components/update-context";
+import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
+import { isExperimentalEnabled, setExperimentalEnabled } from "@/lib/experimental";
 import { ankiFetch } from "@/lib/anki-fetch";
 
 const isTauri =
@@ -17,6 +19,13 @@ export function SettingsPage() {
   const [checkError, setCheckError] = useState("");
   const [sync, setSync] = useState<SyncState>("idle");
   const [syncError, setSyncError] = useState("");
+  const [experimental, setExperimental] = useState(isExperimentalEnabled);
+
+  function toggleExperimental() {
+    const next = !experimental;
+    setExperimental(next);
+    setExperimentalEnabled(next);
+  }
 
   useEffect(() => {
     if (!isTauri) return;
@@ -125,6 +134,32 @@ export function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Keychain-backed; the commands only exist in the desktop app. */}
+      {isTauri && (
+        <div className="mt-8">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/40">
+            Experimental
+          </h2>
+          <label className="mt-2 flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={experimental}
+              onChange={toggleExperimental}
+              className="accent-foreground"
+            />
+            Enable experimental features
+          </label>
+          <p className="mt-1 text-xs text-foreground/50">
+            In development — these features may change or be removed.
+          </p>
+          {experimental && (
+            <div className="mt-2 divide-y divide-foreground/10">
+              <ElevenLabsSettings />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

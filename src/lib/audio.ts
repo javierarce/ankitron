@@ -302,19 +302,33 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * Store an audio file in Anki's media folder and return the filename to
- * reference in a `[sound:…]` tag. With deleteExisting=false Anki renames on
- * collision instead of overwriting, and reports the name it actually used.
+ * Store base64 audio bytes in Anki's media folder under `name`, returning the
+ * filename to reference in a `[sound:…]` tag. With deleteExisting=false Anki
+ * renames on collision instead of overwriting, and reports the name it actually
+ * used — so generating the same TTS clip twice reuses the file rather than
+ * piling up copies (callers that want that dedup pass a stable, content-derived
+ * name).
  */
-export async function storeAudioFile(file: File): Promise<string> {
-  const data = await fileToBase64(file);
+export async function storeAudioBytes(
+  data: string,
+  name: string
+): Promise<string> {
   // Square brackets would terminate the [sound:…] tag early; the rest are
   // unsafe on some filesystems Anki syncs to.
-  const filename = file.name.replace(/[[\]<>:"/\\|?*]/g, "-");
+  const filename = name.replace(/[[\]<>:"/\\|?*]/g, "-");
   const stored = await ankiFetch<string>("storeMediaFile", {
     filename,
     data,
     deleteExisting: false,
   });
   return typeof stored === "string" && stored ? stored : filename;
+}
+
+/**
+ * Store an audio file in Anki's media folder and return the filename to
+ * reference in a `[sound:…]` tag.
+ */
+export async function storeAudioFile(file: File): Promise<string> {
+  const data = await fileToBase64(file);
+  return storeAudioBytes(data, file.name);
 }
