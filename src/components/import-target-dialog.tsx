@@ -3,6 +3,7 @@ import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import type { ExportedDeck } from "@/lib/import-export";
+import { CardPreview } from "./card-preview";
 
 type TargetMode = "current" | "existing" | "new";
 
@@ -101,17 +102,20 @@ export function ImportTargetDialog({
       }}
     >
       <div
-        className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
+        className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
       >
-        <h3 className="mb-1 text-lg font-semibold">Import into deck</h3>
-        <p className="mb-4 text-sm text-foreground/50">
-          From{" "}
-          <strong className="text-foreground/70">
-            {formatDeckPath(parsed.deckName)}
-          </strong>{" "}
-          · {parsed.notes.length}{" "}
-          {parsed.notes.length === 1 ? "note" : "notes"}
-        </p>
+        <h3 className="mb-4 text-lg font-semibold">Import deck</h3>
+
+        {parsed.notes.length > 0 && (
+          <div className="mb-6">
+            <CardPreview
+              notes={parsed.notes}
+              title={formatDeckPath(parsed.deckName)}
+            />
+          </div>
+        )}
+
+        <h4 className="mb-3 text-sm font-semibold">Import into deck</h4>
 
         <div className="space-y-3 text-sm">
           {currentDeck !== undefined && (
@@ -179,8 +183,13 @@ export function ImportTargetDialog({
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !submitDisabled) {
+                      e.preventDefault();
+                      submit();
+                    }
+                  }}
                   placeholder="Deck name"
-                  autoFocus
                   className="mt-1 w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
                 />
               )}

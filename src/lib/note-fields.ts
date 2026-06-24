@@ -1,4 +1,11 @@
 import type { Note, NoteField } from "./types";
+import { CLOZE_TYPED_MODEL } from "./cloze-typed-model";
+
+/** Anki's built-in cloze model names. A note is cloze either because its model
+ * is one of these or because it carries the cloze-defining `Text` field. */
+export function isClozeModelName(modelName: string): boolean {
+  return modelName === "Cloze" || modelName === CLOZE_TYPED_MODEL;
+}
 
 /**
  * Resolve a Basic note's front/back field names by Anki's field `order`, not by
@@ -36,11 +43,7 @@ export function orderedFieldNames(
 export function isClozeNote(
   note: Pick<Note, "modelName" | "fields">,
 ): boolean {
-  return (
-    note.modelName === "Cloze" ||
-    note.modelName === "Cloze (typed)" ||
-    "Text" in note.fields
-  );
+  return isClozeModelName(note.modelName) || "Text" in note.fields;
 }
 
 /**

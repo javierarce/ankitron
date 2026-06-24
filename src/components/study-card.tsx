@@ -1,20 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { Ease } from "@/lib/types";
-import {
-  getMediaUrl,
-  MEDIA_ATTR,
-  playAudio,
-  prepareCardHtml,
-  resolveCardAudio,
-  stopAudio,
-} from "@/lib/audio";
+import { playAudio, resolveCardAudio, stopAudio } from "@/lib/audio";
 import {
   diffTypedAnswer,
   extractExpectedClozeAnswer,
   groupRuns,
 } from "@/lib/typed-answer-diff";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
+import { HtmlContent } from "./card-html";
 
 interface StudyCardProps {
   question: string;
@@ -60,55 +54,6 @@ function splitAnkiAnswer(html: string): { front: string; back: string } {
     front: html.slice(0, match.index),
     back: html.slice(match.index + match[0].length),
   };
-}
-
-/** Renders HTML imperatively via a ref so React never re-creates the
- * inner DOM on re-renders (which would destroy any selected text node
- * inside). */
-function HtmlContent({
-  html,
-  className,
-}: {
-  html: string;
-  className?: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const renderedHtml = useRef<string | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // Card media (<img>) references bare collection-media filenames the app
-    // origin can't serve. prepareCardHtml strips those srcs (so no broken-image
-    // icon flashes) and we pull each file from Anki, then fade the image in.
-    // Only rewrite innerHTML when the html actually changes (avoids clobbering
-    // selection); image resolution runs every invocation so StrictMode's
-    // double-mount can't leave images stuck transparent. `cancelled` guards
-    // against the html changing before a fetch resolves.
-    if (renderedHtml.current !== html) {
-      renderedHtml.current = html;
-      el.innerHTML = prepareCardHtml(html);
-    }
-    let cancelled = false;
-    el.querySelectorAll<HTMLImageElement>(`img[${MEDIA_ATTR}]`).forEach((img) => {
-      const filename = img.getAttribute(MEDIA_ATTR) ?? "";
-      getMediaUrl(filename).then((url) => {
-        if (cancelled) return;
-        if (url) {
-          img.onload = () => {
-            img.style.opacity = "1";
-          };
-          img.src = url;
-        } else {
-          // Missing/unreachable: reveal anyway so any alt text shows.
-          img.style.opacity = "1";
-        }
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [html]);
-  return <div ref={ref} className={className} />;
 }
 
 export function StudyCard({

@@ -49,6 +49,20 @@ export interface ImportResult {
   errors: string[];
 }
 
+/**
+ * One-line summary of what an import did, e.g. "15 notes added" or
+ * "2 notes updated · 3 notes added". Zero counts are dropped so we never show
+ * noise like "0 notes updated"; staleSkipped is explained separately in the UI.
+ */
+export function summarizeImport(result: ImportResult): string {
+  const noun = (n: number) => `${n} note${n === 1 ? "" : "s"}`;
+  const parts: string[] = [];
+  if (result.updated > 0) parts.push(`${noun(result.updated)} updated`);
+  if (result.added > 0) parts.push(`${noun(result.added)} added`);
+  if (result.skipped > 0) parts.push(`${noun(result.skipped)} skipped (duplicates)`);
+  return parts.length > 0 ? parts.join(" · ") : "No notes imported";
+}
+
 export interface ImportDeps {
   ankiFetch: <T>(action: string, params?: Record<string, unknown>) => Promise<T>;
   ensureClozeTypedModel: () => Promise<void>;

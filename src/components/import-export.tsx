@@ -8,6 +8,7 @@ import {
   fetchCardDecksByNoteId,
   importDeck,
   isExportedDeck,
+  summarizeImport,
   type ExportedDeck,
   type ImportResult,
 } from "@/lib/import-export";
@@ -203,11 +204,7 @@ export function ImportResultModal({
         {error && <p className="text-sm text-red-500">{error}</p>}
         {result && (
           <div className="space-y-2 text-sm text-foreground/70">
-            <p>
-              Updated {result.updated} · Added {result.added}
-              {result.skipped > 0 &&
-                ` · Skipped ${result.skipped} (duplicates)`}
-            </p>
+            <p>{summarizeImport(result)}</p>
             {staleSkipped > 0 && (
               <p>
                 {staleSkipped} note{staleSkipped === 1 ? " was" : "s were"} not
