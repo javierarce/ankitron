@@ -13,8 +13,8 @@ const PERMISSIONS_HINT = "Add the text_to_speech and voices_read permissions.";
 
 export function ElevenLabsSettings() {
   // Show the input when no key is set; the masked view (with Replace) otherwise.
-  // Read from the non-secret flag, not a keychain read, so visiting Settings
-  // doesn't prompt for keychain access.
+  // Read from the non-secret localStorage flag — a synchronous check, no Rust
+  // round-trip when Settings opens.
   const [editing, setEditing] = useState(() => !isConfigured());
   const [keyInput, setKeyInput] = useState("");
   const [busy, setBusy] = useState(false);

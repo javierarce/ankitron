@@ -95,8 +95,8 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
   const [ttsText, setTtsText] = useState<string | null>(null);
   const ttsInsertPos = useRef<number | null>(null);
   // The TTS button appears only when the experimental feature is enabled and an
-  // ElevenLabs key is configured. Both read from non-secret flags (see
-  // isConfigured) so opening the editor never prompts for keychain access.
+  // ElevenLabs key is configured. Both read from non-secret localStorage flags,
+  // so this is a synchronous check with no Rust round-trip on editor open.
   const [ttsAvailable] = useState(
     () => isExperimentalEnabled() && isConfigured()
   );

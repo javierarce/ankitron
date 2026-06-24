@@ -1,26 +1,17 @@
 //! ElevenLabs text-to-speech proxy.
 //!
-//! The frontend never holds the API key or talks to ElevenLabs directly: the
-//! key lives in the OS keychain (encrypted at rest, gated by the user's login)
-//! and these commands read it server-side. Proxying through Rust also sidesteps
-//! the webview's CSP (which only allows AnkiConnect) and CORS — the same reason
-//! `anki_request` exists.
+//! The frontend never holds the API key or talks to ElevenLabs directly: the key
+//! is stored in a file in the app's config dir and these commands read it
+//! server-side. We deliberately don't use the OS keychain — on macOS that
+//! surfaces a "wants to use your confidential information" prompt that confuses
+//! users (it persists even for a signed, notarized build). A scoped API key in a
+//! user-only (0600) file is the common tradeoff, the same as tools like the AWS
+//! CLI. Proxying through Rust also sidesteps the webview's CSP (which only allows
+//! AnkiConnect) and CORS — the same reason `anki_request` exists.
 
 use base64::Engine;
-use keyring::Entry;
-use std::sync::Mutex;
-
-/// Keychain coordinates for the stored API key. The service matches the app's
-/// bundle identifier so the credential is namespaced to Ankitron.
-const KEYRING_SERVICE: &str = "com.ankitron.app";
-const KEYRING_ACCOUNT: &str = "elevenlabs-api-key";
-
-/// In-memory copy of the key, populated on first read. Generating a few clips in
-/// one session would otherwise re-read the keychain each time — and every read
-/// can raise a macOS access prompt (constantly in unsigned dev builds). With the
-/// cache the keychain is touched at most once per app launch; it's kept in sync
-/// whenever the key is saved or cleared.
-static KEY_CACHE: Mutex<Option<String>> = Mutex::new(None);
+use std::fs;
+use std::path::PathBuf;
 
 const TTS_URL: &str = "https://api.elevenlabs.io/v1/text-to-speech";
 const VOICES_URL: &str = "https://api.elevenlabs.io/v1/voices";
@@ -49,51 +40,60 @@ impl From<String> for ApiError {
     }
 }
 
-fn key_entry() -> Result<Entry, String> {
-    Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
-        .map_err(|e| format!("Keychain unavailable: {e}"))
+/// Path to the file holding the API key, under the app's config dir
+/// (~/Library/Application Support/Ankitron on macOS).
+fn key_file_path() -> Result<PathBuf, String> {
+    let dir = dirs::config_dir()
+        .ok_or_else(|| "Could not locate the app config directory.".to_string())?
+        .join("Ankitron");
+    Ok(dir.join("elevenlabs-key"))
 }
 
 /// Read the stored key, or None if the user hasn't set one yet.
 fn read_api_key() -> Result<Option<String>, String> {
-    match key_entry()?.get_password() {
-        Ok(key) => Ok(Some(key)),
-        Err(keyring::Error::NoEntry) => Ok(None),
+    match fs::read_to_string(key_file_path()?) {
+        Ok(contents) => {
+            let trimmed = contents.trim();
+            Ok((!trimmed.is_empty()).then(|| trimmed.to_string()))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(format!("Could not read the API key: {e}")),
     }
 }
 
-/// Store the ElevenLabs API key in the OS keychain. An empty string clears it,
-/// so the Settings "Remove" button and "Save" share one command.
+/// Store the ElevenLabs API key. An empty string clears it, so the Settings
+/// "Replace" flow and "Save" share one command.
 #[tauri::command]
 pub fn set_elevenlabs_api_key(key: String) -> Result<(), String> {
-    let entry = key_entry()?;
+    let path = key_file_path()?;
     let trimmed = key.trim();
+
     if trimmed.is_empty() {
-        match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => {}
-            Err(e) => return Err(format!("Could not clear the API key: {e}")),
-        }
-        *KEY_CACHE.lock().unwrap() = None;
-        return Ok(());
+        return match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("Could not clear the API key: {e}")),
+        };
     }
-    entry
-        .set_password(trimmed)
-        .map_err(|e| format!("Could not save the API key: {e}"))?;
-    *KEY_CACHE.lock().unwrap() = Some(trimmed.to_string());
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create the config directory: {e}"))?;
+    }
+    fs::write(&path, trimmed).map_err(|e| format!("Could not save the API key: {e}"))?;
+
+    // Owner-only (0600) so other users on the machine can't read the key.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+
     Ok(())
 }
 
 fn require_key() -> Result<String, String> {
-    // Serve the cached key when we have it; only fall back to the keychain on
-    // the first use after launch.
-    if let Some(key) = KEY_CACHE.lock().unwrap().clone() {
-        return Ok(key);
-    }
-    let key = read_api_key()?
-        .ok_or_else(|| "No ElevenLabs API key set. Add one in Settings.".to_string())?;
-    *KEY_CACHE.lock().unwrap() = Some(key.clone());
-    Ok(key)
+    read_api_key()?.ok_or_else(|| "No ElevenLabs API key set. Add one in Settings.".to_string())
 }
 
 /// Turn a failed ElevenLabs response into a human-readable message. Their error

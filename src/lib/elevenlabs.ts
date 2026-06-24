@@ -65,8 +65,8 @@ const LAST_VOICE_KEY = "elevenlabs-last-voice";
 const VOICES_CACHE_KEY = "elevenlabs-voices";
 const CONFIGURED_KEY = "elevenlabs-configured";
 
-// --- Settings (model + cached voices live in localStorage; the API key lives
-// in the OS keychain, reached only through the Rust commands below) ----------
+// --- Settings (model + cached voices live in localStorage; the API key is
+// stored on disk, reached only through the Rust commands below) --------------
 
 export function getModelId(): string {
   if (typeof localStorage === "undefined") return DEFAULT_MODEL_ID;
@@ -110,23 +110,21 @@ function setCachedVoices(voices: ElevenLabsVoice[]): void {
     localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(voices));
 }
 
-// --- API key (keychain-backed, via Rust) ------------------------------------
+// --- API key (stored on disk, via Rust) -------------------------------------
 
 /**
  * Whether a key is configured — backed by a plain (non-secret) localStorage
- * flag, deliberately NOT a keychain read. Reading the secret triggers macOS's
- * "<app> wants to use your confidential information" prompt; checking this on
- * every editor open would surface that dialog constantly. The keychain is only
- * touched when the user actually generates audio or saves a key. False outside
- * the desktop app, where TTS doesn't run anyway.
+ * flag so the editor and Settings can check it synchronously without a Rust
+ * round-trip on every render. False outside the desktop app, where TTS doesn't
+ * run anyway.
  */
 export function isConfigured(): boolean {
   if (typeof localStorage === "undefined") return false;
   return localStorage.getItem(CONFIGURED_KEY) === "1";
 }
 
-/** Save the key, or clear it when `key` is empty. Mirrors the keychain write
- * into the configured flag so the editor knows without reading the secret. */
+/** Save the key, or clear it when `key` is empty. Mirrors the write into the
+ * configured flag so the editor knows without reading the secret. */
 export async function setApiKey(key: string): Promise<void> {
   await invokeTauri<void>("set_elevenlabs_api_key", { key });
   if (typeof localStorage !== "undefined") {

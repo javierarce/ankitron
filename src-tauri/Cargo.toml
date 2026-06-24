@@ -21,10 +21,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["process", "time"] }
 dirs = "6"
-# API key lives in the macOS Keychain (encrypted at rest), never in a file or
-# the webview. apple-native is the macOS backend; add windows-native /
-# sync-secret-service here if the app is ever built for those platforms.
-keyring = { version = "3", features = ["apple-native"] }
 base64 = "0.22"
 
 [features]
