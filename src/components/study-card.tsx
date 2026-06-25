@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { Ease } from "@/lib/types";
-import { playAudio, resolveCardAudio, stopAudio } from "@/lib/audio";
+import {
+  onPlayingFileChange,
+  playAudio,
+  resolveCardAudio,
+  stopAudio,
+} from "@/lib/audio";
 import {
   diffTypedAnswer,
   extractExpectedClozeAnswer,
@@ -102,6 +107,22 @@ export function StudyCard({
     body.addEventListener("click", handleClick, true);
     return () => body.removeEventListener("click", handleClick, true);
   }, []);
+
+  // Mark the play button(s) for the sounding file as active, so a card with
+  // several clips shows which one is playing. Matched by filename, so if the
+  // same file appears more than once every copy lights up together.
+  useEffect(() => {
+    const body = cardBodyRef.current;
+    if (!body) return;
+    return onPlayingFileChange((file) => {
+      body.querySelectorAll<HTMLElement>("[data-audio-file]").forEach((btn) => {
+        btn.classList.toggle(
+          "is-playing",
+          file !== null && btn.getAttribute("data-audio-file") === file
+        );
+      });
+    });
+  }, [audio]);
 
   // No autoplay here: the session drives Anki's real (offscreen) reviewer,
   // which already autoplays card audio per the deck's options — playing it

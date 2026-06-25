@@ -228,12 +228,36 @@ let currentAudio: HTMLAudioElement | null = null;
 // it has been superseded.
 let playToken = 0;
 
+// The filename currently sounding, or null when nothing is. Subscribers (the
+// study card) use it to mark the matching play button as active, so a card
+// with several clips shows which one is playing.
+let currentFile: string | null = null;
+const playingListeners = new Set<(file: string | null) => void>();
+
+function setCurrentFile(file: string | null): void {
+  if (file === currentFile) return;
+  currentFile = file;
+  for (const listener of playingListeners) listener(file);
+}
+
+/** Subscribe to changes in the currently-playing filename. The listener is
+ * called immediately with the current value and on every change; returns an
+ * unsubscribe function. */
+export function onPlayingFileChange(
+  listener: (file: string | null) => void
+): () => void {
+  playingListeners.add(listener);
+  listener(currentFile);
+  return () => playingListeners.delete(listener);
+}
+
 export function stopAudio(): void {
   playToken++;
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
   }
+  setCurrentFile(null);
 }
 
 /** Play files one after another, cancelling any playback in progress. */
@@ -250,12 +274,15 @@ export async function playAudio(files: string[]): Promise<void> {
       audio.onended = () => resolve();
       audio.onpause = () => resolve();
       audio.onerror = () => resolve();
+      setCurrentFile(file);
       // play() rejects when the webview blocks autoplay before the first
       // user gesture — treat the file as done rather than stalling the queue.
       audio.play().catch(() => resolve());
     });
     if (token !== playToken) return;
   }
+  // Sequence finished on its own (a stop/supersede would have cleared it).
+  if (token === playToken) setCurrentFile(null);
 }
 
 // --- Autoplay ---------------------------------------------------------------

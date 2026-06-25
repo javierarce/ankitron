@@ -51,6 +51,25 @@ body {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
+/* The clip behind this button is currently sounding. Tinted fill plus a soft
+   pulse so it stands out among several play buttons on the same card. */
+.audio-tag.is-playing {
+  color: var(--accent, #2563eb);
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent);
+  animation: audio-tag-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes audio-tag-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #2563eb) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #2563eb) 0%, transparent);
+  }
+}
+
 /* Tauri integration: hidden-inset title bar on macOS. The header becomes
    the draggable region; interactive children opt out via .app-no-drag. */
 html.tauri .app-header {
