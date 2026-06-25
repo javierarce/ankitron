@@ -418,7 +418,8 @@
         Download for macOS
       </a>
       <p class="version">
-        Version <span id="version">0.33.0</span> ·
+        <!-- Stamped from package.json at deploy time (see deploy-site.yml). -->
+        Version <span id="version">0.38.1</span> ·
         <a href="https://github.com/javierarce/ankitron/releases/latest"
           >Release notes</a
         >
@@ -568,19 +569,6 @@
           true
         );
       })();
-
-      // Keep the version label in sync with the latest GitHub release. Falls
-      // back to the hardcoded version above if the request fails (e.g. offline
-      // or rate-limited).
-      fetch("https://api.github.com/repos/javierarce/ankitron/releases/latest")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data && data.tag_name) {
-            document.getElementById("version").textContent =
-              data.tag_name.replace(/^v/, "");
-          }
-        })
-        .catch(() => {});
     </script>
   </body>
 </html>

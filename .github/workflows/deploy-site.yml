@@ -4,8 +4,10 @@ on:
   push:
     branches: [main]
     # Only redeploy when the site (or this workflow) actually changes.
+    # package.json is included so a version bump restamps the version label.
     paths:
       - "docs/**"
+      - "package.json"
       - ".github/workflows/deploy-site.yml"
   workflow_dispatch:
 
@@ -22,6 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Stamp the live app version into the page server-side, so the browser
+      # never has to call the GitHub API (which adblockers block and which is
+      # rate-limited per IP). Sourced from package.json, bumped on every release.
+      - name: Stamp version into the page
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Stamping version $VERSION into docs/index.html"
+          sed -i "s|<span id=\"version\">[^<]*</span>|<span id=\"version\">${VERSION}</span>|" docs/index.html
+          grep -o '<span id="version">[^<]*</span>' docs/index.html
 
       - name: Deploy over SSH
         env:
