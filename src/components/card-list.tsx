@@ -325,8 +325,8 @@ export function CardList({
     if (!change) return;
     clearTagUndo();
     try {
-      for (const c of change.changes) {
-        await ankiFetch(change.action, { notes: c.noteIds, tags: c.tag });
+      for (const op of change.ops) {
+        await ankiFetch(op.action, { notes: op.noteIds, tags: op.tag });
       }
       refreshAfterChange();
     } catch {

@@ -6,14 +6,23 @@ import { useAllTags } from "@/hooks/use-all-tags";
 import { TagInput } from "./tag-input";
 
 /**
- * What a bulk tag operation changed, and how to reverse it. `action` is the
- * inverse op (removeTags undoes an add, addTags undoes a remove); `changes`
- * lists, per tag, exactly the notes that were actually modified so undo doesn't
+ * A single reversible tag operation: `action` is the inverse op needed to undo
+ * what was done (removeTags undoes an add, addTags undoes a remove), and
+ * `noteIds` lists exactly the notes that were actually changed so undo doesn't
  * touch notes that already had (or lacked) the tag.
  */
-export interface TagChange {
+export interface TagOp {
   action: "addTags" | "removeTags";
-  changes: { tag: string; noteIds: number[] }[];
+  tag: string;
+  noteIds: number[];
+}
+
+/**
+ * What a tag edit changed, as a flat list of reversible ops. One Apply can both
+ * add and remove tags, so a change may mix addTags and removeTags ops.
+ */
+export interface TagChange {
+  ops: TagOp[];
 }
 
 interface BulkTagDialogProps {
@@ -27,32 +36,40 @@ interface BulkTagDialogProps {
   onTagged?: (change: TagChange | null) => void;
 }
 
-type Mode = "add" | "remove";
+// What the user wants to happen to an in-use tag. "keep" is the default no-op:
+// for a tag on every selected note it means leave it; for a partially-applied
+// tag it means don't touch the notes either way.
+type TagState = "add" | "remove" | "keep";
 
 export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) {
   useScrollLock();
-  const [mode, setMode] = useState<Mode>("add");
-  // Add mode: the tags being entered. Remove mode: the in-use tags the user has
-  // unchecked, i.e. marked for removal.
+  // New tags typed into the field, to be added to every selected note.
   const [tags, setTags] = useState<string[]>([]);
   // Text typed into the tag field but not yet turned into a chip. Tracked so
   // clicking Apply still picks it up — pressing a button doesn't reliably blur
   // the input (and thus commit the text) on WebKit-based webviews.
   const [pending, setPending] = useState("");
-  const [toRemove, setToRemove] = useState<Set<string>>(() => new Set());
+  // Per in-use tag, the user's intent. Absent means "keep" (the default).
+  const [tagStates, setTagStates] = useState<Map<string, TagState>>(
+    () => new Map(),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const allTags = useAllTags();
+  const count = notes.length;
+
   // Tags in use across the selection, with how many of the selected notes carry
-  // each one — the checklist for Remove mode.
+  // each one — the editable checklist.
   const usage = new Map<string, number>();
   for (const n of notes) {
     for (const t of new Set(n.tags)) usage.set(t, (usage.get(t) ?? 0) + 1);
   }
   const inUse = [...usage.keys()].sort((a, b) => a.localeCompare(b));
-
-  const count = notes.length;
+  const hasPartial = inUse.some((t) => {
+    const u = usage.get(t) ?? 0;
+    return u > 0 && u < count;
+  });
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -62,60 +79,77 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [busy, onClose]);
 
-  function switchMode(next: Mode) {
-    if (next === mode) return;
-    setMode(next);
-    setTags([]);
-    setPending("");
-    setToRemove(new Set());
-    setError(null);
-  }
-
-  function toggleRemove(tag: string) {
-    setToRemove((prev) => {
-      const next = new Set(prev);
-      if (next.has(tag)) next.delete(tag);
-      else next.add(tag);
+  // Click cycles a tag's state. A fully-applied tag toggles keep⇄remove; a
+  // partially-applied one cycles keep→add→remove→keep so you can add it to the
+  // rest, strip it entirely, or leave the notes as they are.
+  function cycleTag(tag: string, isPartial: boolean) {
+    setTagStates((prev) => {
+      const next = new Map(prev);
+      const cur = next.get(tag) ?? "keep";
+      let resolved: TagState;
+      if (isPartial) {
+        resolved = cur === "keep" ? "add" : cur === "add" ? "remove" : "keep";
+      } else {
+        resolved = cur === "remove" ? "keep" : "remove";
+      }
+      if (resolved === "keep") next.delete(tag);
+      else next.set(tag, resolved);
       return next;
     });
   }
 
-  // Fold any uncommitted typed text into the add targets so it isn't lost when
+  // Fold any uncommitted typed text into the new tags so it isn't lost when
   // applying without first pressing Enter.
   const pendingTag = pending.trim();
-  const addTargets =
+  const newTags =
     pendingTag && !tags.includes(pendingTag) ? [...tags, pendingTag] : tags;
-  const targets = mode === "add" ? addTargets : [...toRemove];
-  const disabled = busy || targets.length === 0;
+
+  // Resolve the full set of tags to add and to remove, merging typed-in tags
+  // with checklist intent (a tag in both lands in one set, deduped).
+  const adds = new Set<string>(newTags);
+  const removes = new Set<string>();
+  for (const [tag, state] of tagStates) {
+    if (state === "add") adds.add(tag);
+    else if (state === "remove") removes.add(tag);
+  }
+  const disabled = busy || (adds.size === 0 && removes.size === 0);
 
   async function handleApply() {
-    if (targets.length === 0) return;
+    if (adds.size === 0 && removes.size === 0) return;
+    const addList = [...adds];
+    const removeList = [...removes];
+    const noteIds = notes.map((n) => n.noteId);
     setBusy(true);
     setError(null);
     try {
       // addTags only adds tags a note lacks, and removeTags only strips tags it
       // has, so both are no-ops where they don't apply — no client-side dedup
       // needed.
-      await ankiFetch(mode === "add" ? "addTags" : "removeTags", {
-        notes: notes.map((n) => n.noteId),
-        tags: targets.join(" "),
-      });
-      // Record exactly which notes each tag actually applied to, so a later undo
-      // reverses only the real changes.
-      const changes = targets
-        .map((tag) => ({
-          tag,
-          noteIds: notes
-            .filter((n) =>
-              mode === "add" ? !n.tags.includes(tag) : n.tags.includes(tag),
-            )
-            .map((n) => n.noteId),
-        }))
-        .filter((c) => c.noteIds.length > 0);
-      const change: TagChange | null =
-        changes.length === 0
-          ? null
-          : { action: mode === "add" ? "removeTags" : "addTags", changes };
+      if (addList.length > 0) {
+        await ankiFetch("addTags", { notes: noteIds, tags: addList.join(" ") });
+      }
+      if (removeList.length > 0) {
+        await ankiFetch("removeTags", {
+          notes: noteIds,
+          tags: removeList.join(" "),
+        });
+      }
+      // Record exactly which notes each tag actually applied to, with the
+      // inverse action, so a later undo reverses only the real changes.
+      const ops: TagOp[] = [];
+      for (const tag of addList) {
+        const ids = notes
+          .filter((n) => !n.tags.includes(tag))
+          .map((n) => n.noteId);
+        if (ids.length > 0) ops.push({ action: "removeTags", tag, noteIds: ids });
+      }
+      for (const tag of removeList) {
+        const ids = notes
+          .filter((n) => n.tags.includes(tag))
+          .map((n) => n.noteId);
+        if (ids.length > 0) ops.push({ action: "addTags", tag, noteIds: ids });
+      }
+      const change: TagChange | null = ops.length === 0 ? null : { ops };
       if (onTagged) {
         onTagged(change);
       } else {
@@ -123,19 +157,13 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
         window.location.reload();
       }
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : mode === "add"
-            ? "Failed to add tags"
-            : "Failed to remove tags",
-      );
+      setError(err instanceof Error ? err.message : "Failed to update tags");
       setBusy(false);
     }
   }
 
-  const noun = count === 1 ? "1 Note" : `${count} Notes`;
-  const title = mode === "add" ? `Add Tags to ${noun}` : `Remove Tags from ${noun}`;
+  const noun = count === 1 ? "Note" : `${count} Notes`;
+  const title = `Edit Tags · ${noun}`;
 
   return (
     <div
@@ -147,76 +175,70 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
       <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
         <h3 className="mb-3 text-lg font-semibold">{title}</h3>
 
-        <div className="mb-4 flex rounded-lg border border-foreground/15 p-0.5 text-sm">
-          {(["add", "remove"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => switchMode(m)}
-              disabled={busy}
-              className={`flex-1 rounded-md px-3 py-1 capitalize transition-colors ${
-                mode === m
-                  ? "bg-foreground/10 font-medium"
-                  : "text-foreground/60 hover:text-foreground"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
+        <TagInput
+          tags={tags}
+          onChange={setTags}
+          onInputChange={setPending}
+          suggestions={allTags}
+          autoFocus
+          onSubmit={() => {
+            if (!disabled) handleApply();
+          }}
+        />
+        <p className="mt-2 text-xs text-foreground/50">
+          Type to add new tags. Separate with commas.
+        </p>
 
-        {mode === "add" ? (
-          <>
-            <TagInput
-              tags={tags}
-              onChange={setTags}
-              onInputChange={setPending}
-              suggestions={allTags}
-              autoFocus
-              onSubmit={() => {
-                if (!disabled) handleApply();
-              }}
-            />
-            <p className="mt-2 text-xs text-foreground/50">
-              Separate tags with commas.
-            </p>
-          </>
-        ) : inUse.length === 0 ? (
-          <p className="py-4 text-center text-sm text-foreground/50">
-            The selected {count === 1 ? "note has" : "notes have"} no tags.
-          </p>
-        ) : (
-          <>
-            <p className="mb-2 text-xs text-foreground/50">
-              Uncheck the tags you want to remove.
-            </p>
+        {inUse.length > 0 && (
+          <div className="mt-4">
             <ul className="max-h-64 overflow-auto rounded-lg border border-foreground/10">
               {inUse.map((tag) => {
-                const removing = toRemove.has(tag);
                 const used = usage.get(tag) ?? 0;
+                const isPartial = used > 0 && used < count;
+                const state = tagStates.get(tag) ?? "keep";
+                const checked = state === "add" || (state === "keep" && !isPartial);
+                const indeterminate = state === "keep" && isPartial;
+                // Preview how many notes will carry the tag once applied.
+                const projected =
+                  state === "remove" ? 0 : state === "add" ? count : used;
                 return (
                   <li key={tag}>
                     <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-foreground/5">
                       <input
                         type="checkbox"
-                        checked={!removing}
-                        onChange={() => toggleRemove(tag)}
+                        checked={checked}
+                        ref={(el) => {
+                          if (el) el.indeterminate = indeterminate;
+                        }}
+                        onChange={() => cycleTag(tag, isPartial)}
                         disabled={busy}
                         className="size-4 accent-foreground"
                       />
                       <span
-                        className={`flex-1 ${removing ? "text-red-500 line-through" : ""}`}
+                        className={`flex-1 ${
+                          state === "remove"
+                            ? "text-red-500 line-through"
+                            : state === "add"
+                              ? "text-green-600 dark:text-green-500"
+                              : ""
+                        }`}
                       >
                         {tag}
                       </span>
-                      <span className="text-xs text-foreground/40">
-                        {used} {used === 1 ? "note" : "notes"}
+                      <span className="text-xs tabular-nums text-foreground/40">
+                        {projected} of {count}
                       </span>
                     </label>
                   </li>
                 );
               })}
             </ul>
-          </>
+            <p className="mt-2 text-xs text-foreground/50">
+              {hasPartial
+                ? "Uncheck to remove a tag, or check a half-filled one to add it to every note."
+                : "Uncheck the tags you want to remove."}
+            </p>
+          </div>
         )}
 
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
@@ -234,15 +256,7 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
             disabled={disabled}
             className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
-            {mode === "add"
-              ? busy
-                ? "Adding…"
-                : "Add"
-              : busy
-                ? "Removing…"
-                : toRemove.size > 0
-                  ? `Remove ${toRemove.size}`
-                  : "Remove"}
+            {busy ? "Applying…" : "Apply"}
           </button>
         </div>
       </div>
