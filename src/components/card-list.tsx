@@ -135,6 +135,19 @@ function sortNotes(notes: Note[], mode: SortMode): Note[] {
   }
 }
 
+// A muted keyboard hint shown next to an action's label, so the single-key
+// shortcuts (e/s/t) are discoverable from the controls that trigger them.
+function Kbd({ children }: { children: string }) {
+  return (
+    // The hint font is smaller than the label it sits beside; flex centering
+    // lands its tight line box a hair high, so nudge it down a pixel to line up
+    // optically with the text baseline.
+    <kbd className="relative top-px font-sans text-[11px] leading-none text-foreground/30">
+      {children}
+    </kbd>
+  );
+}
+
 function CardMenu({
   onEdit,
   isSuspended,
@@ -187,27 +200,30 @@ function CardMenu({
               setOpen(false);
               onEdit();
             }}
-            className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
+            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
           >
-            Edit
+            <span>Edit</span>
+            <Kbd>E</Kbd>
           </button>
           <button
             onClick={() => {
               setOpen(false);
               onToggleSuspend();
             }}
-            className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
+            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
           >
-            {isSuspended ? "Unsuspend" : "Suspend"}
+            <span>{isSuspended ? "Unsuspend" : "Suspend"}</span>
+            <Kbd>S</Kbd>
           </button>
           <button
             onClick={() => {
               setOpen(false);
               onMove();
             }}
-            className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
+            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
           >
-            Move to deck&hellip;
+            <span>Move to deck&hellip;</span>
+            <Kbd>M</Kbd>
           </button>
           <button
             onClick={() => {
@@ -628,11 +644,75 @@ export function CardList({
           setSelectedIds(new Set(ids));
           setBulkTagging(true);
         }
+        return;
+      }
+      if (e.key === "s" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Suspend the selection; with nothing selected, act on the focused row.
+        // Like the row menu, this toggles a note's cards together, so the
+        // suspended badge stays accurate. Unsuspend only when every target note
+        // is already suspended; otherwise suspend (matches the bulk action).
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-note-id]")
+        );
+        let ids = rows
+          .map((el) => Number(el.dataset.noteId))
+          .filter((id) => selectedIds.has(id));
+        if (ids.length === 0) {
+          const focusedRow = (
+            document.activeElement as HTMLElement | null
+          )?.closest?.("[data-note-id]") as HTMLElement | null;
+          if (focusedRow) ids = [Number(focusedRow.dataset.noteId)];
+        }
+        const idSet = new Set(ids);
+        const targetNotes = notes.filter((n) => idSet.has(n.noteId));
+        const cardIds = targetNotes.flatMap((n) => n.cards ?? []);
+        if (cardIds.length === 0) return;
+        e.preventDefault();
+        const allSuspended = targetNotes.every((n) =>
+          (n.cards ?? []).some((id) => suspended.has(id))
+        );
+        ankiFetch(allSuspended ? "unsuspend" : "suspend", { cards: cardIds })
+          .then(() => {
+            setSuspended((prev) => {
+              const next = new Set(prev);
+              for (const id of cardIds) {
+                if (allSuspended) next.delete(id);
+                else next.add(id);
+              }
+              return next;
+            });
+            onSuspendChange?.();
+          })
+          .catch(() => {
+            // silently fail
+          });
+        return;
+      }
+      if (e.key === "m" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Move the selection; with nothing selected, move the focused row by
+        // selecting it first so the dialog (which reads the selection) has it.
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-note-id]")
+        );
+        let ids = rows
+          .map((el) => Number(el.dataset.noteId))
+          .filter((id) => selectedIds.has(id));
+        if (ids.length === 0) {
+          const focusedRow = (
+            document.activeElement as HTMLElement | null
+          )?.closest?.("[data-note-id]") as HTMLElement | null;
+          if (focusedRow) ids = [Number(focusedRow.dataset.noteId)];
+        }
+        if (ids.length > 0) {
+          e.preventDefault();
+          setSelectedIds(new Set(ids));
+          setBulkMoving(true);
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasDialog, selectedIds, tagUndo]);
+  }, [hasDialog, selectedIds, tagUndo, notes, suspended, onSuspendChange]);
 
   // Scope to the active segments first; "All" (empty set) keeps every note. A
   // segment covers its whole subtree, so a chip for a parent deck (e.g.
@@ -1099,6 +1179,7 @@ export function CardList({
               >
                 <PencilSimple size={16} weight="bold" />
                 Edit
+                <Kbd>E</Kbd>
               </button>
               <button
                 onClick={() => handleBulkSuspend(!allSelectedSuspended)}
@@ -1115,6 +1196,7 @@ export function CardList({
                     Suspend
                   </>
                 )}
+                <Kbd>S</Kbd>
               </button>
               <button
                 onClick={() => setBulkMoving(true)}
@@ -1122,6 +1204,7 @@ export function CardList({
               >
                 <FolderSimple size={16} weight="bold" />
                 Move
+                <Kbd>M</Kbd>
               </button>
               <button
                 onClick={() => setBulkTagging(true)}
@@ -1129,6 +1212,7 @@ export function CardList({
               >
                 <Tag size={16} weight="bold" />
                 Tag
+                <Kbd>T</Kbd>
               </button>
               <button
                 onClick={() => setBulkDeleteOpen(true)}

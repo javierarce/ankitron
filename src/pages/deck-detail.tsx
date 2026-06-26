@@ -211,9 +211,10 @@ export function DeckDetailPage() {
           </Link>
           <button
             onClick={() => setShowAddForm(true)}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
           >
             Add note
+            <kbd className="relative top-px font-sans text-[11px] leading-none text-foreground/30">A</kbd>
           </button>
           {studyDue > 0 ? (
             <Link
