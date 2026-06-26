@@ -166,10 +166,10 @@ export function CommandPalette() {
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
       e.preventDefault();
       setSelected((s) => Math.min(s + 1, Math.max(items.length - 1, 0)));
-    } else if (e.key === "ArrowUp") {
+    } else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
       e.preventDefault();
       setSelected((s) => Math.max(s - 1, 0));
     } else if (e.key === "Enter") {
@@ -208,6 +208,10 @@ export function CommandPalette() {
               <input
                 ref={inputRef}
                 type="text"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -230,6 +234,10 @@ export function CommandPalette() {
                     <button
                       key={item.kind === "action" ? `action:${item.id}` : `deck:${item.deck}`}
                       type="button"
+                      // Keep focus on the input so arrow keys always drive the
+                      // `selected` highlight. Tabbing onto a row would strand
+                      // focus here, where nothing handles the arrows.
+                      tabIndex={-1}
                       data-index={i}
                       onClick={() => activate(i)}
                       onMouseMove={() => setSelected(i)}

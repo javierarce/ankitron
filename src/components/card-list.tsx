@@ -36,6 +36,7 @@ import { stripSoundTags } from "@/lib/audio";
 import { noteDisplayFields } from "@/lib/note-fields";
 import { deckLeaf, formatDeckPath, isCardInDeck } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
+import { isScrollLocked } from "@/hooks/use-scroll-lock";
 
 /**
  * A segment's label, split into a dimmed parent path and the highlighted leaf,
@@ -482,6 +483,9 @@ export function CardList({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (hasDialog) return;
+      // A modal overlay above the list (e.g. the command palette) holds the
+      // scroll lock; don't let list shortcuts fire behind it.
+      if (isScrollLocked()) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       const inField = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
