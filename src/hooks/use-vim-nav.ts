@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { isScrollLocked } from "./use-scroll-lock";
 
 interface UseVimNavOptions {
   enabled?: boolean;
@@ -29,6 +30,13 @@ export function useVimNav({
 
     function handleKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // A modal overlay (command palette, card editor, confirm dialog…) holds
+      // the scroll lock while open. Don't let background list navigation grab
+      // arrow keys — focus can sit off the overlay's input (e.g. on a palette
+      // result button), so the key would otherwise jump focus to the list
+      // behind the overlay.
+      if (isScrollLocked()) return;
 
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
