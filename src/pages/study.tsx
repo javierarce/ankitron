@@ -282,12 +282,29 @@ export function StudyPage() {
     transitioningRef.current = false;
   }
 
-  async function handleEditClose() {
-    // loadCurrentCard rebuilds the queue and resets to the question side; if the
-    // answer was showing before the edit, restore it so editing doesn't bounce
-    // the card back to its unanswered state.
-    const wasRevealed = isRevealed;
+  function handleEditClose() {
+    // Closing the editor without saving touches nothing, so just dismiss it and
+    // leave the card (and its revealed state) exactly as they were — reloading
+    // here would flash the card back to the question side for no reason.
     setEditingNote(null);
+  }
+
+  async function handleEditSaved(updated?: Note) {
+    // CardForm passes the note only when fields/tags/deck actually changed; a
+    // no-op save reports back with no argument. Nothing changed means nothing to
+    // reload — treat it like a plain close.
+    if (!updated) {
+      setEditingNote(null);
+      return;
+    }
+    // Something changed, so reload to pick up the edit. loadCurrentCard rebuilds
+    // the queue and resets to the question side; wrap the whole swap in a single
+    // fade so the reload reads as a smooth transition rather than a snap, and
+    // restore the answer side if it was showing before the edit.
+    const wasRevealed = isRevealed;
+    setCardVisible(false);
+    setEditingNote(null);
+    await delay(FADE_MS);
     try {
       await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
     } catch {
@@ -295,18 +312,14 @@ export function StudyPage() {
     }
     await loadCurrentCard();
     if (wasRevealed) {
-      // Mirror handleReveal's fade: hide the question side, swap in the answer
-      // while hidden, then fade it back in so the restore matches a manual reveal.
-      setCardVisible(false);
-      await delay(FADE_MS);
       try {
         await ankiFetch("guiShowAnswer");
       } catch {
         // Re-revealing in Anki is best-effort; reveal locally regardless.
       }
       setIsRevealed(true);
-      setCardVisible(true);
     }
+    setCardVisible(true);
   }
 
   async function handleAddSaved() {
@@ -409,7 +422,7 @@ export function StudyPage() {
           deckName={deckName}
           note={editingNote}
           onClose={handleEditClose}
-          onSaved={handleEditClose}
+          onSaved={handleEditSaved}
         />
       )}
 
