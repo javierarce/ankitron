@@ -39,6 +39,8 @@
 | <kbd>a</kbd> | Add a new note |
 | <kbd>e</kbd> | Edit the selected notes in sequence (or the focused note if none are selected) |
 | <kbd>t</kbd> | Add or remove tags on the selected notes (or the focused note if none are selected) |
+| <kbd>s</kbd> | Suspend or unsuspend the selected notes (or the focused note if none are selected) |
+| <kbd>m</kbd> | Move the selected notes to another deck (or the focused note if none are selected) |
 | <kbd>Cmd</kbd> + <kbd>Z</kbd> | Undo the last tag change |
 
 ## Study session
@@ -49,6 +51,7 @@
 | <kbd>Space</kbd> or <kbd>2</kbd> | Grade **Pass** (after reveal) |
 | <kbd>r</kbd> | Play the card's audio (answer side once revealed, otherwise the question) |
 | <kbd>e</kbd> | Edit the current note |
+| <kbd>s</kbd> | Suspend the current note |
 | <kbd>a</kbd> | Add a note to the session |
 | <kbd>Cmd</kbd> + <kbd>←</kbd> | Return to the deck (confirms once you've started reviewing) |
 | <kbd>Cmd</kbd> + <kbd>Z</kbd> | Undo the last review |

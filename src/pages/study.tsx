@@ -15,7 +15,6 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface CurrentCard {
   cardId: number;
-  noteId: number;
   question: string;
   answer: string;
   deckName: string;
@@ -333,6 +332,45 @@ export function StudyPage() {
     await loadCurrentCard();
   }
 
+  async function handleSuspend() {
+    if (!card || transitioningRef.current) return;
+    transitioningRef.current = true;
+    setAnswering(true);
+    // Fade the card out, drop the note from the queue while hidden, then fade in.
+    setCardVisible(false);
+    await delay(FADE_MS);
+    try {
+      // Suspend the whole note, not just this card. The rest of the app treats
+      // suspension as note-level — the card list shows a note as suspended and
+      // toggles all its cards together — so suspending a single card of a
+      // multi-card note (e.g. the forward side of a Basic-and-reversed note)
+      // would leave the list unable to represent the partial state.
+      //
+      // guiCurrentCard doesn't return a note id, so resolve it from the card
+      // (as handleEdit does) and suspend all of that note's cards. Fall back to
+      // just this card if resolution fails.
+      let cardIds = [card.cardId];
+      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
+      const noteId = cardsResult[0]?.noteId ?? cardsResult[0]?.note;
+      if (noteId) {
+        const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
+        if (notes[0]?.cards?.length) cardIds = notes[0].cards;
+      }
+      await ankiFetch("suspend", { cards: cardIds });
+      // The offscreen reviewer's queue still holds the just-suspended card(s);
+      // re-enter review to rebuild it (queue -1 cards drop out), then serve the
+      // next. Suspending isn't a review, so the reviewed count is left untouched.
+      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
+      await loadCurrentCard();
+    } catch {
+      setError("Failed to suspend note. Try again.");
+    } finally {
+      setAnswering(false);
+      setCardVisible(true);
+      transitioningRef.current = false;
+    }
+  }
+
   async function handleAnswer(ease: Ease) {
     if (transitioningRef.current) return;
     transitioningRef.current = true;
@@ -403,6 +441,7 @@ export function StudyPage() {
             onReveal={handleReveal}
             onAnswer={handleAnswer}
             onEdit={handleEdit}
+            onSuspend={handleSuspend}
             answering={answering}
             sounds={sounds}
           />
