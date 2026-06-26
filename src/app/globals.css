@@ -249,6 +249,16 @@ select {
   font-style: italic;
 }
 
+/* Dividers inserted via the toolbar's HR button. Match the app's hairline
+   weight; a touch more contrast than the study-answer divider so it's clearly
+   visible against the editor's plain background. */
+.tiptap hr {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  margin: 0.75em 0;
+  height: 0;
+}
+
 /* Image selection ring in the rich editor. ProseMirror toggles
    `.ProseMirror-selectednode` on the selected node; scope it to the focused
    editor so opening the form — where each field's editor can start with its
@@ -278,6 +288,43 @@ select {
 
 :root.dark .cloze {
   color: #fbbf24; /* amber-400 */
+}
+
+/* Syntax highlighting for the card editor's raw-HTML source view. The tokens
+   are produced by src/lib/html-source.ts and rendered in a <pre> behind a
+   transparent textarea (see html-source-editor.tsx). Colors are tuned for
+   legibility on both themes. */
+.tok-punct {
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+.tok-tag {
+  color: #0550ae;
+}
+.tok-attr {
+  color: #953800;
+}
+.tok-value {
+  color: #0a7d33;
+}
+.tok-comment {
+  color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  font-style: italic;
+}
+.tok-anki {
+  color: #8250df;
+}
+
+:root.dark .tok-tag {
+  color: #79c0ff;
+}
+:root.dark .tok-attr {
+  color: #ffa657;
+}
+:root.dark .tok-value {
+  color: #7ee787;
+}
+:root.dark .tok-anki {
+  color: #d2a8ff;
 }
 
 /* Card answer dividers: unify the hairline for any <hr> that ships inside

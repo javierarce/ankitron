@@ -10,6 +10,8 @@ import {
 import { isConfigured } from "@/lib/elevenlabs";
 import { isExperimentalEnabled } from "@/lib/experimental";
 import { TtsDialog } from "./tts-dialog";
+import { HtmlSourceEditor } from "./html-source-editor";
+import { formatHtml } from "@/lib/html-source";
 
 // Anki stores images as bare collection-media filenames (`<img src="x.jpg">`)
 // the app origin can't serve. This NodeView shows the file by resolving it to
@@ -113,7 +115,6 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         heading: false,
         codeBlock: false,
         blockquote: false,
-        horizontalRule: false,
       }),
       MediaImage,
     ],
@@ -283,8 +284,17 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
   const enterSource = useCallback(() => {
     if (!editor) return;
     // Show the parent's current value: the original imported HTML if the user
-    // hasn't edited in rich mode yet, otherwise what they last produced.
-    setSourceHtml(content);
+    // hasn't edited in rich mode yet, otherwise what they last produced. Pretty-
+    // print it for readability — formatHtml only adds whitespace where it can't
+    // change rendering, so the source stays lossless. Fall back to the raw value
+    // if formatting ever throws on unexpected input.
+    let formatted: string;
+    try {
+      formatted = formatHtml(content);
+    } catch {
+      formatted = content;
+    }
+    setSourceHtml(formatted);
     setSourceMode(true);
   }, [editor, content]);
 
@@ -321,15 +331,13 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
             {"</>"}
           </button>
         </div>
-        <textarea
+        <HtmlSourceEditor
           value={sourceHtml}
-          onChange={(e) => {
-            setSourceHtml(e.target.value);
-            onChange(e.target.value);
+          onChange={(html) => {
+            setSourceHtml(html);
+            onChange(html);
           }}
           placeholder={placeholder}
-          spellCheck={false}
-          className="block w-full resize-y min-h-[100px] max-h-[240px] px-3 py-2 font-mono text-xs leading-relaxed bg-transparent focus:outline-none placeholder:text-foreground/30"
         />
       </div>
     );
@@ -348,6 +356,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
           type="button"
           tabIndex={-1}
           onClick={() => editor.chain().focus().toggleBold().run()}
+          title="Bold"
           className={`rounded px-2 py-1 text-xs font-bold transition-colors ${
             editor.isActive("bold")
               ? "bg-foreground/15 text-foreground"
@@ -360,6 +369,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
           type="button"
           tabIndex={-1}
           onClick={() => editor.chain().focus().toggleItalic().run()}
+          title="Italic"
           className={`rounded px-2 py-1 text-xs italic transition-colors ${
             editor.isActive("italic")
               ? "bg-foreground/15 text-foreground"
@@ -397,7 +407,17 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         <button
           type="button"
           tabIndex={-1}
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          title="Insert divider"
+          className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
+        >
+          ―
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
           onClick={addImage}
+          title="Insert image by URL"
           className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
         >
           IMG
