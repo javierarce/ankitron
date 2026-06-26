@@ -55,6 +55,22 @@ describe("formatHtml", () => {
     expect(out).toContain("<pre>  line 1\n  line 2</pre>");
   });
 
+  it("keeps non-block raw elements inline so no whitespace is injected", () => {
+    // <style>/<script>/<textarea> aren't block-level: putting them on their own
+    // line would add collapsible whitespace to the inline flow (e.g. render
+    // "a b" instead of "ab"). They must stay on the same line as adjacent text.
+    expect(formatHtml("a<style>.x{color:red}</style>b")).toBe(
+      "a<style>.x{color:red}</style>b"
+    );
+    expect(formatHtml("a<script>var x=1</script>b")).toBe("a<script>var x=1</script>b");
+    expect(formatHtml("a<textarea>hi</textarea>b")).toBe("a<textarea>hi</textarea>b");
+  });
+
+  it("preserves raw-element content verbatim even when kept inline", () => {
+    const input = "x<style>\n  .y { margin: 0 }\n</style>y";
+    expect(formatHtml(input)).toBe(input);
+  });
+
   it("handles void and self-closing elements", () => {
     expect(formatHtml('<div>a<br>b<img src="x"/></div>')).toBe(
       ["<div>", "  a<br>b<img src=\"x\"/>", "</div>"].join("\n")

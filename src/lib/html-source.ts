@@ -4,9 +4,10 @@
 //
 //  - formatHtml only inserts whitespace where it can't affect rendering: around
 //    block-level element boundaries (where leading/trailing whitespace collapses
-//    in normal flow). Inline elements, text, and raw elements (<pre>, <script>,
-//    <style>, <textarea>) are emitted verbatim, so re-indenting never changes
-//    how the card renders. It is idempotent.
+//    in normal flow). Inline elements and text are emitted verbatim, and raw
+//    elements (<pre>, <script>, <style>, <textarea>) keep their content
+//    untouched — staying inline unless they're also block-level (<pre>). So
+//    re-indenting never changes how the card renders. It is idempotent.
 //
 //  - highlightHtml emits escaped markup whose *visible* characters (tags
 //    stripped, entities decoded) exactly match the input. That invariant lets
@@ -121,12 +122,21 @@ export function formatHtml(html: string): string {
       continue;
     }
 
-    // Raw elements: copy the whole element (tags + content) through untouched.
+    // Raw elements: copy the whole element (tags + content) through untouched,
+    // so their internal whitespace is never reflowed. Only break onto a new line
+    // when the element is also block-level (<pre>); <script>/<style>/<textarea>
+    // are not, so giving them their own line would inject collapsible whitespace
+    // into the surrounding inline flow and change rendering — keep them inline.
     if (RAW_ELEMENTS.has(info.name) && !info.isClose && !info.selfClose) {
       const closeIdx = indexOfCaseInsensitive(html, `</${info.name}`, end);
       const rawEnd = closeIdx === -1 ? html.length : tagEnd(html, closeIdx);
-      flushInline();
-      lines.push(pad(indent) + html.slice(i, rawEnd));
+      const raw = html.slice(i, rawEnd);
+      if (BLOCK_ELEMENTS.has(info.name)) {
+        flushInline();
+        lines.push(pad(indent) + raw);
+      } else {
+        inline += raw;
+      }
       i = rawEnd;
       continue;
     }
