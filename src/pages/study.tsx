@@ -15,7 +15,6 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface CurrentCard {
   cardId: number;
-  noteId: number;
   question: string;
   answer: string;
   deckName: string;
@@ -332,10 +331,18 @@ export function StudyPage() {
       // suspension as note-level — the card list shows a note as suspended and
       // toggles all its cards together — so suspending a single card of a
       // multi-card note (e.g. the forward side of a Basic-and-reversed note)
-      // would leave the list unable to represent the partial state. Fetch the
-      // note's cards and suspend them all.
-      const notes = await ankiFetch<Note[]>("notesInfo", { notes: [card.noteId] });
-      const cardIds = notes[0]?.cards ?? [card.cardId];
+      // would leave the list unable to represent the partial state.
+      //
+      // guiCurrentCard doesn't return a note id, so resolve it from the card
+      // (as handleEdit does) and suspend all of that note's cards. Fall back to
+      // just this card if resolution fails.
+      let cardIds = [card.cardId];
+      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
+      const noteId = cardsResult[0]?.noteId ?? cardsResult[0]?.note;
+      if (noteId) {
+        const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
+        if (notes[0]?.cards?.length) cardIds = notes[0].cards;
+      }
       await ankiFetch("suspend", { cards: cardIds });
       // The offscreen reviewer's queue still holds the just-suspended card(s);
       // re-enter review to rebuild it (queue -1 cards drop out), then serve the
