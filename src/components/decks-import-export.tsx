@@ -72,6 +72,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
         <ImportResultModal
           result={null}
           error={exportError}
+          errorTitle="Export failed"
           onClose={() => setExportError(null)}
         />
       )}

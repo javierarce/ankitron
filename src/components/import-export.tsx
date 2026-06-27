@@ -70,6 +70,7 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
         <ImportResultModal
           result={null}
           error={exportError}
+          errorTitle="Export failed"
           onClose={() => setExportError(null)}
         />
       )}

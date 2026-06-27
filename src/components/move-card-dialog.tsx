@@ -145,6 +145,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
               if (e.key === "Enter") handleMove();
             }}
             placeholder="New deck name"
+            spellCheck={false}
             autoFocus
             disabled={moving}
             className="mt-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"

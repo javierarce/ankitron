@@ -135,6 +135,7 @@ export function TagInput({
           onKeyDown={handleKeyDown}
           onBlur={commitInput}
           autoFocus={autoFocus}
+          spellCheck={false}
           placeholder={tags.length === 0 ? "Add tags..." : ""}
           className="flex-1 min-w-[80px] bg-transparent text-sm placeholder:text-foreground/40 focus:outline-none"
         />

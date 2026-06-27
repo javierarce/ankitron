@@ -43,9 +43,7 @@ export function DeckSettings({ deckName }: DeckSettingsProps) {
         Play card audio automatically during study
       </label>
       <p className="mt-1 text-xs text-foreground/50">
-        This is Anki&apos;s per-deck audio option, so it also applies when
-        studying in Anki itself and to decks sharing this deck&apos;s options
-        preset. Audio can always be played with the inline buttons or{" "}
+        Audio can always be played manually with the inline buttons or{" "}
         <kbd>R</kbd>.
       </p>
     </div>

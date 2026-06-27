@@ -5,12 +5,47 @@ import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Minus } from "@phosphor-icons/react/dist/ssr/Minus";
 import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { compareDeckPaths, deckLeaf, deckParent, formatDeckPath } from "@/lib/deck";
+import {
+  compareDeckPaths,
+  deckLeaf,
+  deckParent,
+  formatDeckPath,
+  renameDeck,
+} from "@/lib/deck";
+import { recordDeckRedirect } from "@/lib/deck-redirects";
+import {
+  buildExport,
+  downloadDeckJson,
+  fetchCardDecksByNoteId,
+} from "@/lib/import-export";
+import type { DueCounts, Note } from "@/lib/types";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { CardForm } from "./card-form";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
+import { MoveDeckDialog } from "./move-deck-dialog";
 import { DecksImportExport } from "./decks-import-export";
+import { ImportResultModal } from "./import-result-modal";
+
+// Whether a deck (or any of its subdecks, since studying a deck includes them)
+// has cards due. While due counts are still loading we report `true` so the
+// Study action stays enabled rather than flickering disabled then enabled.
+function deckCanStudy(
+  deck: string,
+  dueCounts: Record<string, DueCounts>,
+  dueLoaded: boolean,
+): boolean {
+  if (!dueLoaded) return true;
+  for (const [name, due] of Object.entries(dueCounts)) {
+    if (
+      (name === deck || name.startsWith(deck + "::")) &&
+      due.new + due.learn + due.review > 0
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 interface DeckNode {
   name: string;
@@ -44,11 +79,18 @@ function buildDeckTree(decks: string[]): DeckNode[] {
 interface AllDecksListProps {
   decks: string[];
   noteCounts: Record<string, number>;
+  /** Due counts per deck; drives whether a row's Study action is enabled. */
+  dueCounts: Record<string, DueCounts>;
   /** Re-fetch decks/counts after a change (e.g. a note added from the menu). */
   onRefresh: () => void;
 }
 
-export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps) {
+export function AllDecksList({
+  decks,
+  noteCounts,
+  dueCounts,
+  onRefresh,
+}: AllDecksListProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -71,8 +113,21 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
   // Deck pending deletion (renders the confirm dialog when set).
   const [deletingDeck, setDeletingDeck] = useState<string | null>(null);
 
+  // Deck being moved (renders the move dialog when set).
+  const [movingDeck, setMovingDeck] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  // Export failures reuse the import result modal purely as an error display.
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const hasDialog =
-    showDialog || addCardDeck !== null || deletingDeck !== null;
+    showDialog ||
+    addCardDeck !== null ||
+    deletingDeck !== null ||
+    movingDeck !== null;
+
+  const dueLoaded = Object.keys(dueCounts).length > 0;
 
   // Every deck that has at least one subdeck (each proper ancestor prefix), so
   // h/l (and ←/→) know whether a focused row is collapsible.
@@ -213,6 +268,46 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
     : 0;
   const deletingNoteTotal = deletingDeck ? noteCounts[deletingDeck] : undefined;
 
+  // Move mirrors the deck-settings flow: renameDeck moves the deck (and its
+  // subtree) under the chosen parent, then we record redirects and refresh.
+  async function handleMove(newName: string) {
+    if (!movingDeck) return;
+    setMoving(true);
+    setMoveError(null);
+    try {
+      const renames = await renameDeck(movingDeck, newName, ankiFetch);
+      setMovingDeck(null);
+      setMoving(false);
+      // No-op (e.g. a case-only change) — nothing moved.
+      if (renames.length === 0) return;
+      for (const { from, to } of renames) recordDeckRedirect(from, to);
+      onRefresh();
+    } catch (err) {
+      setMoveError(err instanceof Error ? err.message : "Move failed.");
+      setMoving(false);
+    }
+  }
+
+  // Export a single deck straight to a JSON download — same payload the
+  // Decks-header and deck-settings exports build.
+  async function handleExport(deck: string) {
+    setExportError(null);
+    try {
+      const noteIds = await ankiFetch<number[]>("findNotes", {
+        query: `deck:"${deck}"`,
+      });
+      const notes =
+        noteIds.length === 0
+          ? []
+          : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
+      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
+      const payload = buildExport(deck, notes, undefined, cardDecksByNoteId);
+      await downloadDeckJson(payload, deck);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed.");
+    }
+  }
+
   const tree = useMemo(() => buildDeckTree(decks), [decks]);
   const q = query.trim().toLowerCase();
   // While searching, show a flat list of matches with their full path — the
@@ -248,6 +343,7 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
               else searchRef.current?.blur();
             }
           }}
+          spellCheck={false}
           placeholder="Search decks…"
           className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
         />
@@ -268,7 +364,10 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
                     key={deck}
                     deck={deck}
                     count={noteCounts[deck]}
+                    canStudy={deckCanStudy(deck, dueCounts, dueLoaded)}
                     onAddCard={() => setAddCardDeck(deck)}
+                    onMove={() => setMovingDeck(deck)}
+                    onExport={() => handleExport(deck)}
                     onDelete={() => setDeletingDeck(deck)}
                   />
                 ))
@@ -280,7 +379,11 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
                     expanded={expanded}
                     onToggle={toggle}
                     noteCounts={noteCounts}
+                    dueCounts={dueCounts}
+                    dueLoaded={dueLoaded}
                     onAddCard={setAddCardDeck}
+                    onMove={setMovingDeck}
+                    onExport={handleExport}
                     onDelete={setDeletingDeck}
                   />
                 ))}
@@ -303,6 +406,7 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
                 type="text"
                 value={newDeckName}
                 onChange={(e) => setNewDeckName(e.target.value)}
+                spellCheck={false}
                 placeholder="Deck name…"
                 className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
               />
@@ -358,6 +462,28 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
           }}
         />
       )}
+
+      {movingDeck && (
+        <MoveDeckDialog
+          deckName={movingDeck}
+          moving={moving}
+          error={moveError}
+          onCancel={() => {
+            setMovingDeck(null);
+            setMoveError(null);
+          }}
+          onConfirm={handleMove}
+        />
+      )}
+
+      {exportError && (
+        <ImportResultModal
+          result={null}
+          error={exportError}
+          errorTitle="Export failed"
+          onClose={() => setExportError(null)}
+        />
+      )}
     </div>
   );
 }
@@ -381,7 +507,11 @@ function TreeRows({
   expanded,
   onToggle,
   noteCounts,
+  dueCounts,
+  dueLoaded,
   onAddCard,
+  onMove,
+  onExport,
   onDelete,
 }: {
   node: DeckNode;
@@ -389,7 +519,11 @@ function TreeRows({
   expanded: Set<string>;
   onToggle: (fullName: string) => void;
   noteCounts: Record<string, number>;
+  dueCounts: Record<string, DueCounts>;
+  dueLoaded: boolean;
   onAddCard: (deck: string) => void;
+  onMove: (deck: string) => void;
+  onExport: (deck: string) => void;
   onDelete: (deck: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
@@ -425,7 +559,10 @@ function TreeRows({
         <CountLabel count={noteCounts[node.fullName]} />
         <DeckRowMenu
           deck={node.fullName}
+          canStudy={deckCanStudy(node.fullName, dueCounts, dueLoaded)}
           onAddCard={() => onAddCard(node.fullName)}
+          onMove={() => onMove(node.fullName)}
+          onExport={() => onExport(node.fullName)}
           onDelete={() => onDelete(node.fullName)}
         />
       </div>
@@ -439,7 +576,11 @@ function TreeRows({
             expanded={expanded}
             onToggle={onToggle}
             noteCounts={noteCounts}
+            dueCounts={dueCounts}
+            dueLoaded={dueLoaded}
             onAddCard={onAddCard}
+            onMove={onMove}
+            onExport={onExport}
             onDelete={onDelete}
           />
         ))}
@@ -452,12 +593,18 @@ function TreeRows({
 function SearchRow({
   deck,
   count,
+  canStudy,
   onAddCard,
+  onMove,
+  onExport,
   onDelete,
 }: {
   deck: string;
   count: number | undefined;
+  canStudy: boolean;
   onAddCard: () => void;
+  onMove: () => void;
+  onExport: () => void;
   onDelete: () => void;
 }) {
   const parent = deckParent(deck);
@@ -475,18 +622,31 @@ function SearchRow({
         <span className="font-medium">{deckLeaf(deck)}</span>
       </Link>
       <CountLabel count={count} />
-      <DeckRowMenu deck={deck} onAddCard={onAddCard} onDelete={onDelete} />
+      <DeckRowMenu
+        deck={deck}
+        canStudy={canStudy}
+        onAddCard={onAddCard}
+        onMove={onMove}
+        onExport={onExport}
+        onDelete={onDelete}
+      />
     </div>
   );
 }
 
 function DeckRowMenu({
   deck,
+  canStudy,
   onAddCard,
+  onMove,
+  onExport,
   onDelete,
 }: {
   deck: string;
+  canStudy: boolean;
   onAddCard: () => void;
+  onMove: () => void;
+  onExport: () => void;
   onDelete: () => void;
 }) {
   const navigate = useNavigate();
@@ -551,14 +711,16 @@ function DeckRowMenu({
             ref={menuRef}
             role="menu"
             style={{ position: "fixed", top: pos.top, right: pos.right }}
-            className="z-50 min-w-[150px] rounded-lg border border-border bg-background py-1 shadow-lg"
+            className="z-50 flex w-max min-w-[160px] flex-col rounded-lg border border-border bg-background py-1 shadow-lg"
           >
             <button
+              disabled={!canStudy}
               onClick={() => {
                 setOpen(false);
                 navigate(`/decks/${encoded}/study`);
               }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
+              title={canStudy ? undefined : "Nothing to study in this deck"}
+              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:text-foreground/30 disabled:hover:bg-transparent"
             >
               Study
             </button>
@@ -570,6 +732,24 @@ function DeckRowMenu({
               className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
             >
               Add a note
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onMove();
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
+            >
+              Move
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onExport();
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
+            >
+              Export
             </button>
             <button
               onClick={() => {
