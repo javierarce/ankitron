@@ -359,3 +359,16 @@ export async function storeAudioFile(file: File): Promise<string> {
   const data = await fileToBase64(file);
   return storeAudioBytes(data, file.name);
 }
+
+/**
+ * Store an image file in Anki's media folder and return the bare filename to
+ * use as an `<img src>`. Reuses storeAudioBytes — it's the generic
+ * storeMediaFile primitive, not audio-specific. Anki renames on collision, so
+ * the returned name is the one to reference. MediaImage (card-editor.tsx)
+ * resolves bare filenames to a displayable URL, and storing the file in the
+ * media folder means it syncs to AnkiWeb/mobile with the note.
+ */
+export async function storeImageFile(file: File): Promise<string> {
+  const data = await fileToBase64(file);
+  return storeAudioBytes(data, file.name);
+}
