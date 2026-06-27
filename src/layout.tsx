@@ -80,7 +80,7 @@ export function Layout() {
     <SyncProvider>
       <header
         onMouseDown={handleDrag}
-        className="app-header sticky top-0 z-40 border-b border-foreground/10 bg-background"
+        className="app-header sticky top-0 z-40 border-b border-border bg-background"
       >
         <div className="app-row flex items-center justify-between gap-2 py-3">
           <div className="app-no-drag">

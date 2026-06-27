@@ -318,8 +318,8 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
 
   if (sourceMode) {
     return (
-      <div className="relative rounded-lg border border-foreground/15 overflow-hidden">
-        <div className="flex items-center gap-1 border-b border-foreground/10 px-2 py-1.5 bg-foreground/[0.03]">
+      <div className="relative rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center gap-1 border-b border-border px-2 py-1.5 bg-foreground/[0.03]">
           <span className="px-1 text-xs font-medium text-foreground/40">HTML</span>
           <button
             type="button"
@@ -350,8 +350,8 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
     doc.firstChild.content.size === 0;
 
   return (
-    <div className="relative rounded-lg border border-foreground/15 overflow-hidden">
-      <div className="flex gap-1 border-b border-foreground/10 px-2 py-1.5 bg-foreground/[0.03]">
+    <div className="relative rounded-lg border border-border overflow-hidden">
+      <div className="flex gap-1 border-b border-border px-2 py-1.5 bg-foreground/[0.03]">
         <button
           type="button"
           tabIndex={-1}

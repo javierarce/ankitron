@@ -55,7 +55,7 @@ export function RenameDeckDialog({
         if (e.target === e.currentTarget && !renaming) onCancel();
       }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
         <h3 className="mb-1 text-lg font-semibold">Rename Deck</h3>
         <p className="mb-4 text-sm text-foreground/50">
           {parent ? (
@@ -81,7 +81,7 @@ export function RenameDeckDialog({
           placeholder="Deck name"
           autoFocus
           disabled={renaming}
-          className="w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+          className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
         />
 
         {hasSeparator && (
@@ -103,7 +103,7 @@ export function RenameDeckDialog({
           <button
             onClick={submit}
             disabled={disabled}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {renaming ? "Renaming…" : "Rename"}
           </button>

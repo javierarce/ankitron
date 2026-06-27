@@ -441,7 +441,7 @@ export function CardForm({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg outline-none"
+        className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-lg outline-none"
       >
         <div className="mb-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -516,14 +516,14 @@ export function CardForm({
             {customModel ? (
               // A custom note type can't be remapped onto our curated types
               // without losing fields, so the type is shown but not editable.
-              <div className="w-full rounded-md border border-foreground/10 bg-foreground/[0.03] px-2 py-1.5 text-sm text-foreground/70">
+              <div className="w-full rounded-md border border-border bg-foreground/[0.03] px-2 py-1.5 text-sm text-foreground/70">
                 {note?.modelName}
               </div>
             ) : (
               <select
                 value={cardType}
                 onChange={(e) => changeCardType(e.target.value as CardType)}
-                className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
               >
                 {CARD_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -607,7 +607,7 @@ export function CardForm({
               <select
                 value={targetDeck}
                 onChange={(e) => setTargetDeck(e.target.value)}
-                className="w-full rounded-md border border-foreground/10 bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
               >
                 {decks.map((d) => (
                   <option key={d} value={d}>
@@ -626,7 +626,7 @@ export function CardForm({
                   value={newDeck}
                   onChange={(e) => setNewDeck(e.target.value)}
                   placeholder="New deck name"
-                  className="mt-2 w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+                  className="mt-2 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
                 />
               )}
               {destDeck && destDeck !== deckName && (
@@ -666,7 +666,7 @@ export function CardForm({
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+                className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
               >
                 {saving ? "Saving..." : isEdit ? "Update Note" : "Add Note"}
               </button>

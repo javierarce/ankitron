@@ -4,6 +4,7 @@ import { Ease, Note, NoteField } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Tooltip } from "@/components/tooltip";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
 import { coveringDecks, isCardInDeck } from "@/lib/deck";
@@ -64,7 +65,11 @@ export function StudyPage() {
     to: string;
     state?: unknown;
   } | null>(null);
-  const [cardVisible, setCardVisible] = useState(true);
+  // Starts hidden so the first card fades in (see the rAF effect below) the same
+  // way later cards do; the reveal/answer handlers drive it from then on.
+  const [cardVisible, setCardVisible] = useState(false);
+  // Fades the progress bar in once on mount, so it eases in rather than popping.
+  const [barVisible, setBarVisible] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
@@ -75,6 +80,24 @@ export function StudyPage() {
     () => (card ? extractSoundFilenames(card.fields ?? {}) : []),
     [card]
   );
+
+  useEffect(() => {
+    // Flip on the next frame so the browser sees the opacity-0 → opacity-100
+    // change as a transition rather than the initial paint.
+    const id = requestAnimationFrame(() => setBarVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Fades the first card in once it loads. Guarded so it runs a single time —
+  // after that the reveal/answer handlers own cardVisible, and re-triggering
+  // here would fight their fade-outs.
+  const firstCardFadedRef = useRef(false);
+  useEffect(() => {
+    if (firstCardFadedRef.current || loading || !card) return;
+    firstCardFadedRef.current = true;
+    const id = requestAnimationFrame(() => setCardVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, [loading, card]);
 
   const loadCurrentCard = useCallback(async () => {
     try {
@@ -393,10 +416,39 @@ export function StudyPage() {
     }
   }
 
+  // Once `reviewed` passes the initial queue size the planned set is cleared and
+  // any further reviews are repeats from cards that lapsed back in. The real
+  // remaining count is unknowable, so the bar simply holds full. The overflow
+  // count is acknowledged afterwards on the completion screen.
+  const progressWidth =
+    initialTotal > 0
+      ? reviewed >= initialTotal
+        ? 100
+        : (reviewed / initialTotal) * 100
+      : 0;
+  const extraReviews =
+    initialTotal > 0 ? Math.max(0, reviewed - initialTotal) : 0;
+
+  // Hover text for the progress bar. With a known queue size, show "n of N
+  // cards" until the queue is cleared, then just "N cards"; either way append
+  // "+ m repeats" once cards have lapsed back in. No size known → plain count.
+  const repeatsSuffix =
+    extraReviews > 0
+      ? ` + ${extraReviews} ${extraReviews === 1 ? "repeat" : "repeats"}`
+      : "";
+  const progressLabel =
+    initialTotal > 0
+      ? `${reviewed >= initialTotal ? `${initialTotal}` : `${reviewed} of ${initialTotal}`} ${initialTotal === 1 ? "card" : "cards"}${repeatsSuffix}`
+      : `${reviewed} reviewed`;
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center pb-[6rem]">
       {loading && (
-        <p className="text-foreground/50">Loading cards...</p>
+        <div
+          className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground"
+          role="status"
+          aria-label="Loading cards"
+        />
       )}
 
       {error && <p className="text-red-500">{error}</p>}
@@ -404,17 +456,26 @@ export function StudyPage() {
       {!loading && !error && completed && (
         <div className="text-center">
           <p className="text-xl font-semibold mb-2">Session complete!</p>
-          <p className="text-foreground/50 mb-6">
-            {reviewed > 0
-              ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
-              : "No cards are due for review."}
-          </p>
+          <div className="mb-6">
+            <p className="text-foreground/50">
+              {reviewed > 0
+                ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
+                : "No cards are due for review."}
+            </p>
+            {extraReviews > 0 && (
+              <p className="mt-1 text-sm text-foreground/40">
+                {extraReviews === 1
+                  ? "1 was a repeat from a card that lapsed."
+                  : `${extraReviews} were repeats from cards that lapsed.`}
+              </p>
+            )}
+          </div>
           {reviewed > 0 && syncStatus === "error" && (
             <div className="mb-4 flex flex-col items-center gap-2">
               <p className="text-xs text-foreground/40">Sync failed.</p>
               <button
                 onClick={() => setSyncStatus("idle")}
-                className="rounded-md border border-foreground/15 px-3 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
               >
                 Retry sync
               </button>
@@ -480,26 +541,23 @@ export function StudyPage() {
         />
       )}
 
-      {!completed && initialTotal > 0 && (
+      {!completed && (
         <div
-          className="fixed bottom-0 left-0 right-0 h-1 bg-foreground/10"
-          aria-hidden
+          className="fixed bottom-6 right-6 transition-opacity duration-500 ease-out"
+          style={{ opacity: barVisible ? 1 : 0 }}
         >
-          <div
-            className="h-full bg-foreground/60 transition-all duration-300 ease-out"
-            style={{
-              width: `${Math.min(100, (reviewed / initialTotal) * 100)}%`,
-            }}
-          />
+          <Tooltip side="top" content={progressLabel}>
+            <div
+              className="h-2 w-[200px] overflow-hidden rounded-full border border-border bg-foreground/[0.04]"
+              aria-hidden
+            >
+              <div
+                className="h-full rounded-full bg-foreground/[0.12] transition-all duration-300 ease-out"
+                style={{ width: `${progressWidth}%` }}
+              />
+            </div>
+          </Tooltip>
         </div>
-      )}
-
-      {reviewed > 0 && !completed && (
-        <p className="fixed bottom-4 right-6 text-sm text-foreground/30">
-          {initialTotal > 0
-            ? `${reviewed > initialTotal ? `(+${reviewed - initialTotal}) ` : ""}${Math.min(reviewed, initialTotal)} / ${initialTotal}`
-            : `${reviewed} reviewed`}
-        </p>
       )}
     </div>
   );

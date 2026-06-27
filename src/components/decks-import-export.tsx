@@ -125,7 +125,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       <button
         onClick={() => setShowExportPicker(true)}
         disabled={importing || decks.length === 0}
-        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Pick a deck and download it as JSON"
       >
         Export
@@ -133,7 +133,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={importing}
-        className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Import notes from a JSON file"
       >
         {importing ? "Importing…" : "Import"}
@@ -226,7 +226,7 @@ function ExportPickerDialog({
       }}
     >
       <div
-        className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
+        className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg"
       >
         <h3 className="mb-1 text-lg font-semibold">Export deck</h3>
         <p className="mb-4 text-sm text-foreground/50">
@@ -237,7 +237,7 @@ function ExportPickerDialog({
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
           autoFocus
-          className="w-full rounded-md border border-foreground/10 bg-transparent px-2 py-2 text-sm focus:border-foreground/30 focus:outline-none"
+          className="w-full rounded-md border border-border bg-transparent px-2 py-2 text-sm focus:border-foreground/30 focus:outline-none"
         >
           {decks.map((d) => (
             <option key={d} value={d}>
@@ -257,7 +257,7 @@ function ExportPickerDialog({
           <button
             onClick={handleExport}
             disabled={working || !selected}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {working ? "Exporting…" : "Export"}
           </button>

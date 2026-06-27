@@ -95,12 +95,12 @@ export function ElevenLabsSettings() {
               placeholder="ElevenLabs API key"
               autoComplete="off"
               autoFocus
-              className="min-w-0 flex-1 rounded-md border border-foreground/15 bg-transparent px-3 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-3 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
             />
             <button
               onClick={handleSave}
               disabled={busy || keyInput.trim().length === 0}
-              className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
             >
               {busy ? "Saving…" : "Save"}
             </button>
@@ -116,14 +116,14 @@ export function ElevenLabsSettings() {
               readOnly
               disabled
               aria-label="API key saved"
-              className="min-w-0 flex-1 cursor-default rounded-md border border-foreground/15 bg-foreground/[0.06] px-3 py-1.5 text-sm text-foreground/40 disabled:opacity-100"
+              className="min-w-0 flex-1 cursor-default rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 text-sm text-foreground/40 disabled:opacity-100"
             />
             {/* Replace clears the stored key and reveals the field — to swap a
                 key you re-enter it, so there's no separate Remove. */}
             <button
               onClick={handleRemove}
               disabled={busy}
-              className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
             >
               Replace
             </button>
@@ -150,7 +150,7 @@ export function ElevenLabsSettings() {
             value={model}
             onChange={(e) => handleModelChange(e.target.value)}
             aria-label="ElevenLabs model"
-            className="rounded-md border border-foreground/15 bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
           >
             {ELEVENLABS_MODELS.map((m) => (
               <option key={m.id} value={m.id}>

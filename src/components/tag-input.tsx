@@ -108,7 +108,7 @@ export function TagInput({
 
   return (
     <div className="relative">
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border px-3 py-2">
         {tags.map((tag) => (
           <span
             key={tag}
@@ -140,7 +140,7 @@ export function TagInput({
         />
       </div>
       {showMenu && (
-        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-foreground/15 bg-background py-1 shadow-lg">
+        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-border bg-background py-1 shadow-lg">
           {matches.map((s, i) => (
             <li key={s}>
               <button

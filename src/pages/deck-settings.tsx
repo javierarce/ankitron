@@ -89,7 +89,7 @@ export function DeckSettingsPage() {
 
       {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
 
-      <div className="divide-y divide-foreground/10">
+      <div className="divide-y divide-border">
         <div className="flex items-center justify-between gap-4 py-4">
           <div className="min-w-0">
             <p className="text-sm font-medium">Deck name</p>
@@ -102,7 +102,7 @@ export function DeckSettingsPage() {
               setActionError(null);
               setShowRename(true);
             }}
-            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5"
+            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5"
           >
             Rename
           </button>
@@ -120,7 +120,7 @@ export function DeckSettingsPage() {
               setActionError(null);
               setShowMove(true);
             }}
-            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5"
+            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5"
           >
             Move
           </button>

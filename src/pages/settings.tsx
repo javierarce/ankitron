@@ -72,7 +72,7 @@ export function SettingsPage() {
     <div className="mx-auto w-full max-w-lg">
       <h1 className="mb-6 text-xl font-semibold">Settings</h1>
 
-      <div className="divide-y divide-foreground/10">
+      <div className="divide-y divide-border">
         <div className="flex items-center justify-between gap-4 py-4">
           <div>
             <p className="text-sm font-medium">Appearance</p>
@@ -84,7 +84,7 @@ export function SettingsPage() {
             value={theme}
             onChange={(e) => setTheme(e.target.value as Theme)}
             aria-label="Theme"
-            className="rounded-md border border-foreground/15 bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
           >
             <option value="light">Light</option>
             <option value="dark">Dark</option>
@@ -104,7 +104,7 @@ export function SettingsPage() {
           <button
             onClick={syncNow}
             disabled={sync === "syncing"}
-            className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
+            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
           >
             {sync === "syncing" ? "Syncing…" : "Sync now"}
           </button>
@@ -123,7 +123,7 @@ export function SettingsPage() {
             <button
               onClick={update ? openDialog : checkForUpdates}
               disabled={check === "checking"}
-              className="shrink-0 rounded-md border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
+              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
             >
               {update
                 ? "Update now"
@@ -154,7 +154,7 @@ export function SettingsPage() {
             In development — these features may change or be removed.
           </p>
           {experimental && (
-            <div className="mt-2 divide-y divide-foreground/10">
+            <div className="mt-2 divide-y divide-border">
               <ElevenLabsSettings />
             </div>
           )}

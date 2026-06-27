@@ -102,7 +102,7 @@ export function ImportTargetDialog({
       }}
     >
       <div
-        className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-y-auto rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
+        className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-lg"
       >
         <h3 className="mb-4 text-lg font-semibold">Import deck</h3>
 
@@ -156,7 +156,7 @@ export function ImportTargetDialog({
                 <select
                   value={pickedDeck}
                   onChange={(e) => setPickedDeck(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1 text-sm focus:border-foreground/30 focus:outline-none"
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm focus:border-foreground/30 focus:outline-none"
                 >
                   {decks.map((d) => (
                     <option key={d} value={d}>
@@ -190,7 +190,7 @@ export function ImportTargetDialog({
                     }
                   }}
                   placeholder="Deck name"
-                  className="mt-1 w-full rounded-md border border-foreground/10 bg-transparent px-2 py-1 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
                 />
               )}
             </span>
@@ -214,7 +214,7 @@ export function ImportTargetDialog({
           <button
             onClick={submit}
             disabled={submitDisabled}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {importing ? "Importing…" : "Import"}
           </button>

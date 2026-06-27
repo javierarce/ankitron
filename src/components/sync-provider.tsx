@@ -87,7 +87,7 @@ function SyncIndicator({
       <button
         onClick={onRetry}
         title="Sync failed — click to retry"
-        className="app-no-drag fixed bottom-3 right-3 z-50 flex items-center gap-1.5 rounded-full border border-foreground/10 bg-background/80 px-2.5 py-1 text-xs text-red-500 shadow-sm backdrop-blur transition hover:bg-foreground/5"
+        className="app-no-drag fixed bottom-3 right-3 z-50 flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-red-500 shadow-sm backdrop-blur transition hover:bg-foreground/5"
       >
         <span className="h-2 w-2 rounded-full bg-red-500" />
         Sync failed
@@ -98,7 +98,7 @@ function SyncIndicator({
   return (
     <div
       title="Syncing…"
-      className="fixed bottom-3 right-3 z-50 flex items-center gap-1.5 rounded-full border border-foreground/10 bg-background/80 px-2.5 py-1 text-xs text-foreground/50 shadow-sm backdrop-blur"
+      className="fixed bottom-3 right-3 z-50 flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-foreground/50 shadow-sm backdrop-blur"
     >
       <span className="h-3 w-3 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground/60" />
       Syncing…

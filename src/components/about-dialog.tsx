@@ -65,7 +65,7 @@ export function AboutDialog() {
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      <div className="mx-4 w-full max-w-sm rounded-xl border border-foreground/10 bg-background p-8 text-center shadow-lg">
+      <div className="mx-4 w-full max-w-sm rounded-xl border border-border bg-background p-8 text-center shadow-lg">
         <img
           src="/apple-touch-icon.png"
           alt=""

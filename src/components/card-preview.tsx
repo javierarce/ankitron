@@ -84,13 +84,13 @@ export function CardPreview({ notes, title }: CardPreviewProps) {
           </button>
         )}
 
-        <div className="flex max-h-full min-h-[7rem] w-full flex-col overflow-auto rounded-xl border border-foreground/10 bg-background text-left shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+        <div className="flex max-h-full min-h-[7rem] w-full flex-col overflow-auto rounded-xl border border-border bg-background text-left shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
           <HtmlContent
             html={faces.front}
             className="prose prose-sm dark:prose-invert max-w-none px-6 py-5"
           />
           {hasBack && (
-            <div className="border-t border-foreground/10 bg-foreground/[0.03]">
+            <div className="border-t border-border bg-foreground/[0.03]">
               <HtmlContent
                 html={faces.back}
                 className="study-answer prose prose-sm dark:prose-invert max-w-none px-6 py-5"

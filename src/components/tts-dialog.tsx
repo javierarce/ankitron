@@ -153,7 +153,7 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
         if (e.target === e.currentTarget && !inserting) onClose();
       }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
         <h3 className="mb-1 text-lg font-semibold">Generate audio</h3>
         <p className="mb-4 line-clamp-3 text-sm text-foreground/50">
           “{text}”
@@ -174,7 +174,7 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
               onChange={(e) => selectVoice(e.target.value)}
               disabled={generating || inserting}
               autoFocus
-              className="w-full rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
             >
               {voices.map((v) => (
                 <option key={v.voiceId} value={v.voiceId}>
@@ -188,7 +188,7 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
                 type="button"
                 onClick={handleGenerate}
                 disabled={generating || inserting || !voiceId}
-                className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
               >
                 {generating
                   ? "Generating…"
@@ -201,7 +201,7 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
                   type="button"
                   onClick={handlePlay}
                   disabled={inserting}
-                  className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+                  className="rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
                 >
                   ▶ Play
                 </button>
@@ -227,7 +227,7 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
             type="button"
             onClick={handleInsert}
             disabled={!audio || inserting}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {inserting ? "Inserting…" : "Insert"}
           </button>

@@ -142,7 +142,7 @@ function StudyCardMenu({
         <div
           role="menu"
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-0 top-full mt-1 min-w-[180px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg"
+          className="absolute right-0 top-full mt-1 min-w-[180px] rounded-lg border border-border bg-background py-1 shadow-lg"
         >
           <MenuItem
             label="Edit Note"
@@ -359,7 +359,7 @@ export function StudyCard({
               }
             : undefined
         }
-        className={`study-card-body group relative rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+        className={`study-card-body group relative rounded-xl border border-border shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
           !isRevealed && !typed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
       >
@@ -391,7 +391,7 @@ export function StudyCard({
                     }
                   }}
                   placeholder="Type your answer…"
-                  className="my-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+                  className="my-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
                 />
                 <HtmlContent html={questionAfter} />
               </div>
@@ -420,7 +420,7 @@ export function StudyCard({
                the first carries a full-width top border so the dividers run
                edge to edge across the card. */}
             {typed ? (
-              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-3">
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border px-8 py-3">
                 {typedDiff ? (
                   typedDiff.correct ? (
                     <div className="flex justify-center">
@@ -430,7 +430,7 @@ export function StudyCard({
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center justify-center gap-3 font-mono text-sm">
-                      <span className="inline-flex overflow-hidden rounded-md border border-foreground/10">
+                      <span className="inline-flex overflow-hidden rounded-md border border-border">
                         {groupRuns(typedDiff.typed).map((r, idx) => (
                           <span
                             key={idx}
@@ -446,7 +446,7 @@ export function StudyCard({
                         ))}
                       </span>
                       <span className="text-foreground/30" aria-hidden>→</span>
-                      <span className="inline-flex overflow-hidden rounded-md border border-foreground/10">
+                      <span className="inline-flex overflow-hidden rounded-md border border-border">
                         {groupRuns(typedDiff.expected).map((r, idx) => (
                           <span
                             key={idx}
@@ -472,7 +472,7 @@ export function StudyCard({
               </div>
             ) : (
               isClozeReveal && (
-                <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-6">
+                <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border px-8 py-6">
                   <HtmlContent html={splitAnswer.front} />
                 </div>
               )
@@ -480,7 +480,7 @@ export function StudyCard({
 
             {/* Section 3 — back of the card */}
             {splitAnswer.back.trim() && (
-              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-foreground/10 px-8 py-6">
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border px-8 py-6">
                 <HtmlContent html={splitAnswer.back} />
               </div>
             )}

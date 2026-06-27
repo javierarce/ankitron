@@ -82,7 +82,7 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
 // over the badge columns below (same 3-column 2rem grid as DueCountsBadges).
 function GroupHeader({ title }: { title: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-foreground/10 bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
+    <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-border bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
       <span>{title}</span>
       <span className="grid w-[6.5rem] grid-cols-3 text-center text-[10px] tracking-normal text-foreground/40">
         <span>New</span>
@@ -101,9 +101,9 @@ function SingleDecksCard({
   dueCounts: Record<string, DueCounts>;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+    <div className="overflow-hidden rounded-xl border border-border shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title="Single decks" />
-      <div className="divide-y divide-foreground/10">
+      <div className="divide-y divide-border">
         {decks.map((deck) => (
           <Link
             key={deck}
@@ -130,9 +130,9 @@ function DueGroupCard({
   dueCounts: Record<string, DueCounts>;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+    <div className="overflow-hidden rounded-xl border border-border shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
       <GroupHeader title={root} />
-      <div className="divide-y divide-foreground/10">
+      <div className="divide-y divide-border">
         <Link
           data-nav-item
           to={`/decks/${encodeURIComponent(root)}/study`}
@@ -195,7 +195,7 @@ export function DueCountsBadges({
     // counts line up under the New/Learn/Due header labels (same width + grid),
     // and a row with "0" stays aligned with one containing "12". An outer border
     // wraps the pill; divide-x draws the hairlines between each number.
-    <span className="grid w-[6.5rem] grid-cols-3 divide-x divide-foreground/5 overflow-hidden rounded-full border border-foreground/10 bg-foreground/[0.02] text-[11px] font-medium tabular-nums">
+    <span className="grid w-[6.5rem] grid-cols-3 divide-x divide-foreground/5 overflow-hidden rounded-full border border-border bg-foreground/[0.02] text-[11px] font-medium tabular-nums">
       <CountSegment value={due.new} label="New" showTooltip={showTooltip} />
       <CountSegment value={due.learn} label="Learning" showTooltip={showTooltip} />
       <CountSegment value={due.review} label="Due" showTooltip={showTooltip} />

@@ -172,7 +172,7 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
         if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
         <h3 className="mb-3 text-lg font-semibold">{title}</h3>
 
         <TagInput
@@ -191,7 +191,7 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
 
         {inUse.length > 0 && (
           <div className="mt-4">
-            <ul className="max-h-64 overflow-auto rounded-lg border border-foreground/10">
+            <ul className="max-h-64 overflow-auto rounded-lg border border-border">
               {inUse.map((tag) => {
                 const used = usage.get(tag) ?? 0;
                 const isPartial = used > 0 && used < count;
@@ -254,7 +254,7 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
           <button
             onClick={handleApply}
             disabled={disabled}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {busy ? "Applying…" : "Apply"}
           </button>

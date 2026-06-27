@@ -34,7 +34,7 @@ export function ConfirmDialog({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="mx-4 w-full max-w-sm rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+      <div className="mx-4 w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-lg">
         <h3 className="mb-2 text-lg font-semibold">{title}</h3>
         <p className="mb-6 text-sm text-foreground/60">{message}</p>
         <div className="flex justify-end gap-3">

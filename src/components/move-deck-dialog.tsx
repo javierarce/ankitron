@@ -85,7 +85,7 @@ export function MoveDeckDialog({
         if (e.target === e.currentTarget && !moving) onCancel();
       }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
         <h3 className="mb-1 text-lg font-semibold">Move Deck</h3>
         <p className="mb-4 text-sm text-foreground/50">
           Choose where{" "}
@@ -99,7 +99,7 @@ export function MoveDeckDialog({
           onChange={(e) => setChoice(e.target.value)}
           disabled={moving}
           autoFocus
-          className="w-full rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
         >
           <option value={TOP_LEVEL}>Top level (no parent)</option>
           {candidates.map((d) => (
@@ -125,7 +125,7 @@ export function MoveDeckDialog({
             placeholder="New parent deck name"
             autoFocus
             disabled={moving}
-            className="mt-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+            className="mt-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
           />
         )}
 
@@ -142,7 +142,7 @@ export function MoveDeckDialog({
           <button
             onClick={submit}
             disabled={disabled}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {moving ? "Moving…" : "Move"}
           </button>
