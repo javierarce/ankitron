@@ -44,7 +44,7 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
 
   if (dueGroups.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center pb-[6rem] text-foreground/50">
+      <div className="fade-in flex flex-1 items-center justify-center pb-[6rem] text-foreground/50">
         {decks.length === 0
           ? "No decks found. Open Decks to create one."
           : "Nothing due. You're all caught up."}
@@ -60,7 +60,7 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
   const subdeckGroups = dueGroups.filter((g) => !isSingle(g));
 
   return (
-    <div className="flex flex-1 items-center justify-center pb-[6rem]">
+    <div className="fade-in flex flex-1 items-center justify-center pb-[6rem]">
       <div className="grid w-full gap-4">
         {singleDecks.length > 0 && (
           <SingleDecksCard decks={singleDecks} dueCounts={dueCounts} />
