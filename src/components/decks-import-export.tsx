@@ -1,18 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { Note } from "@/lib/types";
 import {
   buildExport,
   downloadDeckJson,
   fetchCardDecksByNoteId,
-  importDeck,
-  isExportedDeck,
-  type ExportedDeck,
-  type ImportResult,
 } from "@/lib/import-export";
-import { ImportResultModal } from "./import-export";
-import { ImportTargetDialog } from "./import-target-dialog";
+import { useDeckImport } from "@/hooks/use-deck-import";
+import { ImportResultModal } from "./import-result-modal";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 interface DecksImportExportProps {
@@ -21,96 +16,16 @@ interface DecksImportExportProps {
 
 export function DecksImportExport({ decks }: DecksImportExportProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<ExportedDeck | null>(null);
-  const [importing, setImporting] = useState(false);
+  const importer = useDeckImport();
   const [showExportPicker, setShowExportPicker] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Kept after a successful import so "Overwrite anyway" can re-run it, and as
-  // the signal that Anki changed and the page needs a reload on dismiss.
-  const [lastImport, setLastImport] = useState<{
-    target: string;
-    parsed: ExportedDeck;
-  } | null>(null);
+  // Export failures reuse the result modal purely as a generic error display;
+  // kept local since they're unrelated to the shared import controller.
+  const [exportError, setExportError] = useState<string | null>(null);
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
-    setError(null);
-    setResult(null);
-
-    try {
-      const text = await file.text();
-      let json: unknown;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        throw new Error("Invalid JSON file.");
-      }
-      if (!isExportedDeck(json)) {
-        throw new Error("File is not a valid deck export.");
-      }
-      setPending(json);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not read file.");
-    }
-  }
-
-  async function runImport(target: string, isNew: boolean) {
-    if (!pending) return;
-    setImporting(true);
-    try {
-      if (isNew) {
-        await ankiFetch("createDeck", { deck: target });
-      }
-      const addOnly = target !== pending.deckName;
-      const r = await importDeck(
-        target,
-        pending,
-        { ankiFetch, ensureClozeTypedModel },
-        { addOnly },
-      );
-      setResult(r);
-      setLastImport({ target, parsed: pending });
-      setPending(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Import failed.");
-      setPending(null);
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  async function runOverwrite() {
-    if (!lastImport) return;
-    setImporting(true);
-    try {
-      const addOnly = lastImport.target !== lastImport.parsed.deckName;
-      const r = await importDeck(
-        lastImport.target,
-        lastImport.parsed,
-        { ankiFetch, ensureClozeTypedModel },
-        { addOnly, overwriteStale: true },
-      );
-      setResult(r);
-    } catch (err) {
-      setResult(null);
-      setError(err instanceof Error ? err.message : "Import failed.");
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  function dismissResult() {
-    // Reload only when an import actually ran, so the page reflects the new
-    // cards; a parse/validation error changed nothing.
-    if (lastImport) {
-      window.location.reload();
-      return;
-    }
-    setResult(null);
-    setError(null);
+    if (file) importer.beginImportFromFile(file);
   }
 
   return (
@@ -124,7 +39,7 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       />
       <button
         onClick={() => setShowExportPicker(true)}
-        disabled={importing || decks.length === 0}
+        disabled={importer.importing || decks.length === 0}
         className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Pick a deck and download it as JSON"
       >
@@ -132,11 +47,11 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
       </button>
       <button
         onClick={() => fileInputRef.current?.click()}
-        disabled={importing}
+        disabled={importer.importing}
         className="rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors disabled:opacity-50"
         title="Import notes from a JSON file"
       >
-        {importing ? "Importing…" : "Import"}
+        {importer.importing ? "Importing…" : "Import"}
       </button>
 
       {showExportPicker && (
@@ -146,27 +61,18 @@ export function DecksImportExport({ decks }: DecksImportExportProps) {
           onDone={() => setShowExportPicker(false)}
           onError={(msg) => {
             setShowExportPicker(false);
-            setError(msg);
+            setExportError(msg);
           }}
         />
       )}
 
-      {pending && (
-        <ImportTargetDialog
-          parsed={pending}
-          importing={importing}
-          onCancel={() => setPending(null)}
-          onConfirm={runImport}
-        />
-      )}
+      {importer.dialogs}
 
-      {(result || error) && (
+      {exportError && (
         <ImportResultModal
-          result={result}
-          error={error}
-          importing={importing}
-          onOverwriteStale={runOverwrite}
-          onClose={dismissResult}
+          result={null}
+          error={exportError}
+          onClose={() => setExportError(null)}
         />
       )}
     </>

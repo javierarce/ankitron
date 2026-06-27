@@ -4,17 +4,24 @@ import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { AboutDialog } from "@/components/about-dialog";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
+import { FileDropZone } from "@/components/file-drop-zone";
 import { FullScreenSpinner } from "@/components/full-screen-spinner";
 import { HeaderNav } from "@/components/header-nav";
 import { SyncProvider } from "@/components/sync-provider";
 import { UpdateBadge } from "@/components/update-badge";
 import { UpdatePrompt } from "@/components/update-prompt";
+import { useDeckImport } from "@/hooks/use-deck-import";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function Layout() {
   const [ankiReady, setAnkiReady] = useState(!isTauri);
+  // App-wide deck import: dropping a JSON file anywhere in the window (header
+  // included) opens the import flow. The window listener below already stops the
+  // browser from navigating to a dropped file; this turns the drop into an
+  // import instead.
+  const importer = useDeckImport();
 
   useEffect(() => {
     // With the webview's native drag-drop disabled, the browser default for a
@@ -78,36 +85,42 @@ export function Layout() {
 
   return (
     <SyncProvider>
-      <header
-        onMouseDown={handleDrag}
-        className="app-header sticky top-0 z-40 border-b border-foreground/10 bg-background"
+      <FileDropZone
+        onFile={importer.beginImportFromFile}
+        className="flex min-h-dvh flex-col"
       >
-        <div className="app-row flex items-center justify-between gap-2 py-3">
-          <div className="app-no-drag">
-            <HeaderNav />
+        <header
+          onMouseDown={handleDrag}
+          className="app-header sticky top-0 z-40 border-b border-foreground/10 bg-background"
+        >
+          <div className="app-row flex items-center justify-between gap-2 py-3">
+            <div className="app-no-drag">
+              <HeaderNav />
+            </div>
+            <div className="app-no-drag flex items-center gap-2">
+              <UpdateBadge />
+              <Link
+                to="/settings"
+                title="Settings"
+                aria-label="Settings"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground"
+              >
+                <Gear size={16} weight="regular" />
+              </Link>
+            </div>
           </div>
-          <div className="app-no-drag flex items-center gap-2">
-            <UpdateBadge />
-            <Link
-              to="/settings"
-              title="Settings"
-              aria-label="Settings"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground"
-            >
-              <Gear size={16} weight="regular" />
-            </Link>
-          </div>
+        </header>
+        <div className="app-row pt-5">
+          <Breadcrumb />
         </div>
-      </header>
-      <div className="app-row pt-5">
-        <Breadcrumb />
-      </div>
-      <main className="app-row flex flex-1 flex-col py-6">
-        <Outlet />
-      </main>
-      <CommandPalette />
-      <UpdatePrompt />
-      <AboutDialog />
+        <main className="app-row flex flex-1 flex-col py-6">
+          <Outlet />
+        </main>
+        <CommandPalette />
+        <UpdatePrompt />
+        <AboutDialog />
+        {importer.dialogs}
+      </FileDropZone>
     </SyncProvider>
   );
 }
