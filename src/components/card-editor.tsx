@@ -6,6 +6,7 @@ import {
   getMediaUrl,
   mediaFilenameFromSrc,
   storeAudioFile,
+  storeImageFile,
 } from "@/lib/audio";
 import { isConfigured } from "@/lib/elevenlabs";
 import { isExperimentalEnabled } from "@/lib/experimental";
@@ -83,7 +84,9 @@ function normalizeHtml(html: string): string {
 
 export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEditorProps) {
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [attachingAudio, setAttachingAudio] = useState(false);
+  const [attachingImage, setAttachingImage] = useState(false);
   // Source mode swaps the WYSIWYG editor for a raw-HTML textarea. The textarea
   // is the lossless path: its contents are written to the parent verbatim,
   // bypassing TipTap's schema (which silently drops tables, styles, custom
@@ -181,13 +184,28 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
     };
   }, [editor]);
 
-  const addImage = useCallback(() => {
-    if (!editor) return;
-    const url = window.prompt("Image URL:");
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run();
-    }
-  }, [editor]);
+  const handleImageFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      // Reset so picking the same file again re-triggers onChange.
+      e.target.value = "";
+      if (!file || !editor) return;
+      setAttachingImage(true);
+      try {
+        // Store the file in Anki's media folder so it syncs to AnkiWeb and
+        // mobile with the note. setImage gets the bare filename, which the
+        // MediaImage NodeView resolves to a displayable URL — and serialization
+        // keeps `src` = filename, so saving writes a valid Anki <img>.
+        const filename = await storeImageFile(file);
+        editor.chain().focus().setImage({ src: filename }).run();
+      } catch {
+        window.alert("Could not attach the image. Make sure Anki is running.");
+      } finally {
+        setAttachingImage(false);
+      }
+    },
+    [editor]
+  );
 
   const handleAudioFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -416,12 +434,20 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         <button
           type="button"
           tabIndex={-1}
-          onClick={addImage}
-          title="Insert image by URL"
-          className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={attachingImage}
+          title="Attach an image"
+          className="rounded px-2 py-1 text-xs text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
         >
-          IMG
+          {attachingImage ? "…" : "IMG"}
         </button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageFile}
+        />
         <button
           type="button"
           tabIndex={-1}
