@@ -197,9 +197,9 @@ export function CommandPalette() {
           }}
         >
           <div
-            className="mx-4 w-full max-w-xl overflow-hidden rounded-xl border border-foreground/10 bg-background shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
+            className="mx-4 w-full max-w-xl overflow-hidden rounded-xl border border-border bg-background shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
           >
-            <div className="flex items-center gap-2 border-b border-foreground/10 px-4">
+            <div className="flex items-center gap-2 border-b border-border px-4">
               <MagnifyingGlass
                 size={16}
                 weight="regular"
@@ -274,7 +274,7 @@ export function CommandPalette() {
                 })
               )}
             </div>
-            <div className="flex items-center justify-between border-t border-foreground/10 px-4 py-2 text-xs text-foreground/40">
+            <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-foreground/40">
               <span>
                 {mode === "pickDeckForCard" && deckPickFromSearch
                   ? "Esc to go back"

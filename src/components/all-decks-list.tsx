@@ -249,7 +249,7 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
             }
           }}
           placeholder="Search decks…"
-          className="w-full rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
+          className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
         />
       </div>
 
@@ -260,8 +260,8 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
       ) : matches && matches.length === 0 ? (
         <p className="text-foreground/50">No decks match “{query.trim()}”.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-foreground/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-          <div className="divide-y divide-foreground/10">
+        <div className="overflow-hidden rounded-xl border border-border shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+          <div className="divide-y divide-border">
             {matches
               ? matches.map((deck) => (
                   <SearchRow
@@ -295,7 +295,7 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
             if (e.target === e.currentTarget) closeDialog();
           }}
         >
-          <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
             <h3 className="mb-4 text-lg font-semibold">Create New Deck</h3>
             <form onSubmit={handleCreateDeck}>
               <input
@@ -304,7 +304,7 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
                 value={newDeckName}
                 onChange={(e) => setNewDeckName(e.target.value)}
                 placeholder="Deck name…"
-                className="w-full rounded-lg border border-foreground/15 bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
               />
               {deckNameExists ? (
                 <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">
@@ -325,7 +325,7 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
                 <button
                   type="submit"
                   disabled={creating || !trimmedNewName || deckNameExists}
-                  className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
+                  className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
                 >
                   {creating ? "Creating…" : "Create Deck"}
                 </button>
@@ -551,7 +551,7 @@ function DeckRowMenu({
             ref={menuRef}
             role="menu"
             style={{ position: "fixed", top: pos.top, right: pos.right }}
-            className="z-50 min-w-[150px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg"
+            className="z-50 min-w-[150px] rounded-lg border border-border bg-background py-1 shadow-lg"
           >
             <button
               onClick={() => {

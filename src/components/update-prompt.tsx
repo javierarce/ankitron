@@ -98,7 +98,7 @@ export function UpdatePrompt() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
         {phase === "error" ? (
           <>
             <h3 className="mb-2 text-lg font-semibold">Update failed</h3>
@@ -106,7 +106,7 @@ export function UpdatePrompt() {
             <div className="flex justify-end">
               <button
                 onClick={dismiss}
-                className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
+                className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
               >
                 Close
               </button>
@@ -153,7 +153,7 @@ export function UpdatePrompt() {
               {update.currentVersion}).
             </p>
             {update.body ? (
-              <div className="mb-4 max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap rounded-lg border border-foreground/10 bg-foreground/5 p-3 text-sm text-foreground/70">
+              <div className="mb-4 max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap rounded-lg border border-border bg-foreground/5 p-3 text-sm text-foreground/70">
                 {update.body}
               </div>
             ) : null}
@@ -166,7 +166,7 @@ export function UpdatePrompt() {
               </button>
               <button
                 onClick={install}
-                className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
+                className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5"
               >
                 Install and restart
               </button>

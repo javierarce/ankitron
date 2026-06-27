@@ -205,13 +205,13 @@ export function DeckDetailPage() {
         <div className="flex items-center gap-2">
           <Link
             to={`/decks/${encodeURIComponent(deckName)}/settings`}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
           >
             Settings
           </Link>
           <button
             onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 rounded-lg border border-foreground/15 px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
           >
             Add note
             <kbd className="relative top-px font-sans text-[11px] leading-none text-foreground/30">A</kbd>
@@ -224,7 +224,7 @@ export function DeckDetailPage() {
               {studyLabel}
             </Link>
           ) : (
-            <span className="rounded-lg border border-foreground/10 px-4 py-2 text-sm text-foreground/30 cursor-not-allowed">
+            <span className="rounded-lg border border-border px-4 py-2 text-sm text-foreground/30 cursor-not-allowed">
               No cards due
             </span>
           )}

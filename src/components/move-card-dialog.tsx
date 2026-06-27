@@ -105,7 +105,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
         if (e.target === e.currentTarget && !moving) onClose();
       }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg">
+      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
         <h3 className="mb-1 text-lg font-semibold">
           {count === 1 ? "Move Note" : `Move ${count} Notes`}
         </h3>
@@ -122,7 +122,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
           onChange={(e) => setChoice(e.target.value)}
           disabled={decks === null || moving}
           autoFocus
-          className="w-full rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
         >
           {(decks ?? []).map((d) => (
             <option key={d} value={d}>
@@ -147,7 +147,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
             placeholder="New deck name"
             autoFocus
             disabled={moving}
-            className="mt-2 w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+            className="mt-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
           />
         )}
 
@@ -164,7 +164,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
           <button
             onClick={handleMove}
             disabled={disabled}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             {moving ? "Moving…" : "Move"}
           </button>

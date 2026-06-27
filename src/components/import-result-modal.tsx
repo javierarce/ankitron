@@ -24,7 +24,7 @@ export function ImportResultModal({
       }}
     >
       <div
-        className="mx-4 w-full max-w-md rounded-xl border border-foreground/10 bg-background p-6 shadow-lg"
+        className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg"
       >
         <h3 className="mb-2 text-lg font-semibold">
           {error ? "Import failed" : "Import complete"}
@@ -70,7 +70,7 @@ export function ImportResultModal({
           <button
             onClick={onClose}
             disabled={importing}
-            className="rounded-lg border border-foreground/15 px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
           >
             Close
           </button>

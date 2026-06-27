@@ -195,7 +195,7 @@ function CardMenu({
         <DotsThreeVertical size={22} weight="bold" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-foreground/10 bg-background py-1 shadow-lg">
+        <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-border bg-background py-1 shadow-lg">
           <button
             onClick={() => {
               setOpen(false);
@@ -1037,7 +1037,7 @@ export function CardList({
             className={`shrink-0 rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
               activeSegments.size === 0
                 ? "border-foreground bg-foreground text-background"
-                : "border-foreground/15 hover:bg-foreground/5"
+                : "border-border hover:bg-foreground/5"
             } ${
               dragOverDeck === deckName
                 ? "ring-2 ring-foreground/40 ring-offset-1 ring-offset-background"
@@ -1078,7 +1078,7 @@ export function CardList({
                     ? "border-foreground bg-foreground text-background"
                     : covered
                       ? "border-foreground/30 bg-foreground/10 hover:bg-foreground/15"
-                      : "border-foreground/15 hover:bg-foreground/5"
+                      : "border-border hover:bg-foreground/5"
                 } ${
                   isDragOver
                     ? "ring-2 ring-foreground/40 ring-offset-1 ring-offset-background"
@@ -1116,7 +1116,7 @@ export function CardList({
             // text/plain; block dropping that onto the search box.
             onDrop={(e) => e.preventDefault()}
             placeholder="Search notes…"
-            className="flex-1 rounded-lg border border-foreground/10 bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
+            className="flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
           />
         </div>
       )}
@@ -1160,7 +1160,7 @@ export function CardList({
             value={sortMode}
             onChange={(e) => handleSortChange(e.target.value as SortMode)}
             aria-label="Sort notes"
-            className="rounded-lg border border-foreground/15 bg-transparent px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-foreground/5 focus:outline-none focus:border-foreground/30 transition-colors cursor-pointer"
+            className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-foreground/5 focus:outline-none focus:border-foreground/30 transition-colors cursor-pointer"
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -1179,7 +1179,7 @@ export function CardList({
                       .map((n) => n.noteId),
                   )
                 }
-                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
               >
                 <PencilSimple size={16} weight="bold" />
                 Edit
@@ -1187,7 +1187,7 @@ export function CardList({
               </button>
               <button
                 onClick={() => handleBulkSuspend(!allSelectedSuspended)}
-                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
               >
                 {allSelectedSuspended ? (
                   <>
@@ -1204,7 +1204,7 @@ export function CardList({
               </button>
               <button
                 onClick={() => setBulkMoving(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
               >
                 <FolderSimple size={16} weight="bold" />
                 Move
@@ -1212,7 +1212,7 @@ export function CardList({
               </button>
               <button
                 onClick={() => setBulkTagging(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"
               >
                 <Tag size={16} weight="bold" />
                 Tag
@@ -1272,7 +1272,7 @@ export function CardList({
                 className={`group relative flex select-none items-center gap-3 rounded-lg border px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer transition-[background-color] ${
                   selected
                     ? "border-foreground/40 bg-foreground/[0.05]"
-                    : "border-foreground/10 hover:bg-foreground/[0.02]"
+                    : "border-border hover:bg-foreground/[0.02]"
                 } ${noteSuspended && !selected ? "bg-foreground/[0.03]" : ""}`}
               >
                 <button
