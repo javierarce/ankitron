@@ -139,9 +139,12 @@ summary {
   background-color: transparent;
 }
 
-/* Decks page note counts load after the rows, so fade each one in when it
-   arrives instead of popping in (or showing a placeholder). */
-@keyframes count-fade-in {
+/* A plain opacity fade, shared by anything that loads in a beat after its
+   surroundings instead of popping in. Runs once on mount, so a background sync
+   refetch (which updates content in place) doesn't re-trigger it.
+   - .count-fade-in: Decks-page note counts, which land after their rows.
+   - .fade-in: the deck lists themselves, once their page finishes loading. */
+@keyframes fade-in {
   from {
     opacity: 0;
   }
@@ -151,7 +154,11 @@ summary {
 }
 
 .count-fade-in {
-  animation: count-fade-in 160ms ease-out;
+  animation: fade-in 160ms ease-out;
+}
+
+.fade-in {
+  animation: fade-in 400ms ease-out;
 }
 
 /* Card rows carry their own selected state (a stronger border + fill). Keep the

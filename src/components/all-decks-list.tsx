@@ -222,7 +222,7 @@ export function AllDecksList({ decks, noteCounts, onRefresh }: AllDecksListProps
     : null;
 
   return (
-    <div>
+    <div className="fade-in">
       <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Decks</h1>
         <div className="flex items-center gap-2">
