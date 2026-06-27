@@ -6,30 +6,36 @@ import { ArrowDown } from "@phosphor-icons/react/dist/ssr/ArrowDown";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
+import { Sun } from "@phosphor-icons/react/dist/ssr/Sun";
+import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";
+import { Desktop } from "@phosphor-icons/react/dist/ssr/Desktop";
+import type { Icon } from "@phosphor-icons/react";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
 import { useScrollLock, isScrollLocked } from "@/hooks/use-scroll-lock";
+import { useTheme } from "@/lib/theme-context";
 import { CardForm } from "./card-form";
 
 type Mode = "search" | "pickDeckForCard";
 
-type ActionId = "new-card" | "settings";
+type ActionId = "new-card" | "settings" | "theme-toggle" | "theme-system";
+
+type ActionDef = {
+  id: ActionId;
+  label: string;
+  keywords: string;
+  icon: Icon;
+  // Right-aligned hint shown on the selected row.
+  hint: string;
+};
 
 type Item =
-  | { kind: "action"; id: ActionId; label: string }
+  | { kind: "action"; id: ActionId; label: string; icon: Icon; hint: string }
   | { kind: "deck"; label: string; deck: string };
-
-const ACTIONS: { id: ActionId; label: string; keywords: string }[] = [
-  { id: "new-card", label: "New note…", keywords: "new note add note new card add card" },
-  {
-    id: "settings",
-    label: "Settings",
-    keywords: "settings preferences theme appearance dark light update version",
-  },
-];
 
 export function CommandPalette() {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("search");
   // True only when the deck picker was reached from the search step (via the
@@ -117,9 +123,45 @@ export function CommandPalette() {
     ? decks.filter((d) => d.toLowerCase().includes(q))
     : decks;
 
+  // Resolve the appearance actually on screen (the provider keeps this `dark`
+  // class in sync) so the toggle flips to the opposite even when the theme is
+  // "system".
+  const isDark = document.documentElement.classList.contains("dark");
+
+  const actions: ActionDef[] = [
+    {
+      id: "new-card",
+      label: "New note…",
+      keywords: "new note add note new card add card",
+      icon: Plus,
+      hint: "new note",
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      keywords: "settings preferences update version",
+      icon: Gear,
+      hint: "open",
+    },
+    {
+      id: "theme-toggle",
+      label: isDark ? "Switch to light theme" : "Switch to dark theme",
+      keywords: "theme appearance dark light mode color toggle switch",
+      icon: isDark ? Sun : Moon,
+      hint: "switch",
+    },
+    {
+      id: "theme-system",
+      label: "System theme",
+      keywords: "theme appearance system auto mode color",
+      icon: Desktop,
+      hint: theme === "system" ? "current" : "switch",
+    },
+  ];
+
   const filteredActions =
     mode === "search"
-      ? ACTIONS.filter(
+      ? actions.filter(
           (a) =>
             q === "" || a.label.toLowerCase().includes(q) || a.keywords.includes(q)
         )
@@ -130,6 +172,8 @@ export function CommandPalette() {
       kind: "action" as const,
       id: a.id,
       label: a.label,
+      icon: a.icon,
+      hint: a.hint,
     })),
     ...filteredDecks.map((d) => ({ kind: "deck" as const, label: d, deck: d })),
   ];
@@ -145,6 +189,16 @@ export function CommandPalette() {
     if (item.kind === "action") {
       if (item.id === "settings") {
         navigate("/settings");
+        close();
+        return;
+      }
+      if (item.id === "theme-toggle") {
+        setTheme(isDark ? "light" : "dark");
+        close();
+        return;
+      }
+      if (item.id === "theme-system") {
+        setTheme("system");
         close();
         return;
       }
@@ -230,6 +284,7 @@ export function CommandPalette() {
               ) : (
                 items.map((item, i) => {
                   const isSelected = i === selected;
+                  const ActionIcon = item.kind === "action" ? item.icon : null;
                   return (
                     <button
                       key={item.kind === "action" ? `action:${item.id}` : `deck:${item.deck}`}
@@ -246,12 +301,9 @@ export function CommandPalette() {
                       }`}
                     >
                       <span className="flex items-center gap-2">
-                        {item.kind === "action" &&
-                          (item.id === "settings" ? (
-                            <Gear size={14} weight="bold" className="text-foreground/60" />
-                          ) : (
-                            <Plus size={14} weight="bold" className="text-foreground/60" />
-                          ))}
+                        {ActionIcon && (
+                          <ActionIcon size={14} weight="bold" className="text-foreground/60" />
+                        )}
                         {item.kind === "action" ? (
                           <span className="font-medium">{item.label}</span>
                         ) : (
@@ -261,9 +313,7 @@ export function CommandPalette() {
                       {isSelected && (
                         <span className="text-xs text-foreground/40">
                           {item.kind === "action"
-                            ? item.id === "settings"
-                              ? "open"
-                              : "new note"
+                            ? item.hint
                             : mode === "pickDeckForCard"
                               ? "add here"
                               : "go"}
