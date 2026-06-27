@@ -319,27 +319,83 @@ export function StudyPage() {
       setEditingNote(null);
       return;
     }
-    // Something changed, so reload to pick up the edit. loadCurrentCard rebuilds
-    // the queue and resets to the question side; wrap the whole swap in a single
-    // fade so the reload reads as a smooth transition rather than a snap, and
+    // Something changed, so refresh to pick up the edit. Wrap the whole swap in
+    // a single fade so it reads as a smooth transition rather than a snap, and
     // restore the answer side if it was showing before the edit.
     const wasRevealed = isRevealed;
+    const editedCardId = card?.cardId;
     setCardVisible(false);
     setEditingNote(null);
     await delay(FADE_MS);
-    try {
-      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
-    } catch {
-      // ignore
-    }
-    await loadCurrentCard();
-    if (wasRevealed) {
+
+    // Refresh the edited card *in place* rather than re-entering review.
+    // guiDeckReview rebuilds the scheduler queue and serves whatever card lands
+    // on top — usually a different one — which is why an edit would sometimes
+    // jump to the next card. cardsInfo renders straight from the collection (the
+    // offscreen reviewer caches its current card and wouldn't show the edit
+    // without a queue rebuild), so it gives us the freshly rendered question and
+    // answer for the exact card we just edited. The reviewer's current card is
+    // untouched, so grading still lands on this card.
+    let refreshed: CurrentCard | null = null;
+    if (editedCardId != null) {
       try {
-        await ankiFetch("guiShowAnswer");
+        const info = await ankiFetch<CurrentCard[]>("cardsInfo", {
+          cards: [editedCardId],
+        });
+        const ci = info[0];
+        // Stay in place only while the card still belongs to this deck. A
+        // note-type change deletes and replaces it (cardsInfo comes back empty)
+        // and a deck move sends it elsewhere — both should advance instead.
+        if (
+          ci &&
+          ci.deckName &&
+          isCardInDeck(ci.deckName, studyDecks[deckIdxRef.current])
+        ) {
+          refreshed = {
+            cardId: ci.cardId,
+            question: ci.question,
+            answer: ci.answer,
+            deckName: ci.deckName,
+            fields: ci.fields,
+          };
+        }
       } catch {
-        // Re-revealing in Anki is best-effort; reveal locally regardless.
+        // fall through to a queue rebuild
       }
-      setIsRevealed(true);
+    }
+
+    if (refreshed) {
+      setCard(refreshed);
+      // Editing the note resets Anki's offscreen reviewer to the question side.
+      // If the answer was showing before the edit, put the reviewer back into
+      // its "answer" state so grading (guiAnswerCard, which only works once the
+      // answer is shown) still lands — otherwise the grade keys would silently
+      // do nothing.
+      if (wasRevealed) {
+        try {
+          await ankiFetch("guiShowAnswer");
+        } catch {
+          // Re-revealing in Anki is best-effort; reveal locally regardless.
+        }
+      }
+      setIsRevealed(wasRevealed);
+    } else {
+      // The card left this deck (moved or its note type changed). Rebuild the
+      // queue and serve whatever's next.
+      try {
+        await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
+      } catch {
+        // ignore
+      }
+      await loadCurrentCard();
+      if (wasRevealed) {
+        try {
+          await ankiFetch("guiShowAnswer");
+        } catch {
+          // Re-revealing in Anki is best-effort; reveal locally regardless.
+        }
+        setIsRevealed(true);
+      }
     }
     setCardVisible(true);
   }
