@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { AllDecksList } from "@/components/all-decks-list";
 import { useSync } from "@/lib/sync-context";
-import { ankiFetch, fetchAllNoteCounts } from "@/lib/anki-fetch";
+import {
+  ankiFetch,
+  fetchAllDueCounts,
+  fetchAllNoteCounts,
+} from "@/lib/anki-fetch";
+import type { DueCounts } from "@/lib/types";
 
 export function DecksPage() {
   const [decks, setDecks] = useState<string[]>([]);
   const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
+  const [dueCounts, setDueCounts] = useState<Record<string, DueCounts>>({});
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
   const { syncedAt, registerPageLoad } = useSync();
@@ -24,6 +30,19 @@ export function DecksPage() {
       setDecks(deckNames);
       setHasError(false);
       setNoteCounts(deckNames.length ? await fetchAllNoteCounts(deckNames) : {});
+      // Due counts only gate the Study action; a failure here shouldn't blank
+      // the decks list, and we must not leave every row showing all-zero (which
+      // would wrongly disable Study everywhere) — clear them so Study stays
+      // enabled until a later refresh succeeds.
+      try {
+        setDueCounts(
+          deckNames.length
+            ? await fetchAllDueCounts(deckNames, { throwOnError: true })
+            : {},
+        );
+      } catch {
+        setDueCounts({});
+      }
     } catch {
       setHasError(true);
     }
@@ -49,6 +68,19 @@ export function DecksPage() {
             })
             .catch(() => {
               // Counts are non-critical — leave the placeholders in place.
+            });
+          // Due counts only gate the row menu's Study action, so fetch them off
+          // the critical path too; until they land, Study stays enabled. Opt
+          // into throwOnError so a stats failure leaves dueCounts empty (Study
+          // stays enabled) rather than all-zero (which would disable it on
+          // every row).
+          fetchAllDueCounts(deckNames, { throwOnError: true })
+            .then((counts) => {
+              if (!cancelled) setDueCounts(counts);
+            })
+            .catch(() => {
+              // Non-critical — leave Study enabled.
+              if (!cancelled) setDueCounts({});
             });
         }
       } catch {
@@ -82,6 +114,11 @@ export function DecksPage() {
   }
 
   return (
-    <AllDecksList decks={decks} noteCounts={noteCounts} onRefresh={reload} />
+    <AllDecksList
+      decks={decks}
+      noteCounts={noteCounts}
+      dueCounts={dueCounts}
+      onRefresh={reload}
+    />
   );
 }

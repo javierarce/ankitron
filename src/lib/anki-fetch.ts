@@ -144,6 +144,11 @@ export async function fetchNoteCount(deckName: string): Promise<number> {
  */
 export async function fetchAllDueCounts(
   deckNames: string[],
+  // By default a failed stats request resolves to all-zero counts so callers
+  // that just render badges don't blank their page. Pass throwOnError when the
+  // caller needs to tell a genuine "everything is at zero" apart from a fetch
+  // failure (the Decks page gates its Study action on this distinction).
+  options?: { throwOnError?: boolean },
 ): Promise<Record<string, DueCounts>> {
   // Zero-initialise so a missing entry (or an outright failure) leaves the deck
   // list intact with blank counts rather than dropping rows.
@@ -185,8 +190,11 @@ export async function fetchAllDueCounts(
         };
       }
     }
-  } catch {
-    // Keep the zero-initialised counts — a stats failure shouldn't blank the page.
+  } catch (err) {
+    // Let opt-in callers distinguish failure from a real all-zero result;
+    // otherwise keep the zero-initialised counts so a stats failure doesn't
+    // blank the page.
+    if (options?.throwOnError) throw err;
   }
 
   return counts;

@@ -195,7 +195,7 @@ function CardMenu({
         <DotsThreeVertical size={22} weight="bold" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-border bg-background py-1 shadow-lg">
+        <div className="absolute right-0 top-full mt-1 z-10 w-max rounded-lg border border-border bg-background py-1 shadow-lg">
           <button
             onClick={() => {
               setOpen(false);
@@ -1115,6 +1115,7 @@ export function CardList({
             // Cards being dragged onto a segment carry their note ids as
             // text/plain; block dropping that onto the search box.
             onDrop={(e) => e.preventDefault()}
+            spellCheck={false}
             placeholder="Search notes…"
             className="flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
           />

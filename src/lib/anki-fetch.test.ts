@@ -153,6 +153,15 @@ describe("fetchAllDueCounts", () => {
     expect(counts["Spanish"]).toEqual({ new: 0, learn: 0, review: 0 });
     expect(counts["Spanish::Verbs"]).toEqual({ new: 0, learn: 0, review: 0 });
   });
+
+  it("rejects on stats failure when throwOnError is set", async () => {
+    const mockFetch = vi.mocked(globalThis.fetch);
+    mockFetch.mockRejectedValue(new Error("network error"));
+
+    await expect(
+      fetchAllDueCounts(["Spanish", "Spanish::Verbs"], { throwOnError: true }),
+    ).rejects.toThrow("network error");
+  });
 });
 
 describe("fetchAllNoteCounts", () => {

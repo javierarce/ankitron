@@ -190,6 +190,7 @@ export function ImportTargetDialog({
                     }
                   }}
                   placeholder="Deck name"
+                  spellCheck={false}
                   className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
                 />
               )}

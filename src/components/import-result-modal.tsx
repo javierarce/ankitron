@@ -7,12 +7,16 @@ export function ImportResultModal({
   importing,
   onOverwriteStale,
   onClose,
+  // Heading shown in the error case. Defaults to import wording; export reuses
+  // this modal purely as an error display and overrides it.
+  errorTitle = "Import failed",
 }: {
   result: ImportResult | null;
   error: string | null;
   importing?: boolean;
   onOverwriteStale?: () => void;
   onClose: () => void;
+  errorTitle?: string;
 }) {
   useScrollLock();
   const staleSkipped = result?.staleSkipped ?? 0;
@@ -27,7 +31,7 @@ export function ImportResultModal({
         className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg"
       >
         <h3 className="mb-2 text-lg font-semibold">
-          {error ? "Import failed" : "Import complete"}
+          {error ? errorTitle : "Import complete"}
         </h3>
         {error && <p className="text-sm text-red-500">{error}</p>}
         {result && (

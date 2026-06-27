@@ -647,7 +647,7 @@ export function CardForm({
                   type="button"
                   onClick={onDelete}
                   disabled={saving}
-                  className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                 >
                   <Trash size={16} weight="bold" />
                   Delete

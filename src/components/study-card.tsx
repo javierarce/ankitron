@@ -391,6 +391,7 @@ export function StudyCard({
                     }
                   }}
                   placeholder="Type your answer…"
+                  spellCheck={false}
                   className="my-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
                 />
                 <HtmlContent html={questionAfter} />
