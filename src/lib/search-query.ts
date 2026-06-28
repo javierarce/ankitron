@@ -8,6 +8,8 @@
  * owns the caret, focus, and keyboard handling, and calls into this module.
  */
 
+import { foldText } from "./fold-text";
+
 /** A qualifier offered in the dropdown, e.g. `deck:` or `is:`. */
 export interface Qualifier {
   /** The keyword before the colon, e.g. "deck". */
@@ -201,12 +203,13 @@ export function suggestionsFor(
   const qualifier = QUALIFIER_BY_NAME.get(name);
   if (!qualifier || qualifier.valueKind === "none") return [];
 
-  const typed = unquote(body.slice(colon + 1)).toLowerCase();
-  // Offer a value if it matches what's typed and isn't already in the query
-  // (applied elsewhere, or exactly what's been typed so far).
+  const typed = foldText(unquote(body.slice(colon + 1)));
+  // Offer a value if it matches what's typed (diacritic-insensitively) and
+  // isn't already in the query (applied elsewhere, or exactly what's been typed
+  // so far).
   const applied = appliedValues(query, name);
   const usable = (value: string) =>
-    value.toLowerCase().includes(typed) && !applied.has(value.toLowerCase());
+    foldText(value).includes(typed) && !applied.has(value.toLowerCase());
 
   if (qualifier.valueKind === "is") {
     return IS_VALUES.filter((v) => usable(v.value))
