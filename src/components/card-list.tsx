@@ -17,6 +17,12 @@ import { Tag } from "@phosphor-icons/react/dist/ssr/Tag";
 import { X } from "@phosphor-icons/react/dist/ssr/X";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
+import { SearchInput } from "./search-input";
+import {
+  effectiveQuery,
+  hasOperators,
+  type SuggestionSources,
+} from "@/lib/search-query";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { BulkTagDialog, type TagChange } from "./bulk-tag-dialog";
@@ -98,6 +104,65 @@ function stripCloze(text: string): string {
     const hintIdx = inner.lastIndexOf("::");
     return hintIdx === -1 ? inner : inner.slice(0, hintIdx);
   });
+}
+
+// A note's searchable text: its field values (HTML and cloze stripped) plus its
+// tags, lowercased, for the plain-text substring filter.
+function noteHaystack(note: Note): string {
+  return Object.values(note.fields)
+    .map((field) => field?.value)
+    .filter(Boolean)
+    .map((v) => stripCloze(stripHtml(v as string)))
+    .concat(note.tags)
+    .join(" ")
+    .toLowerCase();
+}
+
+/**
+ * Notes within `scoped` matching `q`. An empty query keeps them all; operator
+ * queries are resolved by Anki (the caller passes the cached note-id result for
+ * `q`, and we fall back to the full scope until it lands); plain text uses the
+ * in-memory substring filter.
+ */
+function notesForQuery(
+  scoped: Note[],
+  q: string,
+  backend: { key: string; ids: Set<number> } | null,
+): Note[] {
+  if (q === "") return scoped;
+  if (hasOperators(q)) {
+    return backend?.key === q
+      ? scoped.filter((note) => backend.ids.has(note.noteId))
+      : scoped;
+  }
+  const needle = q.toLowerCase();
+  return scoped.filter((note) => noteHaystack(note).includes(needle));
+}
+
+// Autocomplete vocabulary present in a set of notes: their tags, note types, and
+// home decks. Drawn from the *filtered* result set so the menu only ever offers
+// values that still lead somewhere.
+function collectSources(
+  notes: Note[],
+  homeDeck: (note: Note) => string,
+): SuggestionSources {
+  const tags = new Set<string>();
+  const models = new Set<string>();
+  const decks = new Set<string>();
+  let hasUntagged = false;
+  for (const note of notes) {
+    if (note.tags.length === 0) hasUntagged = true;
+    for (const t of note.tags) tags.add(t);
+    models.add(note.modelName);
+    decks.add(homeDeck(note));
+  }
+  const cmp = (a: string, b: string) => a.localeCompare(b);
+  return {
+    decks: [...decks].sort(cmp),
+    tags: [...tags].sort(cmp),
+    models: [...models].sort(cmp),
+    hasUntagged,
+  };
 }
 
 type SortMode = "modified-desc" | "created-desc" | "created-asc";
@@ -293,6 +358,65 @@ export function CardList({
   const [suspended, setSuspended] = useState<Set<number>>(() => new Set(suspendedCardIds ?? []));
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  // Note ids matching an operator query (deck:, is:, prop:, …), executed by
+  // Anki's backend since it understands the full search syntax. Plain-text
+  // queries skip this and stay on the instant in-memory filter below. Keyed by
+  // the query that produced it, so a stale result is ignored (not applied to a
+  // newer query) and the in-flight list never flashes the wrong matches.
+  const [backendResult, setBackendResult] = useState<{
+    key: string;
+    ids: Set<number>;
+  } | null>(null);
+  // A half-typed qualifier (`tag:`, `deck:` …) drops out, so the list behind
+  // the open autocomplete menu stays put until a value is chosen.
+  const effective = effectiveQuery(query);
+  const useBackendSearch = effective !== "" && hasOperators(effective);
+
+  // The query around the token being autocompleted (reported by SearchInput).
+  // Autocomplete vocabulary is drawn from the notes matching *this*, so e.g. a
+  // second `tag:` only offers tags that co-occur with the first one. Its own
+  // (operator) result set is fetched separately when it differs from the
+  // displayed query.
+  const [contextQ, setContextQ] = useState("");
+  const contextNeedsFetch =
+    contextQ !== "" && contextQ !== effective && hasOperators(contextQ);
+  const [contextResult, setContextResult] = useState<{
+    key: string;
+    ids: Set<number>;
+  } | null>(null);
+  useEffect(() => {
+    if (!contextNeedsFetch) return;
+    const key = contextQ;
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}" (${key})` })
+        .then((ids) => !cancelled && setContextResult({ key, ids: new Set(ids) }))
+        .catch(() => !cancelled && setContextResult({ key, ids: new Set() }));
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [contextQ, deckName, contextNeedsFetch]);
+
+  // Run operator queries through Anki, scoped to this deck's subtree and ANDed
+  // with the user's query (parenthesised so a top-level `or` can't escape the
+  // scope). Debounced; an invalid query resolves to "no matches" rather than an
+  // error. Segment scoping still happens client-side via segmentNotes below.
+  useEffect(() => {
+    if (!useBackendSearch) return;
+    const key = effective;
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}" (${key})` })
+        .then((ids) => !cancelled && setBackendResult({ key, ids: new Set(ids) }))
+        .catch(() => !cancelled && setBackendResult({ key, ids: new Set() }));
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [effective, deckName, useBackendSearch]);
 
   // The list reloads (window.location.reload) after edits, so persist the sort
   // choice in localStorage to keep it from resetting on every save.
@@ -732,22 +856,24 @@ export function CardList({
           return activeSegmentList.some((seg) => isCardInDeck(home, seg));
         });
 
-  const trimmedQuery = query.trim().toLowerCase();
-  const matchedNotes = trimmedQuery
-    ? segmentNotes.filter((note) => {
-        const haystack = Object.values(note.fields)
-          .map((field) => field?.value)
-          .filter(Boolean)
-          .map((v) => stripCloze(stripHtml(v as string)))
-          .concat(note.tags)
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(trimmedQuery);
-      })
-    : segmentNotes;
+  // The displayed result set: notes matching the full (effective) query. Until
+  // a pending operator query lands, notesForQuery falls back to the full scope
+  // rather than flashing empty or stale matches.
+  const matchedNotes = notesForQuery(segmentNotes, effective, backendResult);
   // Sort last so display order — and the selection ranges, "select all", and
   // keyboard nav that read it — all follow the chosen order.
   const filteredNotes = sortNotes(matchedNotes, sortMode);
+
+  // Notes the autocomplete vocabulary is drawn from: those matching the query
+  // around the token being edited. When that context equals the displayed query
+  // (e.g. the active token is an empty `tag:`, dropped from both), reuse the
+  // already-computed result instead of refetching.
+  const homeDeck = (note: Note) => decks[note.noteId] ?? deckName;
+  const sourceNotes =
+    contextQ === effective
+      ? matchedNotes
+      : notesForQuery(segmentNotes, contextQ, contextResult);
+  const searchSources = collectSources(sourceNotes, homeDeck);
 
   function isNoteSuspended(note: Note): boolean {
     return (note.cards ?? []).some((id) => suspended.has(id));
@@ -1098,26 +1224,14 @@ export function CardList({
 
       {!listEmpty && (
         <div className="mb-4 flex items-center gap-3">
-          <input
+          <SearchInput
             ref={searchRef}
-            type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                if (query) {
-                  setQuery("");
-                } else {
-                  searchRef.current?.blur();
-                }
-              }
-            }}
-            // Cards being dragged onto a segment carry their note ids as
-            // text/plain; block dropping that onto the search box.
-            onDrop={(e) => e.preventDefault()}
-            spellCheck={false}
+            onChange={setQuery}
+            sources={searchSources}
+            onContextChange={setContextQ}
             placeholder="Search notes…"
-            className="flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:border-foreground/30"
+            className="flex-1"
           />
         </div>
       )}
@@ -1150,7 +1264,7 @@ export function CardList({
             </>
           ) : (
             <p className="text-sm text-foreground/50">
-              {trimmedQuery
+              {effective
                 ? `${filteredNotes.length} of ${segmentNotes.length} ${segmentNotes.length === 1 ? "note" : "notes"}`
                 : `${segmentNotes.length} ${segmentNotes.length === 1 ? "note" : "notes"}`}
             </p>
