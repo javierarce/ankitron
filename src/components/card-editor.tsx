@@ -99,6 +99,15 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
   // visual selection — doesn't lose where the audio should land.
   const [ttsText, setTtsText] = useState<string | null>(null);
   const ttsInsertPos = useRef<number | null>(null);
+  // Mirror of "is the TTS dialog open", readable inside the editor's stable
+  // handleKeyDown closure (created once). While it's open the editor must ignore
+  // keys: focus can drift back here — e.g. when generating disables the dialog's
+  // focused control — and a stray Enter would otherwise replace the highlighted
+  // selection.
+  const ttsOpenRef = useRef(false);
+  useEffect(() => {
+    ttsOpenRef.current = ttsText !== null;
+  }, [ttsText]);
   // The TTS button appears only when the experimental feature is enabled and an
   // ElevenLabs key is configured. Both read from non-secret localStorage flags,
   // so this is a synchronous check with no Rust round-trip on editor open.
@@ -131,6 +140,16 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
           "min-h-[100px] px-3 py-2 text-sm focus:outline-none prose prose-sm dark:prose-invert max-w-none",
       },
       handleKeyDown: (_view, event) => {
+        // While the TTS dialog is open the editor stays inert so a stray focus
+        // return can't mutate the card behind it. Swallow every key (preventing
+        // the newline) and stop it bubbling to the form (preventing Cmd+Enter
+        // save) — except Escape, which must reach the dialog's close handler.
+        if (ttsOpenRef.current) {
+          if (event.key === "Escape") return false;
+          event.preventDefault();
+          event.stopPropagation();
+          return true;
+        }
         // Cmd/Ctrl+Enter is the form's save-and-close shortcut. Claim it here so
         // ProseMirror doesn't insert a newline first; returning true stops its
         // default, and the event still bubbles to the form, which submits.

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import {
   ElevenLabsVoice,
@@ -46,6 +47,9 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
   const [inserting, setInserting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const selectRef = useRef<HTMLSelectElement | null>(null);
+
   // The generated clip: base64 to store on Insert, plus an object URL to play.
   // Cleared whenever the voice changes so the preview never lags behind it.
   const [audio, setAudio] = useState<{ base64: string; url: string } | null>(
@@ -86,6 +90,24 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [inserting, onClose]);
+
+  // Keep focus inside the dialog so keystrokes can't reach the editor/form
+  // behind it. This re-runs as the dialog's state changes — notably when
+  // generating/inserting disable the focused control, which drops focus and
+  // would otherwise let it drift back to the editor. We only grab focus when
+  // it's outside the dialog (or parked on the panel), never from a control the
+  // user is using. focus() no-ops on a disabled <select>, so fall back to the
+  // always-focusable panel while a request is in flight.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const active = document.activeElement;
+    if (!panel.contains(active) || active === panel) {
+      const select = selectRef.current;
+      if (select && !select.disabled) select.focus();
+      else panel.focus();
+    }
+  }, [voices.length, generating, inserting, audio]);
 
   // Revoke the object URL when it's replaced or the dialog unmounts so blobs
   // don't leak across regenerations.
@@ -146,14 +168,49 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
 
   const noVoices = voices.length === 0;
 
-  return (
+  // Portal to <body> so the dialog isn't a DOM descendant of the card <form>.
+  // Otherwise its <select> is a form control and pressing Enter would trigger
+  // the browser's implicit form submission, saving and closing the card.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !inserting) onClose();
       }}
+      // React events still bubble through the component tree (even across a
+      // portal) to the form's onKeyDown (Cmd+Enter = save). Stop them here so
+      // the dialog's keystrokes stay in the dialog.
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        // Self-contained Tab trap. The portal lives outside the form's focus
+        // trap, so without this Tab/Shift+Tab could land on a control in the
+        // form behind the dialog. Mirrors the form's own trap (card-form.tsx).
+        if (e.key !== "Tab") return;
+        const panel = panelRef.current;
+        if (!panel) return;
+        const focusables = Array.from(
+          panel.querySelectorAll<HTMLElement>(
+            'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => el.offsetParent !== null);
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && (active === first || !panel.contains(active))) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (active === last || !panel.contains(active))) {
+          e.preventDefault();
+          first.focus();
+        }
+      }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg focus:outline-none"
+      >
         <h3 className="mb-1 text-lg font-semibold">Generate audio</h3>
         <p className="mb-4 line-clamp-3 text-sm text-foreground/50">
           “{text}”
@@ -170,6 +227,7 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
               Voice
             </label>
             <select
+              ref={selectRef}
               value={voiceId}
               onChange={(e) => selectVoice(e.target.value)}
               disabled={generating || inserting}
@@ -233,6 +291,7 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
