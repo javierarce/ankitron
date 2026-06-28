@@ -41,6 +41,7 @@ import {
 import { stripSoundTags } from "@/lib/audio";
 import { noteDisplayFields } from "@/lib/note-fields";
 import { deckLeaf, formatDeckPath, isCardInDeck } from "@/lib/deck";
+import { foldText } from "@/lib/fold-text";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
 
@@ -107,15 +108,15 @@ function stripCloze(text: string): string {
 }
 
 // A note's searchable text: its field values (HTML and cloze stripped) plus its
-// tags, lowercased, for the plain-text substring filter.
+// tags, lowercased and diacritic-folded, for the plain-text substring filter.
 function noteHaystack(note: Note): string {
-  return Object.values(note.fields)
+  const text = Object.values(note.fields)
     .map((field) => field?.value)
     .filter(Boolean)
     .map((v) => stripCloze(stripHtml(v as string)))
     .concat(note.tags)
-    .join(" ")
-    .toLowerCase();
+    .join(" ");
+  return foldText(text);
 }
 
 /**
@@ -135,7 +136,7 @@ function notesForQuery(
       ? scoped.filter((note) => backend.ids.has(note.noteId))
       : scoped;
   }
-  const needle = q.toLowerCase();
+  const needle = foldText(q);
   return scoped.filter((note) => noteHaystack(note).includes(needle));
 }
 

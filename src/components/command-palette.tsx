@@ -12,6 +12,7 @@ import { Desktop } from "@phosphor-icons/react/dist/ssr/Desktop";
 import type { Icon } from "@phosphor-icons/react";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
+import { foldText } from "@/lib/fold-text";
 import { useScrollLock, isScrollLocked } from "@/hooks/use-scroll-lock";
 import { useTheme } from "@/lib/theme-context";
 import { CardForm } from "./card-form";
@@ -118,9 +119,9 @@ export function CommandPalette() {
     }
   }, [open, mode]);
 
-  const q = query.trim().toLowerCase();
+  const q = foldText(query.trim());
   const filteredDecks = q
-    ? decks.filter((d) => d.toLowerCase().includes(q))
+    ? decks.filter((d) => foldText(d).includes(q))
     : decks;
 
   // Resolve the appearance actually on screen (the provider keeps this `dark`
@@ -373,9 +374,14 @@ function DeckRow({ name, query }: { name: string; query: string }) {
 }
 
 function highlight(text: string, query: string) {
-  const lower = text.toLowerCase();
-  const idx = lower.indexOf(query);
-  if (idx === -1) return text;
+  const folded = foldText(text);
+  const idx = folded.indexOf(query);
+  // Precomposed accents (the common case) keep a 1:1 mapping, so offsets into
+  // `folded` are valid in `text`. Already-decomposed input — a letter typed as
+  // base + a separate combining mark — shrinks when the mark is stripped; when
+  // that shifts offsets, skip the highlight rather than slice at the wrong
+  // boundary.
+  if (idx === -1 || folded.length !== text.length) return text;
   return (
     <>
       <span className="text-foreground/40">{text.slice(0, idx)}</span>

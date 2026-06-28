@@ -13,6 +13,7 @@ import {
   renameDeck,
 } from "@/lib/deck";
 import { recordDeckRedirect } from "@/lib/deck-redirects";
+import { foldText } from "@/lib/fold-text";
 import {
   buildExport,
   downloadDeckJson,
@@ -309,11 +310,11 @@ export function AllDecksList({
   }
 
   const tree = useMemo(() => buildDeckTree(decks), [decks]);
-  const q = query.trim().toLowerCase();
+  const q = foldText(query.trim());
   // While searching, show a flat list of matches with their full path — the
   // collapsed tree would otherwise hide matching subdecks.
   const matches = q
-    ? [...decks].sort(compareDeckPaths).filter((d) => d.toLowerCase().includes(q))
+    ? [...decks].sort(compareDeckPaths).filter((d) => foldText(d).includes(q))
     : null;
 
   return (
