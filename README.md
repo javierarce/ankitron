@@ -17,6 +17,7 @@ A simple, lightweight Mac app for managing and studying [Anki](https://apps.anki
 - Create, edit, and delete notes in four note types: Basic, Basic (and reversed), Cloze, and Cloze (typed)
 - Rich-text editor with bold, italic, lists, image insertion, HTML source view, and a cloze helper
 - Add and remove tags 
+- Search notes with [Anki's search syntax](https://docs.ankiweb.net/searching.html) (`deck:`, `tag:`, `is:`, `note:`, and more), with autocomplete that suggests values from the current results
 - Suspend and unsuspend cards
 - Bulk-select notes to delete, move, suspend or edit them one at a time in sequence
 
