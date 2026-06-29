@@ -376,7 +376,7 @@ export function StudyCard({
         </div>
 
         {!isRevealed ? (
-          <div key="content" className="px-8 py-6">
+          <div key="content" className="pl-8 pr-12 py-6">
             {typed ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
                 <HtmlContent html={questionBefore} />
@@ -406,7 +406,7 @@ export function StudyCard({
         ) : (
           <div key="content">
             {/* Section 1 — question (gray background) */}
-            <div className="rounded-t-xl bg-foreground/[0.03] px-8 py-6">
+            <div className="rounded-t-xl bg-foreground/[0.03] pl-8 pr-12 py-6">
               <HtmlContent
                 html={
                   typed
@@ -421,7 +421,7 @@ export function StudyCard({
                the first carries a full-width top border so the dividers run
                edge to edge across the card. */}
             {typed ? (
-              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border px-8 py-3">
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-3">
                 {typedDiff ? (
                   typedDiff.correct ? (
                     <div className="flex justify-center">
@@ -473,7 +473,7 @@ export function StudyCard({
               </div>
             ) : (
               isClozeReveal && (
-                <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border px-8 py-6">
+                <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-6">
                   <HtmlContent html={splitAnswer.front} />
                 </div>
               )
@@ -481,7 +481,7 @@ export function StudyCard({
 
             {/* Section 3 — back of the card */}
             {splitAnswer.back.trim() && (
-              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border px-8 py-6">
+              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-6">
                 <HtmlContent html={splitAnswer.back} />
               </div>
             )}
