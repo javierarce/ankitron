@@ -265,6 +265,32 @@ select {
   font-style: italic;
 }
 
+/* Links in the editor and rendered card HTML. Tailwind v4's preflight and
+   Anki's stored HTML both leave <a> unstyled, so give it the app's accent blue
+   with an underline. Dark mode uses a lighter blue that stays legible against
+   the near-black background. */
+.tiptap a,
+.prose a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tiptap a:hover,
+.prose a:hover {
+  color: #1d4ed8;
+}
+
+.dark .tiptap a,
+.dark .prose a {
+  color: #60a5fa;
+}
+
+.dark .tiptap a:hover,
+.dark .prose a:hover {
+  color: #93c5fd;
+}
+
 /* Dividers inserted via the toolbar's HR button. Match the app's hairline
    weight; a touch more contrast than the study-answer divider so it's clearly
    visible against the editor's plain background. */
