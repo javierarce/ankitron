@@ -206,10 +206,10 @@ async function handleAction(
     }
 
     case "findNotes": {
+      // Every note in the subtree, suspended or not — the deck detail list shows
+      // suspended notes too (it marks them rather than hiding them).
       const deck = deckFromQuery(params.query as string);
-      return notesInSubtree(deck)
-        .filter((n) => !n.suspended || true) // list shows suspended notes too
-        .map((n) => n.noteId);
+      return notesInSubtree(deck).map((n) => n.noteId);
     }
 
     case "findCards": {
