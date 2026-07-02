@@ -3,10 +3,16 @@ name: Deploy site
 on:
   push:
     branches: [main]
-    # Only redeploy when the site (or this workflow) actually changes.
-    # package.json is included so a version bump restamps the version label.
+    # Redeploy when the site changes, or when anything the embedded demo is
+    # built from changes (it bundles the real app from src/). package.json is
+    # also included so a version bump restamps the version label.
     paths:
       - "docs/**"
+      - "src/**"
+      - "index.html"
+      - "vite.config.ts"
+      - "postcss.config.mjs"
+      - "pnpm-lock.yaml"
       - "package.json"
       - ".github/workflows/deploy-site.yml"
   workflow_dispatch:
@@ -24,6 +30,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Build the interactive demo (the real app against an in-memory Anki mock)
+      # into docs/demo, so the landing page's <iframe src="demo/"> has something
+      # to load. docs/demo is gitignored and produced fresh here on every deploy.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build the interactive demo
+        run: pnpm run build:demo
 
       # Stamp the live app version into the page server-side, so the browser
       # never has to call the GitHub API (which adblockers block and which is

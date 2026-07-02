@@ -20,6 +20,10 @@
 # build output
 /dist
 
+# interactive demo bundle — built from src/ by the deploy workflow (build:demo),
+# never committed
+/docs/demo
+
 # rust / tauri
 /src-tauri/target
 
