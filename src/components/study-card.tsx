@@ -189,6 +189,7 @@ export function StudyCard({
   const [typedValue, setTypedValue] = useState("");
   const [submittedValue, setSubmittedValue] = useState("");
   const [prevQuestion, setPrevQuestion] = useState(question);
+  const [wasRevealed, setWasRevealed] = useState(isRevealed);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardBodyRef = useRef<HTMLDivElement>(null);
 
@@ -241,6 +242,19 @@ export function StudyCard({
     setPrevQuestion(question);
     setTypedValue("");
     setSubmittedValue("");
+  }
+
+  // Anki can re-serve the very same card (e.g. after a Fail), so the question
+  // string is unchanged and the reset above doesn't fire. Detect the fresh
+  // serve by the reveal flag dropping back to false — submitting a typed answer
+  // goes false→true, a (re)served card goes true→false — and clear the prior
+  // input so the answer must be typed again.
+  if (wasRevealed !== isRevealed) {
+    setWasRevealed(isRevealed);
+    if (!isRevealed) {
+      setTypedValue("");
+      setSubmittedValue("");
+    }
   }
 
   useEffect(() => {
