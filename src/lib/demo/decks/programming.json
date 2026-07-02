@@ -1,0 +1,10 @@
+{
+  "deckName": "Programming",
+  "notes": [
+    { "modelName": "Basic", "deck": "Programming::Python", "fields": { "Front": "What does <code>len()</code> return?", "Back": "The number of items in a sequence or collection." }, "tags": ["python"], "state": "new" },
+    { "modelName": "Basic", "deck": "Programming::Python", "fields": { "Front": "How do you start a virtual environment?", "Back": "<code>python -m venv .venv</code>" }, "tags": ["python"], "state": "review" },
+    { "modelName": "Basic", "deck": "Programming::Python", "fields": { "Front": "What is a list comprehension?", "Back": "A concise way to build a list: <code>[x*x for x in range(10)]</code>" }, "tags": ["python"], "state": "done" },
+    { "modelName": "Basic", "deck": "Programming::JavaScript", "fields": { "Front": "What does <code>typeof null</code> return?", "Back": "<code>\"object\"</code> — a famous historical bug in JavaScript." }, "tags": ["javascript"], "state": "review" },
+    { "modelName": "Basic", "deck": "Programming::JavaScript", "fields": { "Front": "What is the difference between <code>==</code> and <code>===</code>?", "Back": "<code>==</code> coerces types before comparing; <code>===</code> compares value and type without coercion." }, "tags": ["javascript"], "state": "new" }
+  ]
+}

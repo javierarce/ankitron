@@ -1,0 +1,10 @@
+{
+  "deckName": "World Capitals",
+  "notes": [
+    { "modelName": "Basic", "fields": { "Front": "Kenya", "Back": "Nairobi" }, "tags": ["africa"], "state": "new" },
+    { "modelName": "Basic", "fields": { "Front": "Japan", "Back": "Tokyo" }, "tags": ["asia"], "state": "review" },
+    { "modelName": "Basic", "fields": { "Front": "France", "Back": "Paris" }, "tags": ["europe"], "state": "review" },
+    { "modelName": "Basic", "fields": { "Front": "Brazil", "Back": "Brasília" }, "tags": ["americas"], "state": "new" },
+    { "modelName": "Basic", "fields": { "Front": "Australia", "Back": "Canberra" }, "tags": ["oceania"], "state": "done" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "deckName": "Spanish",
+  "notes": [
+    { "modelName": "Basic", "deck": "Spanish::Verbs", "fields": { "Front": "hablar", "Back": "to speak" }, "tags": ["verb"], "state": "review" },
+    { "modelName": "Basic", "deck": "Spanish::Verbs", "fields": { "Front": "comer", "Back": "to eat" }, "tags": ["verb"], "state": "new" },
+    { "modelName": "Basic", "deck": "Spanish::Verbs", "fields": { "Front": "vivir", "Back": "to live" }, "tags": ["verb"], "state": "new" },
+    { "modelName": "Basic", "deck": "Spanish::Verbs", "fields": { "Front": "tener", "Back": "to have" }, "tags": ["verb", "irregular"], "state": "learn" },
+    { "modelName": "Basic", "deck": "Spanish::Verbs", "fields": { "Front": "hacer", "Back": "to do / to make" }, "tags": ["verb", "irregular"], "state": "review" },
+    { "modelName": "Basic", "deck": "Spanish::Verbs", "fields": { "Front": "poder", "Back": "to be able to" }, "tags": ["verb", "irregular"], "state": "done" },
+    { "modelName": "Basic", "deck": "Spanish::Verbs", "fields": { "Front": "querer", "Back": "to want" }, "tags": ["verb"], "state": "done" },
+    { "modelName": "Basic", "deck": "Spanish::Vocabulary", "fields": { "Front": "la casa", "Back": "the house" }, "tags": [], "state": "new" },
+    { "modelName": "Basic", "deck": "Spanish::Vocabulary", "fields": { "Front": "el perro", "Back": "the dog" }, "tags": [], "state": "new" },
+    { "modelName": "Basic", "deck": "Spanish::Vocabulary", "fields": { "Front": "el agua", "Back": "the water" }, "tags": [], "state": "review" },
+    { "modelName": "Basic", "deck": "Spanish::Vocabulary", "fields": { "Front": "la manzana", "Back": "the apple" }, "tags": [], "state": "done" },
+    { "modelName": "Basic", "deck": "Spanish::Vocabulary", "fields": { "Front": "el libro", "Back": "the book" }, "tags": [], "state": "done" }
+  ]
+}

@@ -10,6 +10,15 @@ export async function ankiFetch<T = unknown>(
 ): Promise<T> {
   const body = { action, version: 6, params };
 
+  // Marketing demo build (VITE_DEMO=1): route every call to an in-memory Anki
+  // simulator so the real UI runs in a plain browser with no Anki/AnkiConnect.
+  // The dynamic import keeps the mock and its fixtures out of the shipped app —
+  // in a normal build VITE_DEMO is statically false and this branch is dropped.
+  if (import.meta.env.VITE_DEMO) {
+    const { mockAnki } = await import("./demo/mock-anki");
+    return mockAnki(action, params) as Promise<T>;
+  }
+
   if (isTauri) {
     // Use Tauri's invoke to bypass CORS — the Rust backend proxies to AnkiConnect.
     const { invoke } = await import("@tauri-apps/api/core");

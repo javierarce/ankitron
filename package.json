@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "vite",
     "dev:tauri": "tauri dev",
+    "dev:demo": "VITE_DEMO=1 vite --port 5180 --strictPort",
+    "build:demo": "VITE_DEMO=1 vite build --base /demo/ --outDir docs/demo --emptyOutDir",
     "build": "vite build",
     "build:tauri": "tauri build",
     "preview": "vite preview",
