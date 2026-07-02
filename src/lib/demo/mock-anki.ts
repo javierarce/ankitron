@@ -20,6 +20,7 @@ import {
   addDemoNote,
   DECKS,
   DEMO_STATS,
+  ensureDeck,
   NOTES,
   type DemoNote,
 } from "./fixtures";
@@ -31,6 +32,11 @@ const cardIdOf = (noteId: number) => CARD_OFFSET + noteId;
 const noteIdOfCard = (cardId: number) => cardId - CARD_OFFSET;
 
 const deckId = (name: string) => DECKS.find((d) => d.name === name)?.id ?? 0;
+
+// In-memory media folder: filename -> base64. Populated by storeMediaFile when
+// a card gets an image or audio clip, read back by retrieveMediaFile so the
+// media actually renders/plays in the demo (Anki keeps these on disk).
+const mediaStore = new Map<string, string>();
 
 // ---------------------------------------------------------------------------
 // Helpers over the model
@@ -98,6 +104,10 @@ const review = {
   queue: [] as number[], // cardIds still to review, in order
   idx: 0, // pointer to the current card
   answerShown: false,
+  // Notes graded this session, with their pre-grade state, so undo can restore
+  // them. Grading marks a note "done" (dropping it from due counts), which is
+  // how a finished deck disappears from the home page — just like the real app.
+  graded: [] as { noteId: number; prevState: DemoNote["state"] }[],
 };
 
 const buildQueue = (root: string) =>
@@ -210,6 +220,7 @@ export async function mockAnki(
         review.deck = name;
         review.queue = buildQueue(name);
         review.idx = 0;
+        review.graded = [];
       }
       review.answerShown = false;
       return true;
@@ -225,16 +236,26 @@ export async function mockAnki(
       review.answerShown = true;
       return true;
 
-    case "guiAnswerCard":
-      // Advance past the graded card. We don't requeue "Fail" so a demo session
-      // always converges to the completion screen.
+    case "guiAnswerCard": {
+      // Mark the graded note "done" so it leaves the due counts — that's how a
+      // finished deck drops off the home page. Record the prior state for undo.
+      // We don't requeue "Fail" so a demo session always reaches completion.
+      const graded = findNote(noteIdOfCard(review.queue[review.idx]));
+      if (graded) {
+        review.graded.push({ noteId: graded.noteId, prevState: graded.state });
+        graded.state = "done";
+      }
       review.idx += 1;
       review.answerShown = false;
       return true;
+    }
 
     case "guiUndo":
       if (review.idx > 0) {
         review.idx -= 1;
+        const last = review.graded.pop();
+        const n = last && findNote(last.noteId);
+        if (n && last) n.state = last.prevState; // bring the card back as due
         review.answerShown = false;
       }
       return true;
@@ -326,6 +347,9 @@ export async function mockAnki(
     case "modelNames":
       return ["Basic", "Basic (and reversed card)", "Cloze"];
     case "createDeck":
+      // Register the deck so it shows up on the deck list — e.g. importing a
+      // deck, or adding a note to a brand-new deck.
+      ensureDeck(params.deck as string);
       return deckId(params.deck as string) || 999;
     case "getDeckConfig":
       return { id: 1, name: "Default" };
@@ -340,10 +364,14 @@ export async function mockAnki(
     case "setDeckConfigId":
     case "deleteDecks":
       return null;
+    case "storeMediaFile": {
+      // Keep the uploaded bytes so the image/audio can be rendered back below.
+      const filename = (params.filename as string) ?? "media";
+      if (typeof params.data === "string") mediaStore.set(filename, params.data);
+      return filename;
+    }
     case "retrieveMediaFile":
-      return false; // "no such media file" — the UI handles a missing file
-    case "storeMediaFile":
-      return (params.filename as string) ?? "";
+      return mediaStore.get(params.filename as string) ?? false;
 
     default:
       // Anything we didn't model returns an empty-ish value so the UI degrades

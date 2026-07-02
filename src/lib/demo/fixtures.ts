@@ -100,15 +100,35 @@ for (const [file, mod] of Object.entries(deckFiles).sort(([a], [b]) =>
   }
 }
 
-/** The full deck tree (every authored deck plus its derived parents), sorted. */
-export const DECKS: { name: string; id: number }[] = [...deckNames]
-  .sort(compareDeckPaths)
-  .map((name, i) => ({ name, id: i + 1 }));
+// Deck registry — seeded from the loaded notes, but growable at runtime so a
+// deck created during the session (importing a deck, or adding a note to a
+// brand-new deck) shows up just like it would in the real app. Ids are stable
+// once assigned.
+let nextDeckId = 1;
+const deckIdByName = new Map<string, number>();
+
+/** The live deck tree: authored decks, their derived parents, and any added
+ * during the session, in the order their ids were assigned. */
+export const DECKS: { name: string; id: number }[] = [];
+
+/** Register a deck path (and its ancestors) if not already known. */
+export function ensureDeck(path: string): void {
+  if (!path) return;
+  for (const name of ancestorPaths(path)) {
+    if (deckIdByName.has(name)) continue;
+    const id = nextDeckId++;
+    deckIdByName.set(name, id);
+    DECKS.push({ name, id });
+  }
+}
+
+// Seed the registry from the loaded decks, in tree order for stable ids.
+for (const name of [...deckNames].sort(compareDeckPaths)) ensureDeck(name);
 
 /** Mutable note store — the session's add/edit/delete handlers act on this. */
 export const NOTES: DemoNote[] = notes;
 
-/** Append a note created during the session (the add-note form). */
+/** Append a note created during the session (the add-note form or an import). */
 export function addDemoNote(
   deckName: string,
   front: string,
@@ -116,6 +136,7 @@ export function addDemoNote(
   state: DemoState,
   tags: string[],
 ): DemoNote {
+  ensureDeck(deckName);
   const n: DemoNote = {
     noteId: nextNoteId++,
     deckName,
