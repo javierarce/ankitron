@@ -1,6 +1,9 @@
 import { useEffect, useRef } from "react";
 import { getMediaUrl, MEDIA_ATTR, prepareCardHtml } from "@/lib/audio";
 
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 /** Renders HTML imperatively via a ref so React never re-creates the
  * inner DOM on re-renders (which would destroy any selected text node
  * inside). Card media (<img>) references bare collection-media filenames the
@@ -46,5 +49,24 @@ export function HtmlContent({
       cancelled = true;
     };
   }, [html]);
-  return <div ref={ref} className={className} />;
+  // A card <a href> in the webview would navigate the whole app away and leave
+  // it stranded. Intercept clicks on links and hand the URL to the OS browser
+  // instead; other clicks (audio buttons, plain content) fall through.
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const anchor = (e.target as HTMLElement).closest("a");
+    const href = anchor?.getAttribute("href");
+    if (!href) return;
+    e.preventDefault();
+    // Don't let a link click bubble to the card body, which would reveal the
+    // answer (see study-card.tsx). A link click is a link click, nothing more.
+    e.stopPropagation();
+    // Hand the URL to the OS browser (matches about-dialog.tsx); fall back to a
+    // new tab when running outside Tauri (e.g. dev in a plain browser).
+    if (isTauri) {
+      import("@tauri-apps/plugin-shell").then(({ open }) => open(href));
+    } else {
+      window.open(href, "_blank", "noopener");
+    }
+  };
+  return <div ref={ref} className={className} onClick={handleClick} />;
 }

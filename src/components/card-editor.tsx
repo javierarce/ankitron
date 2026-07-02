@@ -1,4 +1,4 @@
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, getMarkRange } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import {
 import { isConfigured } from "@/lib/elevenlabs";
 import { isExperimentalEnabled } from "@/lib/experimental";
 import { TtsDialog } from "./tts-dialog";
+import { LinkDialog } from "./link-dialog";
 import { HtmlSourceEditor } from "./html-source-editor";
 import { formatHtml } from "@/lib/html-source";
 
@@ -76,6 +77,29 @@ function getNextClozeNumber(html: string): number {
   return Math.max(...numbers) + 1;
 }
 
+// TipTap's setLink stores the href verbatim (defaultProtocol only participates
+// in autolink/paste, never rewriting it), so a bare "example.com" would be a
+// relative href that resolves against the app's tauri:// origin at click time
+// and goes nowhere. Prepend a scheme when the input lacks one.
+function normalizeLinkHref(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed === "") return "";
+  // Protocol-relative (//host): give it https so it doesn't inherit tauri://.
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  // Already has a scheme (https:, mailto:, tel:, …)? Leave it alone.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+// Whether a selection is itself a URL, so highlighting a pasted link and hitting
+// the link button pre-fills the field with it. A scheme (https:, mailto:…) or a
+// bare dotted host with no whitespace ("example.com/path").
+function looksLikeUrl(text: string): boolean {
+  const t = text.trim();
+  if (!t || /\s/.test(t)) return false;
+  return /^[a-z][a-z0-9+.-]*:/i.test(t) || /^[\w-]+(\.[\w-]+)+/.test(t);
+}
+
 // Collapse insignificant whitespace so the rich/source fidelity check doesn't
 // flag harmless reformatting (TipTap re-indents and re-wraps on serialize).
 function normalizeHtml(html: string): string {
@@ -119,6 +143,25 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
   // on selection-only changes, so an inline read would go stale and leave the
   // button stuck disabled.
   const [hasSelection, setHasSelection] = useState(false);
+  // Whether the cursor sits inside a link, driving the link button's active
+  // highlight. Tracked via editor events for the same reason as hasSelection:
+  // useEditor doesn't re-render on selection-only moves (e.g. arrow keys), so
+  // reading editor.isActive("link") inline during render would go stale.
+  const [isLinkActive, setIsLinkActive] = useState(false);
+  // The link editor is a modal (LinkDialog) with text + URL fields; null means
+  // closed. Opening it captures the target range up front, since focusing the
+  // dialog drops the editor's selection. `editing` distinguishes updating an
+  // existing link (whose full mark range is captured) from creating one.
+  const [linkDialog, setLinkDialog] = useState<{
+    from: number;
+    to: number;
+    text: string;
+    url: string;
+    editing: boolean;
+  } | null>(null);
+  // editorProps is built once when the editor mounts, before openLink exists,
+  // so the click handler calls through a ref that's kept pointing at the latest.
+  const openLinkRef = useRef<(pos?: number) => void>(() => {});
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -127,6 +170,16 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         heading: false,
         codeBlock: false,
         blockquote: false,
+        // StarterKit bundles the Link mark (so imported <a> tags round-trip).
+        // openOnClick would navigate the webview away from the app when a link
+        // is clicked mid-edit, so disable it — the link button manages links
+        // instead. defaultProtocol only governs autolink/paste (setLink stores
+        // the href verbatim — see normalizeLinkHref), so "https" makes a URL
+        // typed inline resolve absolutely rather than against tauri://.
+        link: {
+          openOnClick: false,
+          defaultProtocol: "https",
+        },
       }),
       MediaImage,
     ],
@@ -188,12 +241,43 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
           .finally(() => setAttachingAudio(false));
         return true;
       },
+      handleDOMEvents: {
+        // WKWebView natively follows an <a> click inside contenteditable
+        // (Chrome/Firefox just place the cursor), navigating the app away, and
+        // preventDefault on the *click* event doesn't stop it. Cancelling the
+        // gesture at mousedown does. We compute the clicked position here (the
+        // caret never moves, since we prevent the default) and open the link
+        // editor for that link. Left button only, so right/ctrl-click still get
+        // the context menu.
+        mousedown: (view, event) => {
+          if (event.button !== 0) return false;
+          const link = (event.target as HTMLElement | null)?.closest("a");
+          if (!link) return false;
+          event.preventDefault();
+          const pos = view.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          })?.pos;
+          openLinkRef.current(pos);
+          return true;
+        },
+        // Belt-and-suspenders: swallow the click default for links too, in case
+        // a drag or focus quirk lets one through despite the mousedown cancel.
+        click: (_view, event) => {
+          if (!(event.target as HTMLElement | null)?.closest("a")) return false;
+          event.preventDefault();
+          return true;
+        },
+      },
     },
   });
 
   useEffect(() => {
     if (!editor) return;
-    const sync = () => setHasSelection(!editor.state.selection.empty);
+    const sync = () => {
+      setHasSelection(!editor.state.selection.empty);
+      setIsLinkActive(editor.isActive("link"));
+    };
     sync();
     editor.on("selectionUpdate", sync);
     editor.on("transaction", sync);
@@ -287,6 +371,91 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       const pos = editor.state.selection.from - 2;
       editor.chain().setTextSelection(pos).run();
     }
+  }, [editor]);
+
+  const openLink = useCallback((pos?: number) => {
+    if (!editor) return;
+    const { state } = editor;
+    const linkType = state.schema.marks.link;
+    // A link click passes the clicked position (the selection isn't moved
+    // there — we cancel the mousedown to stop WebKit navigating); the toolbar
+    // button passes nothing and works off the current selection.
+    const $pos = pos != null ? state.doc.resolve(pos) : state.selection.$from;
+    // A cursor anywhere inside a link edits that whole link: expand to its mark
+    // range so text/URL prefill from — and Update/Remove act on — the full link.
+    const range = linkType ? getMarkRange($pos, linkType) : undefined;
+    if (range) {
+      let href = "";
+      state.doc.nodesBetween(range.from, range.to, (node) => {
+        const mark = node.marks.find((m) => m.type === linkType);
+        if (mark) href = (mark.attrs.href as string) ?? "";
+      });
+      setLinkDialog({
+        from: range.from,
+        to: range.to,
+        text: state.doc.textBetween(range.from, range.to),
+        url: href,
+        editing: true,
+      });
+      return;
+    }
+    // No link: seed the text from the selection, and the URL too when the
+    // selection already looks like a pasted address.
+    const { from, to } = state.selection;
+    const selectedText = state.doc.textBetween(from, to);
+    setLinkDialog({
+      from,
+      to,
+      text: selectedText,
+      url: looksLikeUrl(selectedText) ? selectedText : "",
+      editing: false,
+    });
+  }, [editor]);
+
+  // Keep the click handler (bound once in editorProps) calling the current
+  // openLink so it opens the dialog for whatever link was tapped.
+  useEffect(() => {
+    openLinkRef.current = openLink;
+  }, [openLink]);
+
+  const submitLink = useCallback(
+    (text: string, url: string) => {
+      if (!editor || !linkDialog) return;
+      const href = normalizeLinkHref(url);
+      if (href === "") return; // URL required (the dialog also guards this).
+      // Empty text falls back to the URL so there's always something to show.
+      const label = text.trim() === "" ? href : text;
+      // Replace the captured range with the linked text — covers inserting at a
+      // cursor, linking a selection, and rewriting an existing link's text/href.
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(
+          { from: linkDialog.from, to: linkDialog.to },
+          { type: "text", text: label, marks: [{ type: "link", attrs: { href } }] }
+        )
+        .run();
+      setLinkDialog(null);
+    },
+    [editor, linkDialog]
+  );
+
+  const removeLink = useCallback(() => {
+    if (!editor || !linkDialog) return;
+    // The captured range is the full link, so unset over it strips the link and
+    // keeps the text.
+    editor
+      .chain()
+      .focus()
+      .setTextSelection({ from: linkDialog.from, to: linkDialog.to })
+      .unsetLink()
+      .run();
+    setLinkDialog(null);
+  }, [editor, linkDialog]);
+
+  const closeLink = useCallback(() => {
+    setLinkDialog(null);
+    editor?.commands.focus();
   }, [editor]);
 
   const openTts = useCallback(() => {
@@ -418,6 +587,32 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
         <button
           type="button"
           tabIndex={-1}
+          onClick={() => openLink()}
+          title="Add or edit a link"
+          className={`rounded px-2 py-1 transition-colors ${
+            isLinkActive
+              ? "bg-foreground/15 text-foreground"
+              : "text-foreground/50 hover:text-foreground hover:bg-foreground/5"
+          }`}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           className={`rounded px-2 py-1 text-xs transition-colors ${
             editor.isActive("bulletList")
@@ -534,6 +729,16 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
           text={ttsText}
           onInsert={insertTtsAudio}
           onClose={() => setTtsText(null)}
+        />
+      )}
+      {linkDialog && (
+        <LinkDialog
+          initialText={linkDialog.text}
+          initialUrl={linkDialog.url}
+          editing={linkDialog.editing}
+          onSubmit={submitLink}
+          onRemove={removeLink}
+          onClose={closeLink}
         />
       )}
     </div>
