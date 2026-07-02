@@ -1,9 +1,0 @@
-{
-  "deckName": "French",
-  "notes": [
-    { "modelName": "Basic", "fields": { "Front": "bonjour", "Back": "hello / good morning" }, "tags": ["greeting"], "state": "new" },
-    { "modelName": "Basic", "fields": { "Front": "merci", "Back": "thank you" }, "tags": ["greeting"], "state": "review" },
-    { "modelName": "Basic", "fields": { "Front": "le chat", "Back": "the cat" }, "tags": [], "state": "learn" },
-    { "modelName": "Basic", "fields": { "Front": "la pomme", "Back": "the apple" }, "tags": [], "state": "done" }
-  ]
-}

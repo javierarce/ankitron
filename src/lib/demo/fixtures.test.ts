@@ -20,18 +20,28 @@ describe("demo fixtures", () => {
     }
   });
 
-  it("derives the deck tree (incl. parents of subdecks) with unique ids", () => {
-    const names = DECKS.map((d) => d.name);
-    // "Spanish" is authored only via its subdecks' notes, so it must be derived.
-    expect(names).toContain("Spanish");
-    expect(names).toContain("Spanish::Verbs");
-    expect(names).toContain("Programming::JavaScript");
+  // Content-agnostic so the demo decks can be swapped freely: assert the shape
+  // the loader must produce, not specific deck names.
+  it("derives a coherent deck tree with unique ids", () => {
+    expect(DECKS.length).toBeGreaterThan(0);
+    expect(NOTES.length).toBeGreaterThan(0);
     expect(new Set(DECKS.map((d) => d.id)).size).toBe(DECKS.length);
+
+    const names = new Set(DECKS.map((d) => d.name));
+    for (const n of NOTES) {
+      // Every note's deck is registered...
+      expect(names.has(n.deckName)).toBe(true);
+      // ...and every subdeck's ancestor decks are derived (e.g. "A::B" ⇒ "A").
+      const parts = n.deckName.split("::");
+      for (let i = 1; i < parts.length; i++) {
+        expect(names.has(parts.slice(0, i).join("::"))).toBe(true);
+      }
+    }
   });
 
   it("gives every note a valid scheduling state and non-empty content", () => {
     const valid = new Set(["new", "learn", "review", "done"]);
-    expect(NOTES.length).toBeGreaterThan(15);
+    expect(NOTES.length).toBeGreaterThan(0);
     for (const n of NOTES) {
       expect(valid.has(n.state)).toBe(true);
       expect(n.front.length).toBeGreaterThan(0);

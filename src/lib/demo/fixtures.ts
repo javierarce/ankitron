@@ -151,8 +151,61 @@ export function addDemoNote(
   return n;
 }
 
+/** In-memory media folder (filename -> base64), like Anki's collection.media. */
+export const DEMO_MEDIA = new Map<string, string>();
+
 /** Global "studied today" footer numbers — the only non-per-deck tunables. */
 export const DEMO_STATS = demoConfig as {
   studiedTodayCards: number;
   secondsPerCard: number;
 };
+
+// --- Session persistence ---------------------------------------------------
+// The app reloads the page after some actions (dismissing the import result,
+// for one) to refresh its view from Anki. Anki is memory-only here, so without
+// this a reload would wipe everything the visitor just did — an import would
+// "succeed" and then vanish. We snapshot the mutable model to sessionStorage
+// and restore it on load, so changes survive reloads within a tab. A brand-new
+// visit (fresh tab) still starts from the clean fixtures.
+const STORAGE_KEY = "ankitron-demo-state-v1";
+
+export function persistDemoState(): void {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        notes,
+        decks: DECKS,
+        deckIds: [...deckIdByName],
+        media: [...DEMO_MEDIA],
+        nextNoteId,
+        nextDeckId,
+      }),
+    );
+  } catch {
+    // Storage unavailable or over quota — the demo just won't survive reloads.
+  }
+}
+
+// Restore a prior snapshot over the freshly-loaded fixtures, if one exists.
+(function hydrateFromSession() {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const snap = JSON.parse(raw);
+    notes.length = 0;
+    notes.push(...snap.notes);
+    DECKS.length = 0;
+    DECKS.push(...snap.decks);
+    deckIdByName.clear();
+    for (const [name, deckId] of snap.deckIds) deckIdByName.set(name, deckId);
+    DEMO_MEDIA.clear();
+    for (const [file, data] of snap.media) DEMO_MEDIA.set(file, data);
+    nextNoteId = snap.nextNoteId;
+    nextDeckId = snap.nextDeckId;
+  } catch {
+    // Corrupt/incompatible snapshot — ignore and use the fresh fixtures.
+  }
+})();

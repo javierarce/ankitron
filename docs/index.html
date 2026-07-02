@@ -387,11 +387,15 @@
       const root = document.documentElement;
       const demoFrame = document.getElementById("demo");
 
-      let theme =
-        localStorage.getItem("theme") ||
-        (window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light");
+      // Resolve a stored theme ("light" | "dark" | "system") to a boolean. The
+      // demo (the real app) can store "system"; the landing toggle only stores
+      // light/dark, but we handle all three so app → site sync works.
+      const prefersDark = () =>
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const resolveDark = (value) =>
+        value === "dark" || (value !== "light" && prefersDark());
+
+      let theme = resolveDark(localStorage.getItem("theme")) ? "dark" : "light";
       root.classList.toggle("dark", theme === "dark"); // initial paint
 
       // The embedded demo is the real app, same-origin, sharing this
@@ -407,6 +411,15 @@
         }
       };
       demoFrame.addEventListener("load", syncDemoTheme);
+
+      // Flow the switch the other way too: changing the theme inside the demo
+      // (its Settings) writes the same localStorage `theme`. Same-origin, so the
+      // parent gets a `storage` event — mirror it onto the landing page.
+      window.addEventListener("storage", (e) => {
+        if (e.key !== "theme") return;
+        theme = resolveDark(e.newValue) ? "dark" : "light";
+        root.classList.toggle("dark", theme === "dark");
+      });
 
       document.getElementById("theme-toggle").addEventListener("click", () => {
         theme = root.classList.contains("dark") ? "light" : "dark";

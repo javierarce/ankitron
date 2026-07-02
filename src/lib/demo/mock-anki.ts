@@ -19,9 +19,11 @@
 import {
   addDemoNote,
   DECKS,
+  DEMO_MEDIA,
   DEMO_STATS,
   ensureDeck,
   NOTES,
+  persistDemoState,
   type DemoNote,
 } from "./fixtures";
 
@@ -32,11 +34,6 @@ const cardIdOf = (noteId: number) => CARD_OFFSET + noteId;
 const noteIdOfCard = (cardId: number) => cardId - CARD_OFFSET;
 
 const deckId = (name: string) => DECKS.find((d) => d.name === name)?.id ?? 0;
-
-// In-memory media folder: filename -> base64. Populated by storeMediaFile when
-// a card gets an image or audio clip, read back by retrieveMediaFile so the
-// media actually renders/plays in the demo (Anki keeps these on disk).
-const mediaStore = new Map<string, string>();
 
 // ---------------------------------------------------------------------------
 // Helpers over the model
@@ -137,12 +134,36 @@ const guiCurrentCard = () => {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Actions that change the in-memory model; after any of these we snapshot to
+// sessionStorage so the change survives a page reload (see persistDemoState).
+const MUTATING = new Set([
+  "guiAnswerCard",
+  "guiUndo",
+  "suspend",
+  "addNote",
+  "updateNoteFields",
+  "deleteNotes",
+  "addTags",
+  "removeTags",
+  "changeDeck",
+  "createDeck",
+  "storeMediaFile",
+]);
+
 export async function mockAnki(
   action: string,
   params: Record<string, unknown> = {},
 ): Promise<unknown> {
   await wait(action.startsWith("gui") ? 40 : 90);
+  const result = await handleAction(action, params);
+  if (MUTATING.has(action)) persistDemoState();
+  return result;
+}
 
+async function handleAction(
+  action: string,
+  params: Record<string, unknown>,
+): Promise<unknown> {
   switch (action) {
     case "deckNames":
       return DECKS.map((d) => d.name);
@@ -367,11 +388,11 @@ export async function mockAnki(
     case "storeMediaFile": {
       // Keep the uploaded bytes so the image/audio can be rendered back below.
       const filename = (params.filename as string) ?? "media";
-      if (typeof params.data === "string") mediaStore.set(filename, params.data);
+      if (typeof params.data === "string") DEMO_MEDIA.set(filename, params.data);
       return filename;
     }
     case "retrieveMediaFile":
-      return mediaStore.get(params.filename as string) ?? false;
+      return DEMO_MEDIA.get(params.filename as string) ?? false;
 
     default:
       // Anything we didn't model returns an empty-ish value so the UI degrades
