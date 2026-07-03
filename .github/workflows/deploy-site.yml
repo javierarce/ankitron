@@ -35,6 +35,8 @@ jobs:
       # into docs/demo, so the landing page's <iframe src="demo/"> has something
       # to load. docs/demo is gitignored and produced fresh here on every deploy.
       - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1 # package.json has no packageManager field to infer from
       - uses: actions/setup-node@v4
         with:
           node-version: 22
