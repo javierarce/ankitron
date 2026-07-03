@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Ease, Note, NoteField } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
@@ -537,12 +537,12 @@ export function StudyPage() {
               </button>
             </div>
           )}
-          <a
-            href="/"
+          <Link
+            to="/"
             className="rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background inline-block"
           >
             Back to Study
-          </a>
+          </Link>
         </div>
       )}
 

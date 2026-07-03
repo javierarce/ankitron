@@ -1,0 +1,138 @@
+{
+  "deckName": "Botany Facts",
+  "notes": [
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "What is the act of two trees naturally fusing their branches or trunks together called?",
+        "Back": "Inosculation"
+      },
+      "tags": [
+        "trees",
+        "inosculation"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Mistletoe is the only known multicellular organism to have lost most of what?",
+        "Back": "Its mitochondrial respiratory capacity (it lacks respiratory Complex I)"
+      },
+      "tags": [
+        "mistletoe",
+        "mitochondria"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Within how many days must a dodder (Cuscuta) seedling reach a host before it starves?",
+        "Back": "5 to 10 days"
+      },
+      "tags": [
+        "parasitic-plants",
+        "dodder"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "The tumbleweed of the American West is famously called Russian thistle \u2014 but which plant family does it actually belong to?",
+        "Back": "The amaranth family (Amaranthaceae). It's neither a thistle nor a cactus."
+      },
+      "tags": [
+        "invasive-species",
+        "tumbleweed"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "The extinct seed fern Glossopteris was key fossil evidence for what theory?",
+        "Back": "Continental drift \u2014 its fossils across South America, Africa, India, Antarctica, and Australia showed these landmasses were once joined as Gondwana."
+      },
+      "tags": [
+        "fossils",
+        "glossopteris",
+        "continental-drift"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "How many ultrasonic 'pops' per hour did stressed tomato and tobacco plants emit in the 2023 study?",
+        "Back": "30 to 50 pops per hour (detectable up to 5 metres away)"
+      },
+      "tags": [
+        "plant-acoustics",
+        "stress"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "In mosses, which generation is the dominant, visible green plant \u2014 haploid or diploid?",
+        "Back": "The haploid gametophyte (the reverse of ferns and flowering plants, where the diploid sporophyte dominates)"
+      },
+      "tags": [
+        "mosses",
+        "ploidy"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Handling celery or other Apiaceae in sunlight can cause what kind of skin reaction?",
+        "Back": "Phytophotodermatitis \u2014 a phototoxic burn triggered by plant coumarins plus UV light"
+      },
+      "tags": [
+        "phototoxicity",
+        "apiaceae"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "The dwarf mistletoe launches its seeds between treetops using what mechanism?",
+        "Back": "Explosive seedpods that fire the seeds across the canopy at high speed"
+      },
+      "tags": [
+        "mistletoe",
+        "seed-dispersal"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "How does the Australian Christmas tree (Nuytsia floribunda) tap its neighbours' water?",
+        "Back": "It severs their xylem with a guillotine-like structure in its haustoria"
+      },
+      "tags": [
+        "parasitic-plants",
+        "nuytsia"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Where do most orchid species actually grow?",
+        "Back": "On trees, as epiphytes (which is why they have thick, gripping roots)"
+      },
+      "tags": [
+        "orchids",
+        "epiphytes"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "The poison 'wolf's bane' (aconite) got its name from being used to kill what animals in the 18th century?",
+        "Back": "Wolves and panthers"
+      },
+      "tags": [
+        "poisonous-plants",
+        "wolfsbane"
+      ]
+    }
+  ]
+}

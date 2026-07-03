@@ -1,0 +1,70 @@
+{
+  "deckName": "Historical Anomalies",
+  "notes": [
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Volume of molasses released during the 1919 Great Molasses Flood?",
+        "Back": "2.3 million U.S. gallons (8,700 cubic meters)"
+      },
+      "tags": [
+        "potatoes",
+        "molases",
+        "boston"
+      ],
+      "state": "new"
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "What caused the structural failure that triggered the Erfurt latrine disaster?",
+        "Back": "The combined weight of the heavy gathering of nobles caused the floor of the building to collapse through the ground floor into the latrine cesspit below."
+      },
+      "tags": [
+        "ach scheiße",
+        "germany"
+      ],
+      "state": "review"
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Approximately how long did the Tanganyika laughter epidemic last from its initial outbreak until it completely died off?",
+        "Back": "18 months"
+      },
+      "tags": [
+        "not funny",
+        "tanzania"
+      ],
+      "state": "learn"
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Exactly how many frozen pizzas were destroyed during the Great Michigan Pizza Funeral, and what were the toppings?",
+        "Back": "29,188 cheese-and-mushroom pizzas."
+      },
+      "tags": [
+        "capricciosa",
+        "cheese",
+        "mushroom",
+        "mozzarella",
+        "pizza",
+        "michigan"
+      ],
+      "state": "done"
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Roughly how many people are estimated to have compulsively taken to dancing for weeks during the Dancing Plague of 1518?",
+        "Back": "Somewhere between 50 and 400 people"
+      },
+      "tags": [
+        "plagues",
+        "murder on the dance floor"
+      ],
+      "state": "done"
+    }
+  ]
+}
