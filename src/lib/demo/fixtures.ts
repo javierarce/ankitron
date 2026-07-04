@@ -122,6 +122,18 @@ export function ensureDeck(path: string): void {
   }
 }
 
+/** Remove a deck and its subdecks from the registry (used by deleteDecks, e.g.
+ * the create/move/delete emulation behind a deck rename). */
+export function removeDeckSubtree(name: string): void {
+  for (let i = DECKS.length - 1; i >= 0; i--) {
+    const { name: deck } = DECKS[i];
+    if (deck === name || deck.startsWith(name + "::")) {
+      DECKS.splice(i, 1);
+      deckIdByName.delete(deck);
+    }
+  }
+}
+
 // Seed the registry from the loaded decks, in tree order for stable ids.
 for (const name of [...deckNames].sort(compareDeckPaths)) ensureDeck(name);
 
