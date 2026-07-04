@@ -118,8 +118,8 @@ describe("DeckSettingsPage rename", () => {
     await user.click(screen.getByRole("button", { name: "Move" }));
     await screen.findByRole("heading", { name: "Move Deck" });
 
-    // Pick a new parent and confirm.
-    await user.selectOptions(screen.getByRole("combobox"), "French");
+    // Pick a new parent from the deck tree and confirm.
+    await user.click(await screen.findByRole("button", { name: "French" }));
     const moveButtons = screen.getAllByRole("button", { name: "Move" });
     await user.click(moveButtons[moveButtons.length - 1]);
 
@@ -152,14 +152,13 @@ describe("DeckSettingsPage rename", () => {
     await user.click(screen.getByRole("button", { name: "Move" }));
     await screen.findByRole("heading", { name: "Move Deck" });
 
-    // Choose "New parent deck…" and type a name for it.
-    await user.selectOptions(
-      screen.getByRole("combobox"),
-      screen.getByRole("option", { name: /New parent deck/ }),
+    // Create a new top-level parent and type a name for it.
+    await user.click(
+      await screen.findByRole("button", { name: "New top-level deck" }),
     );
     await user.type(
-      screen.getByPlaceholderText("New parent deck name"),
-      "Languages",
+      screen.getByPlaceholderText("New deck name"),
+      "Languages{Enter}",
     );
     const moveButtons = screen.getAllByRole("button", { name: "Move" });
     await user.click(moveButtons[moveButtons.length - 1]);

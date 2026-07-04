@@ -16,7 +16,7 @@ interface ImportExportProps {
 
 export function ImportExport({ deckName, notes }: ImportExportProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const importer = useDeckImport({ currentDeck: deckName });
+  const importer = useDeckImport();
   // Export failures reuse the result modal purely as a generic error display;
   // kept local since they're unrelated to the shared import controller.
   const [exportError, setExportError] = useState<string | null>(null);

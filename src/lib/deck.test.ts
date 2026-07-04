@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  buildDeckTree,
   compareDeckPaths,
   coveringDecks,
   deckDeleteMessage,
@@ -365,5 +366,31 @@ describe("coveringDecks", () => {
     expect(coveringDecks(["Spanish::Verbs", "Spanish::Verbs"])).toEqual([
       "Spanish::Verbs",
     ]);
+  });
+});
+
+describe("buildDeckTree", () => {
+  it("nests subdecks under their parents in tree order", () => {
+    const tree = buildDeckTree(["Spanish::Verbs", "French", "Spanish"]);
+    expect(tree.map((n) => n.fullName)).toEqual(["French", "Spanish"]);
+    expect(tree[1].children.map((n) => n.fullName)).toEqual(["Spanish::Verbs"]);
+    expect(tree[1].children[0].name).toBe("Verbs");
+  });
+
+  it("creates missing ancestors implicitly", () => {
+    const tree = buildDeckTree(["Spanish::Verbs::Irregular"]);
+    expect(tree).toHaveLength(1);
+    expect(tree[0].fullName).toBe("Spanish");
+    expect(tree[0].children[0].fullName).toBe("Spanish::Verbs");
+    expect(tree[0].children[0].children[0].fullName).toBe(
+      "Spanish::Verbs::Irregular",
+    );
+  });
+
+  it("keeps a similarly-named sibling out of the subtree", () => {
+    const tree = buildDeckTree(["Spanish", "Spanish 2", "Spanish::Verbs"]);
+    expect(tree.map((n) => n.fullName)).toEqual(["Spanish", "Spanish 2"]);
+    expect(tree[0].children.map((n) => n.fullName)).toEqual(["Spanish::Verbs"]);
+    expect(tree[1].children).toEqual([]);
   });
 });

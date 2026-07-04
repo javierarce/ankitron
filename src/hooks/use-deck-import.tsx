@@ -10,11 +10,6 @@ import {
 import { ImportTargetDialog } from "@/components/import-target-dialog";
 import { ImportResultModal } from "@/components/import-result-modal";
 
-interface UseDeckImportOptions {
-  /** When set, the target dialog offers (and defaults to) this deck. */
-  currentDeck?: string;
-}
-
 /**
  * Drives the shared JSON-import flow: read a file, validate it, let the user
  * pick a target deck, run the import, and report the result. Returns the dialog
@@ -22,7 +17,7 @@ interface UseDeckImportOptions {
  * and render `dialogs`. Extracted so the Import button and drag-and-drop share
  * one controller rather than duplicating this state machine.
  */
-export function useDeckImport({ currentDeck }: UseDeckImportOptions = {}) {
+export function useDeckImport() {
   const [pending, setPending] = useState<ExportedDeck | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -115,7 +110,6 @@ export function useDeckImport({ currentDeck }: UseDeckImportOptions = {}) {
       {pending && (
         <ImportTargetDialog
           parsed={pending}
-          currentDeck={currentDeck}
           importing={importing}
           onCancel={() => setPending(null)}
           onConfirm={runImport}
