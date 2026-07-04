@@ -1,0 +1,101 @@
+{
+  "deckName": "Are you crazy?",
+  "notes": [
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Have you been drinking varnish?",
+        "Back": "Hast du Lack gesoffen?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Were you combed with a hammer as a child?",
+        "Back": "Wurdest du als Kind mit dem Hammer gek\u00e4mmt?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Are you still quite crispy?",
+        "Back": "Bist du noch ganz knusprig?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Did your trampoline stand in the garage?",
+        "Back": "Stand dein Trampolin in der Garage?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Did it hail into your pram?",
+        "Back": "Hat's dir in den Kinderwagen gehagelt?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Were you thrown up three times and caught only twice as a child?",
+        "Back": "Hat man dich als Kind dreimal hochgeworfen und nur zweimal gefangen?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Were you bathed too hot as a child?",
+        "Back": "Wurdest du als Kind zu hei\u00df gebadet?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    },
+    {
+      "modelName": "Basic",
+      "fields": {
+        "Front": "Did the swing stand too close to the wall?",
+        "Back": "Hat die Schaukel zu dicht an der Wand gestanden?"
+      },
+      "tags": [
+        "german",
+        "insults",
+        "bist-du-verr\u00fcckt"
+      ]
+    }
+  ]
+}
