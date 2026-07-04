@@ -22,6 +22,7 @@ import {
 import type { DueCounts, Note } from "@/lib/types";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { useMenuPlacement } from "@/hooks/use-menu-placement";
 import { CardForm } from "./card-form";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { MoveDeckDialog } from "./move-deck-dialog";
@@ -652,11 +653,12 @@ function DeckRowMenu({
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  // Fixed-position coordinates so the menu can render in a portal, escaping the
-  // table's overflow-hidden clip (which otherwise cuts it off).
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Render in a portal (escaping the table's overflow-hidden clip) at flip-aware
+  // fixed coordinates, so a menu near the bottom of the list opens upward
+  // instead of being cut off.
+  const { style } = useMenuPlacement(open, btnRef, menuRef);
 
   useEffect(() => {
     if (!open) return;
@@ -668,28 +670,13 @@ function DeckRowMenu({
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    // Close on scroll/resize rather than chase the button's moving position.
-    function close() {
-      setOpen(false);
-    }
     window.addEventListener("mousedown", handleClick);
     window.addEventListener("keydown", handleKey);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
     return () => {
       window.removeEventListener("mousedown", handleClick);
       window.removeEventListener("keydown", handleKey);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
     };
   }, [open]);
-
-  function openMenu() {
-    const r = btnRef.current?.getBoundingClientRect();
-    if (!r) return;
-    setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
-    setOpen(true);
-  }
 
   const encoded = encodeURIComponent(deck);
 
@@ -697,7 +684,7 @@ function DeckRowMenu({
     <>
       <button
         ref={btnRef}
-        onClick={() => (open ? setOpen(false) : openMenu())}
+        onClick={() => setOpen((o) => !o)}
         aria-label="Deck actions"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -706,13 +693,12 @@ function DeckRowMenu({
         <DotsThreeVertical size={22} weight="bold" />
       </button>
       {open &&
-        pos &&
         createPortal(
           <div
             ref={menuRef}
             role="menu"
-            style={{ position: "fixed", top: pos.top, right: pos.right }}
-            className="z-50 flex w-max min-w-[160px] flex-col rounded-lg border border-border bg-background py-1 shadow-lg"
+            style={style}
+            className="z-50 flex w-max min-w-[160px] flex-col overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-lg"
           >
             <button
               disabled={!canStudy}
