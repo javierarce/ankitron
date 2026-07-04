@@ -48,7 +48,7 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 
 # Ankitron Keyboard Shortcuts
 
-See [SHORTCUTS.md](SHORTCUTS.md)
+Press <kbd>?</kbd> (or the keyboard button next to the settings cog) to see the full list of shortcuts in the app.
 
 
 ## Contributing

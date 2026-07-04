@@ -7,6 +7,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { FullScreenSpinner } from "@/components/full-screen-spinner";
 import { HeaderNav } from "@/components/header-nav";
+import { ShortcutsButton } from "@/components/shortcuts-dialog";
 import { SyncProvider } from "@/components/sync-provider";
 import { UpdateBadge } from "@/components/update-badge";
 import { UpdatePrompt } from "@/components/update-prompt";
@@ -99,6 +100,7 @@ export function Layout() {
             </div>
             <div className="app-no-drag flex items-center gap-2">
               <UpdateBadge />
+              <ShortcutsButton />
               <Link
                 to="/settings"
                 title="Settings"
