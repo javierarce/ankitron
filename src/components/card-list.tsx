@@ -235,7 +235,7 @@ function CardMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   // Portal + flip-aware placement so a row near the bottom of the (scrollable)
   // note list opens its menu upward instead of off-screen.
-  const { style } = useMenuPlacement(open, btnRef, menuRef);
+  const style = useMenuPlacement(open, btnRef, menuRef);
 
   useEffect(() => {
     if (!open) return;

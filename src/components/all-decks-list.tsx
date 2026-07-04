@@ -658,7 +658,7 @@ function DeckRowMenu({
   // Render in a portal (escaping the table's overflow-hidden clip) at flip-aware
   // fixed coordinates, so a menu near the bottom of the list opens upward
   // instead of being cut off.
-  const { style } = useMenuPlacement(open, btnRef, menuRef);
+  const style = useMenuPlacement(open, btnRef, menuRef);
 
   useEffect(() => {
     if (!open) return;

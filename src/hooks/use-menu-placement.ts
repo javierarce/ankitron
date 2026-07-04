@@ -9,13 +9,6 @@ export interface MenuPlacementOptions {
   margin?: number;
 }
 
-export interface MenuPlacement {
-  /** True once a real position has been measured (false for the first paint). */
-  ready: boolean;
-  /** Fixed-position style to spread onto the (portalled) menu element. */
-  style: CSSProperties;
-}
-
 // Hidden off-screen style used before we've measured the menu. useLayoutEffect
 // runs before the browser paints, so the menu is placed for real without a
 // visible flash — but it must render first so we can measure its size.
@@ -27,22 +20,22 @@ const HIDDEN: CSSProperties = {
 };
 
 /**
- * Computes flip-aware fixed coordinates for a dropdown menu rendered in a
+ * Computes flip-aware fixed-position style for a dropdown menu rendered in a
  * portal (so it escapes any overflow-hidden ancestor). The menu prefers to
  * open below its button, but flips above when it doesn't fit below and there's
  * more room up top — and caps its height to the available space either way, so
  * a menu near the bottom of the viewport is never clipped. Reposition happens
  * on scroll/resize so the menu stays glued to a moving button.
  *
- * The menu should carry `overflow-y-auto` so the height cap can scroll when
- * even the roomier side is too short.
+ * Spread the returned style onto the menu element; carry `overflow-y-auto` on
+ * it too so the height cap can scroll when even the roomier side is too short.
  */
 export function useMenuPlacement(
   open: boolean,
   anchorRef: RefObject<HTMLElement | null>,
   menuRef: RefObject<HTMLElement | null>,
   { align = "right", gap = 4, margin = 8 }: MenuPlacementOptions = {},
-): MenuPlacement {
+): CSSProperties {
   const [style, setStyle] = useState<CSSProperties | null>(null);
 
   useLayoutEffect(() => {
@@ -103,5 +96,5 @@ export function useMenuPlacement(
     };
   }, [open, anchorRef, menuRef, align, gap, margin]);
 
-  return { ready: style !== null, style: style ?? HIDDEN };
+  return style ?? HIDDEN;
 }
