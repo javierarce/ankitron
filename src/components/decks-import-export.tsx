@@ -7,6 +7,7 @@ import {
   fetchCardDecksByNoteId,
 } from "@/lib/import-export";
 import { useDeckImport } from "@/hooks/use-deck-import";
+import { DeckPicker } from "./deck-picker";
 import { ImportResultModal } from "./import-result-modal";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 
@@ -140,18 +141,13 @@ function ExportPickerDialog({
           Choose a deck to download as a JSON file.
         </p>
 
-        <select
-          value={selected}
-          onChange={(e) => setSelected(e.target.value)}
+        <DeckPicker
+          decks={decks}
+          value={selected || null}
+          onChange={setSelected}
+          disabled={working}
           autoFocus
-          className="w-full rounded-md border border-border bg-transparent px-2 py-2 text-sm focus:border-foreground/30 focus:outline-none"
-        >
-          {decks.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
+        />
 
         <div className="mt-6 flex justify-end gap-3">
           <button

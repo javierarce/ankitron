@@ -1,16 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import type { ExportedDeck } from "@/lib/import-export";
 import { CardPreview } from "./card-preview";
+import { DeckPicker } from "./deck-picker";
 
-type TargetMode = "current" | "existing" | "new";
+type TargetMode = "new" | "existing";
 
 interface ImportTargetDialogProps {
   parsed: ExportedDeck;
-  /** When set, the "current deck" option is shown and defaulted. */
-  currentDeck?: string;
   importing: boolean;
   onCancel: () => void;
   onConfirm: (target: string, isNew: boolean) => void;
@@ -18,44 +17,45 @@ interface ImportTargetDialogProps {
 
 export function ImportTargetDialog({
   parsed,
-  currentDeck,
   importing,
   onCancel,
   onConfirm,
 }: ImportTargetDialogProps) {
   useScrollLock();
-  const sourceMatchesCurrent =
-    currentDeck !== undefined && parsed.deckName === currentDeck;
-  const [mode, setMode] = useState<TargetMode>(
-    currentDeck !== undefined ? (sourceMatchesCurrent ? "current" : "new") : "new",
+  const [decks, setDecks] = useState<string[] | null>(null);
+  // "New deck" keeps an editable name (defaulting to the export's own name);
+  // "existing" picks from the tree. Kept as two explicit options rather than
+  // preseeding the tree with a phantom pending deck — a row that vanishes on
+  // deselection and can't be renamed reads as a glitch, not a choice.
+  const [mode, setMode] = useState<TargetMode>("new");
+  const [newName, setNewName] = useState(parsed.deckName);
+  const [picked, setPicked] = useState<{ deck: string; isNew: boolean } | null>(
+    null,
   );
-  const [newName, setNewName] = useState(
-    sourceMatchesCurrent ? `${parsed.deckName} (copy)` : parsed.deckName,
-  );
-  const [decks, setDecks] = useState<string[]>([]);
-  const [pickedDeck, setPickedDeck] = useState<string>("");
+  // Once the user touches any control, the deck-list load must not yank the
+  // mode from under them.
+  const touched = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     ankiFetch<string[]>("deckNames")
       .then((names) => {
         if (cancelled) return;
-        const others = names.filter((n) => n !== currentDeck);
-        setDecks(others);
-        if (others.length > 0) {
-          // Prefer the source deck if present — that's the natural target for
-          // a round-trip when the user is on a different page.
-          const preferred = others.includes(parsed.deckName)
-            ? parsed.deckName
-            : others[0];
-          setPickedDeck(preferred);
+        setDecks(names);
+        // Prefer importing back into the source deck when it exists — the
+        // natural round-trip target, and the one noteId matching applies to.
+        if (names.includes(parsed.deckName) && !touched.current) {
+          setMode("existing");
+          setPicked({ deck: parsed.deckName, isNew: false });
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setDecks([]);
+      });
     return () => {
       cancelled = true;
     };
-  }, [currentDeck, parsed.deckName]);
+  }, [parsed.deckName]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -65,34 +65,16 @@ export function ImportTargetDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [importing, onCancel]);
 
-  function effectiveTarget(): string {
-    if (mode === "current") return currentDeck ?? "";
-    if (mode === "existing") return pickedDeck;
-    return newName.trim();
-  }
-
-  const target = effectiveTarget();
+  const target = mode === "new" ? newName.trim() : (picked?.deck ?? "");
+  const isNewTarget =
+    mode === "new" ? !(decks ?? []).includes(target) : (picked?.isNew ?? false);
   const willMatchByNoteId = target !== "" && target === parsed.deckName;
+  const submitDisabled = importing || !target;
 
   function submit() {
-    if (mode === "current") {
-      if (!currentDeck) return;
-      return onConfirm(currentDeck, false);
-    }
-    if (mode === "existing") {
-      if (!pickedDeck) return;
-      return onConfirm(pickedDeck, false);
-    }
-    const name = newName.trim();
-    if (!name) return;
-    onConfirm(name, true);
+    if (submitDisabled) return;
+    onConfirm(target, isNewTarget);
   }
-
-  const submitDisabled =
-    importing ||
-    (mode === "current" && !currentDeck) ||
-    (mode === "existing" && !pickedDeck) ||
-    (mode === "new" && !newName.trim());
 
   return (
     <div
@@ -118,62 +100,15 @@ export function ImportTargetDialog({
         <h4 className="mb-3 text-sm font-semibold">Import into deck</h4>
 
         <div className="space-y-3 text-sm">
-          {currentDeck !== undefined && (
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="radio"
-                name="target"
-                checked={mode === "current"}
-                onChange={() => setMode("current")}
-                className="mt-1"
-              />
-              <span className="flex-1">
-                <span className="block">
-                  Current deck: <strong>{formatDeckPath(currentDeck)}</strong>
-                </span>
-              </span>
-            </label>
-          )}
-
-          <label
-            className={`flex items-start gap-2 ${
-              decks.length === 0
-                ? "cursor-not-allowed opacity-50"
-                : "cursor-pointer"
-            }`}
-          >
-            <input
-              type="radio"
-              name="target"
-              checked={mode === "existing"}
-              onChange={() => setMode("existing")}
-              disabled={decks.length === 0}
-              className="mt-1"
-            />
-            <span className="flex-1">
-              <span className="block">Existing deck</span>
-              {mode === "existing" && (
-                <select
-                  value={pickedDeck}
-                  onChange={(e) => setPickedDeck(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm focus:border-foreground/30 focus:outline-none"
-                >
-                  {decks.map((d) => (
-                    <option key={d} value={d}>
-                      {formatDeckPath(d)}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </span>
-          </label>
-
           <label className="flex cursor-pointer items-start gap-2">
             <input
               type="radio"
               name="target"
               checked={mode === "new"}
-              onChange={() => setMode("new")}
+              onChange={() => {
+                touched.current = true;
+                setMode("new");
+              }}
               className="mt-1"
             />
             <span className="flex-1">
@@ -182,7 +117,10 @@ export function ImportTargetDialog({
                 <input
                   type="text"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={(e) => {
+                    touched.current = true;
+                    setNewName(e.target.value);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !submitDisabled) {
                       e.preventDefault();
@@ -197,11 +135,67 @@ export function ImportTargetDialog({
             </span>
           </label>
 
-          <p className="rounded-md bg-foreground/5 px-3 py-2 text-xs text-foreground/60">
-            {willMatchByNoteId
-              ? "Notes with matching noteIds will be updated; new ones added."
-              : "All notes will be added as new — noteId matching is skipped for cross-deck imports."}
-          </p>
+          <label
+            className={`flex items-start gap-2 ${
+              decks !== null && decks.length === 0
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer"
+            }`}
+          >
+            <input
+              type="radio"
+              name="target"
+              checked={mode === "existing"}
+              onChange={() => {
+                touched.current = true;
+                setMode("existing");
+              }}
+              disabled={decks !== null && decks.length === 0}
+              className="mt-1"
+            />
+            <span className="flex-1">
+              <span className="block">Existing deck</span>
+              {mode === "existing" && (
+                <div className="mt-1">
+                  <DeckPicker
+                    decks={decks}
+                    value={picked?.deck ?? null}
+                    onChange={(deck, isNew) => {
+                      touched.current = true;
+                      setPicked({ deck, isNew });
+                    }}
+                    allowCreate
+                    allowCreateTopLevel={false}
+                    disabled={importing}
+                  />
+                </div>
+              )}
+            </span>
+          </label>
+
+          {/* Only importing into an existing deck needs explaining (update vs
+              add-only); a brand-new deck trivially gets everything added. Keyed
+              off isNewTarget, not the radio: typing an existing deck's name
+              under "New deck" really imports into that deck. */}
+          {target !== "" && !isNewTarget && (
+            <div className="flex items-start gap-2">
+              {/* Invisible radio so the hint lines up with the option content
+                  above (radio widths vary by platform, so a fixed padding
+                  wouldn't). */}
+              <input
+                type="radio"
+                className="invisible mt-1"
+                aria-hidden
+                tabIndex={-1}
+                disabled
+              />
+              <p className="flex-1 text-xs text-foreground/60">
+                {willMatchByNoteId
+                  ? "Notes with matching noteIds will be updated; new ones added."
+                  : "All notes will be added as new — noteId matching is skipped for cross-deck imports."}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-3">

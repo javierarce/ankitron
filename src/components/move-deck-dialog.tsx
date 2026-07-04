@@ -1,14 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
-import {
-  compareDeckPaths,
-  deckDepth,
-  deckLeaf,
-  deckParent,
-  isCardInDeck,
-  joinDeck,
-} from "@/lib/deck";
+import { deckLeaf, deckParent, isCardInDeck, joinDeck } from "@/lib/deck";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { DeckPicker } from "./deck-picker";
 
 interface MoveDeckDialogProps {
   deckName: string;
@@ -18,11 +12,6 @@ interface MoveDeckDialogProps {
   moving: boolean;
   error: string | null;
 }
-
-const TOP_LEVEL = ""; // sentinel for "no parent"
-// "Create a new parent" sentinel. The leading space is deliberate: Anki trims
-// deck names, so no real deck path can equal this, keeping it collision-proof.
-const NEW_PARENT = " new";
 
 export function MoveDeckDialog({
   deckName,
@@ -34,9 +23,10 @@ export function MoveDeckDialog({
   useScrollLock();
   const leaf = deckLeaf(deckName);
   const currentParent = deckParent(deckName);
-  const [decks, setDecks] = useState<string[]>([]);
-  const [choice, setChoice] = useState(currentParent);
-  const [newParent, setNewParent] = useState("");
+  const [decks, setDecks] = useState<string[] | null>(null);
+  // The chosen parent path; "" = top level. New parents picked through the
+  // picker don't exist yet, but renameDeck creates every target path anyway.
+  const [parent, setParent] = useState(currentParent);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +34,9 @@ export function MoveDeckDialog({
       .then((names) => {
         if (!cancelled) setDecks(names);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setDecks([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -58,20 +50,18 @@ export function MoveDeckDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [moving, onCancel]);
 
-  // Valid parents are every deck except the deck itself and its own subtree
-  // (you can't move a deck inside itself). "Default" is excluded as a parent.
-  const candidates = useMemo(
-    () =>
-      decks
-        .filter((d) => !isCardInDeck(d, deckName) && d !== "Default")
-        .sort(compareDeckPaths),
-    [decks, deckName],
-  );
+  // A deck can't move inside its own subtree, and "Default" is excluded as a
+  // parent. Shown disabled (with the reason) rather than hidden, so the tree
+  // keeps its shape.
+  function disableDeck(deck: string): string | null {
+    if (deck === deckName) return "This is the deck being moved";
+    if (isCardInDeck(deck, deckName)) return "A deck can't be moved inside itself";
+    if (deck === "Default") return "The Default deck can't have subdecks";
+    return null;
+  }
 
-  const creating = choice === NEW_PARENT;
-  const parent = creating ? newParent.trim() : choice;
   const unchanged = parent === currentParent;
-  const disabled = moving || unchanged || (creating && !newParent.trim());
+  const disabled = moving || unchanged;
 
   function submit() {
     if (disabled) return;
@@ -94,41 +84,16 @@ export function MoveDeckDialog({
         </p>
 
         <label className="mb-1 block text-xs text-foreground/50">Move into</label>
-        <select
-          value={choice}
-          onChange={(e) => setChoice(e.target.value)}
+        <DeckPicker
+          decks={decks}
+          value={parent}
+          onChange={setParent}
+          disable={disableDeck}
+          allowTopLevel
+          allowCreate
           disabled={moving}
           autoFocus
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
-        >
-          <option value={TOP_LEVEL}>Top level (no parent)</option>
-          {candidates.map((d) => (
-            <option key={d} value={d}>
-              {/* Indent by depth and show only the leaf so the list reads as a
-                  tree instead of exposing "::" paths. The indent uses
-                  non-breaking spaces — the browser strips leading ASCII spaces
-                  from <option> labels. */}
-              {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
-            </option>
-          ))}
-          <option value={NEW_PARENT}>+ New parent deck…</option>
-        </select>
-
-        {creating && (
-          <input
-            type="text"
-            value={newParent}
-            onChange={(e) => setNewParent(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
-            }}
-            placeholder="New parent deck name"
-            spellCheck={false}
-            autoFocus
-            disabled={moving}
-            className="mt-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none disabled:opacity-60"
-          />
-        )}
+        />
 
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 

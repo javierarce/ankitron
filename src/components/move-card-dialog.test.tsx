@@ -53,8 +53,10 @@ describe("MoveCardDialog", () => {
       />,
     );
 
-    // Wait for the deck list to load so the Move button enables.
-    const move = await screen.findByRole("button", { name: "Move" });
+    // Move stays disabled until a target deck is explicitly picked.
+    const move = screen.getByRole("button", { name: "Move" });
+    expect((move as HTMLButtonElement).disabled).toBe(true);
+    await user.click(await screen.findByRole("button", { name: "French" }));
     await waitFor(() => expect((move as HTMLButtonElement).disabled).toBe(false));
 
     await user.click(move);
@@ -71,12 +73,22 @@ describe("MoveCardDialog", () => {
       <MoveCardDialog notes={[note]} currentDeck="Spanish" onClose={onClose} />,
     );
 
-    const move = await screen.findByRole("button", { name: "Move" });
+    await user.click(await screen.findByRole("button", { name: "French" }));
+    const move = screen.getByRole("button", { name: "Move" });
     await waitFor(() => expect((move as HTMLButtonElement).disabled).toBe(false));
 
     await user.click(move);
 
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("disables the row for the deck the notes are already in", async () => {
+    render(
+      <MoveCardDialog notes={[note]} currentDeck="Spanish" onClose={vi.fn()} />,
+    );
+
+    const row = await screen.findByRole("button", { name: "Spanish" });
+    expect((row as HTMLButtonElement).disabled).toBe(true);
   });
 });

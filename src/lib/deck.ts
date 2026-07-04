@@ -84,6 +84,38 @@ export function coveringDecks(selected: string[]): string[] {
     .sort(compareDeckPaths);
 }
 
+/** One node of the deck hierarchy: leaf name, full "::" path, and subdecks. */
+export interface DeckNode {
+  name: string;
+  fullName: string;
+  children: DeckNode[];
+}
+
+/**
+ * Build a tree from "::"-separated deck paths. Sorted by compareDeckPaths so
+ * parents precede children and siblings are alphabetical; missing ancestors are
+ * created implicitly (Anki normally lists them, but stay robust if not).
+ */
+export function buildDeckTree(decks: string[]): DeckNode[] {
+  const roots: DeckNode[] = [];
+  const byFull = new Map<string, DeckNode>();
+  for (const deck of [...decks].sort(compareDeckPaths)) {
+    const parts = deck.split("::");
+    let parentFull = "";
+    for (let i = 0; i < parts.length; i++) {
+      const fullName = parts.slice(0, i + 1).join("::");
+      if (!byFull.has(fullName)) {
+        const node: DeckNode = { name: parts[i], fullName, children: [] };
+        byFull.set(fullName, node);
+        if (i === 0) roots.push(node);
+        else byFull.get(parentFull)!.children.push(node);
+      }
+      parentFull = fullName;
+    }
+  }
+  return roots;
+}
+
 /** A single deck's old → new name as part of a rename. */
 export interface DeckRename {
   from: string;

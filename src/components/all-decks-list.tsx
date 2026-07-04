@@ -6,11 +6,13 @@ import { Minus } from "@phosphor-icons/react/dist/ssr/Minus";
 import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { ankiFetch } from "@/lib/anki-fetch";
 import {
+  buildDeckTree,
   compareDeckPaths,
   deckLeaf,
   deckParent,
   formatDeckPath,
   renameDeck,
+  type DeckNode,
 } from "@/lib/deck";
 import { recordDeckRedirect } from "@/lib/deck-redirects";
 import { foldText } from "@/lib/fold-text";
@@ -46,35 +48,6 @@ function deckCanStudy(
     }
   }
   return false;
-}
-
-interface DeckNode {
-  name: string;
-  fullName: string;
-  children: DeckNode[];
-}
-
-// Build a tree from "::"-separated deck paths. Sorted by compareDeckPaths so
-// parents precede children and siblings are alphabetical; missing ancestors are
-// created implicitly (Anki normally lists them, but stay robust if not).
-function buildDeckTree(decks: string[]): DeckNode[] {
-  const roots: DeckNode[] = [];
-  const byFull = new Map<string, DeckNode>();
-  for (const deck of [...decks].sort(compareDeckPaths)) {
-    const parts = deck.split("::");
-    let parentFull = "";
-    for (let i = 0; i < parts.length; i++) {
-      const fullName = parts.slice(0, i + 1).join("::");
-      if (!byFull.has(fullName)) {
-        const node: DeckNode = { name: parts[i], fullName, children: [] };
-        byFull.set(fullName, node);
-        if (i === 0) roots.push(node);
-        else byFull.get(parentFull)!.children.push(node);
-      }
-      parentFull = fullName;
-    }
-  }
-  return roots;
 }
 
 interface AllDecksListProps {
