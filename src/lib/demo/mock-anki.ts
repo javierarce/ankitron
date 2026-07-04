@@ -24,6 +24,7 @@ import {
   ensureDeck,
   NOTES,
   persistDemoState,
+  removeDeckSubtree,
   type DemoNote,
 } from "./fixtures";
 
@@ -147,6 +148,7 @@ const MUTATING = new Set([
   "removeTags",
   "changeDeck",
   "createDeck",
+  "deleteDecks",
   "storeMediaFile",
 ]);
 
@@ -213,8 +215,11 @@ async function handleAction(
     }
 
     case "findCards": {
-      const deck = deckFromQuery(params.query as string);
-      return notesInSubtree(deck).map((n) => cardIdOf(n.noteId));
+      // Honour the `-deck:"X::*"` exclusion a rename uses to grab only a deck's
+      // OWN cards; without it, moving a deck with subdecks flattens them.
+      return notesMatchingQuery(params.query as string).map((n) =>
+        cardIdOf(n.noteId),
+      );
     }
 
     case "notesInfo": {
@@ -383,8 +388,25 @@ async function handleAction(
     case "updateModelTemplates":
     case "saveDeckConfig":
     case "setDeckConfigId":
-    case "deleteDecks":
       return null;
+
+    case "deleteDecks": {
+      // Remove each named deck and its subtree from the registry. renameDeck
+      // relies on this to clear the emptied originals after moving cards out;
+      // without it the source deck lingers as an empty "0 card" copy. cardsToo
+      // mirrors Anki 2.1.28+ (a delete always takes contained cards with it).
+      const decks = (params.decks as string[]) ?? [];
+      const cardsToo = params.cardsToo === true;
+      for (const name of decks) {
+        if (cardsToo) {
+          for (let i = NOTES.length - 1; i >= 0; i--) {
+            if (inSubtree(NOTES[i].deckName, name)) NOTES.splice(i, 1);
+          }
+        }
+        removeDeckSubtree(name);
+      }
+      return null;
+    }
     case "storeMediaFile": {
       // Keep the uploaded bytes so the image/audio can be rendered back below.
       const filename = (params.filename as string) ?? "media";
@@ -406,4 +428,22 @@ async function handleAction(
 function deckFromQuery(query: string | undefined): string {
   const m = /deck:"([^"]+)"/.exec(query ?? "");
   return m ? m[1] : "";
+}
+
+// Resolve the notes a findCards query selects. Handles the two shapes the app
+// builds: `deck:"X"` (X and its subtree) and an optional `-deck:"X::*"` exclusion
+// that drops the subdecks, leaving only X's own cards (what a deck move needs to
+// relocate each level without flattening the hierarchy).
+function notesMatchingQuery(query: string | undefined): DemoNote[] {
+  const q = query ?? "";
+  const root = deckFromQuery(q);
+  // `-deck:"..."` terms; a trailing `::*` means "any strict subdeck of".
+  const excluded = [...q.matchAll(/-deck:"([^"]+)"/g)].map((m) => m[1]);
+  return notesInSubtree(root).filter((n) =>
+    !excluded.some((term) =>
+      term.endsWith("::*")
+        ? n.deckName.startsWith(term.slice(0, -3) + "::")
+        : n.deckName === term,
+    ),
+  );
 }

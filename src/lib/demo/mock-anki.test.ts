@@ -2,6 +2,24 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mockAnki } from "./mock-anki";
+import { renameDeck } from "@/lib/deck";
+
+// mockAnki matches ankiFetch's runtime contract; adapt it to the generic
+// signature renameDeck's parameter expects.
+const fetch = ((action: string, params?: Record<string, unknown>) =>
+  mockAnki(action, params)) as Parameters<typeof renameDeck>[2];
+
+const deckNames = () => fetch<string[]>("deckNames");
+const deckOfCard = async (cardId: number) =>
+  (await fetch<{ deckName: string }[]>("cardsInfo", { cards: [cardId] }))[0]
+    .deckName;
+const addNote = (deckName: string, front: string) =>
+  fetch<number>("addNote", {
+    note: { deckName, fields: { Front: front, Back: "b" }, tags: [] },
+  });
+// The mock derives cardId from noteId with a fixed offset (see mock-anki.ts).
+const CARD_OFFSET = 100_000;
 
 // Guard against the one way the demo can silently drift from the real app.
 //
@@ -67,5 +85,36 @@ describe("demo mock ⇄ app AnkiConnect contract", () => {
         `${missing.join(", ")}. Add a handler (or a deliberate stub) so the demo ` +
         `doesn't fall through to the default warning.`,
     ).toEqual([]);
+  });
+});
+
+// renameDeck emulates a move with create → changeDeck → deleteDecks. The demo's
+// deleteDecks used to be a no-op, so a moved deck lingered as an empty "0 card"
+// copy — the bug these tests guard against.
+describe("demo deck move (renameDeck over the mock)", () => {
+  it("moves a leaf deck without leaving an empty copy behind", async () => {
+    const noteId = await addNote("MoveSrc", "hello");
+    expect(await deckNames()).toContain("MoveSrc");
+
+    await renameDeck("MoveSrc", "Archive::MoveSrc", fetch);
+
+    const names = await deckNames();
+    expect(names).not.toContain("MoveSrc");
+    expect(names).toContain("Archive::MoveSrc");
+    expect(await deckOfCard(CARD_OFFSET + noteId)).toBe("Archive::MoveSrc");
+  });
+
+  it("preserves the hierarchy when moving a deck with subdecks", async () => {
+    const parentNote = await addNote("Src", "parent");
+    const childNote = await addNote("Src::Sub", "child");
+
+    await renameDeck("Src", "Dest", fetch);
+
+    const names = await deckNames();
+    expect(names).not.toContain("Src");
+    expect(names).not.toContain("Src::Sub");
+    // The child stays under its (renamed) parent rather than flattening to Dest.
+    expect(await deckOfCard(CARD_OFFSET + parentNote)).toBe("Dest");
+    expect(await deckOfCard(CARD_OFFSET + childNote)).toBe("Dest::Sub");
   });
 });
