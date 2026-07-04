@@ -5,6 +5,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type DragEvent as ReactDragEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { Check } from "@phosphor-icons/react/dist/ssr/Check";
 import { Checks } from "@phosphor-icons/react/dist/ssr/Checks";
@@ -23,6 +24,7 @@ import {
   hasOperators,
   type SuggestionSources,
 } from "@/lib/search-query";
+import { useMenuPlacement } from "@/hooks/use-menu-placement";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { BulkTagDialog, type TagChange } from "./bulk-tag-dialog";
@@ -229,14 +231,18 @@ function CardMenu({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Portal + flip-aware placement so a row near the bottom of the (scrollable)
+  // note list opens its menu upward instead of off-screen.
+  const style = useMenuPlacement(open, btnRef, menuRef);
 
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -250,8 +256,9 @@ function CardMenu({
   }, [open]);
 
   return (
-    <div ref={menuRef} className="relative">
+    <>
       <button
+        ref={btnRef}
         onClick={() => setOpen((o) => !o)}
         aria-label="Note actions"
         aria-haspopup="menu"
@@ -260,8 +267,14 @@ function CardMenu({
       >
         <DotsThreeVertical size={22} weight="bold" />
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-10 w-max rounded-lg border border-border bg-background py-1 shadow-lg">
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={style}
+            className="z-50 flex w-max flex-col overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-lg"
+          >
           <button
             onClick={() => {
               setOpen(false);
@@ -301,9 +314,10 @@ function CardMenu({
           >
             Delete
           </button>
-        </div>
-      )}
-    </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
