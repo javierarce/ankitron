@@ -53,11 +53,17 @@
       :root {
         --background: #ffffff;
         --foreground: #171717;
+        /* Themed border tint. A flat 12% of --foreground reads fine on the
+           light background but nearly vanishes in dark mode (a faint light
+           tint over near-black), so dark mode gets a stronger mix — matching
+           the app's ~13% light / ~20% dark border token. */
+        --border: color-mix(in srgb, var(--foreground) 12%, transparent);
       }
 
       :root.dark {
         --background: #0a0a0a;
         --foreground: #ededed;
+        --border: color-mix(in srgb, var(--foreground) 22%, transparent);
       }
 
       * {
@@ -144,7 +150,7 @@
         width: 100%;
         height: min(70vh, 660px);
         min-height: 460px;
-        border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+        border: 1px solid var(--border);
         border-radius: 16px;
         overflow: hidden;
         background: var(--background);
@@ -184,7 +190,7 @@
         width: 2.25rem;
         height: 2.25rem;
         padding: 0;
-        border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+        border: 1px solid var(--border);
         border-radius: 9999px;
         background: color-mix(in srgb, var(--background) 70%, transparent);
         color: color-mix(in srgb, var(--foreground) 70%, transparent);
