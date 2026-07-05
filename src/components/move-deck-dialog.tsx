@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ankiFetch } from "@/lib/anki-fetch";
 import { deckLeaf, deckParent, isCardInDeck, joinDeck } from "@/lib/deck";
+import { useDeckNames } from "@/hooks/use-deck-names";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { DeckPicker } from "./deck-picker";
 
@@ -23,24 +23,10 @@ export function MoveDeckDialog({
   useScrollLock();
   const leaf = deckLeaf(deckName);
   const currentParent = deckParent(deckName);
-  const [decks, setDecks] = useState<string[] | null>(null);
+  const decks = useDeckNames();
   // The chosen parent path; "" = top level. New parents picked through the
   // picker don't exist yet, but renameDeck creates every target path anyway.
   const [parent, setParent] = useState(currentParent);
-
-  useEffect(() => {
-    let cancelled = false;
-    ankiFetch<string[]>("deckNames")
-      .then((names) => {
-        if (!cancelled) setDecks(names);
-      })
-      .catch(() => {
-        if (!cancelled) setDecks([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

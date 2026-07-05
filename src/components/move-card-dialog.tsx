@@ -3,6 +3,7 @@ import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
 import { moveNotesToDeck } from "@/lib/notes";
+import { useDeckNames } from "@/hooks/use-deck-names";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { DeckPicker } from "./deck-picker";
 
@@ -20,7 +21,7 @@ interface MoveCardDialogProps {
 
 export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCardDialogProps) {
   useScrollLock();
-  const [decks, setDecks] = useState<string[] | null>(null);
+  const decks = useDeckNames();
   // No preselected target: with a visible tree, an explicit choice beats
   // silently defaulting to whichever deck happens to sort first.
   const [target, setTarget] = useState<{ deck: string; isNew: boolean } | null>(
@@ -30,20 +31,6 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
   const [error, setError] = useState<string | null>(null);
 
   const count = notes.length;
-
-  useEffect(() => {
-    let cancelled = false;
-    ankiFetch<string[]>("deckNames")
-      .then((names) => {
-        if (!cancelled) setDecks(names);
-      })
-      .catch(() => {
-        if (!cancelled) setDecks([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { useEffect, useState } from "react";
 import { formatDeckPath } from "@/lib/deck";
+import { useDeckNames } from "@/hooks/use-deck-names";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import type { ExportedDeck } from "@/lib/import-export";
 import { CardPreview } from "./card-preview";
@@ -22,7 +22,7 @@ export function ImportTargetDialog({
   onConfirm,
 }: ImportTargetDialogProps) {
   useScrollLock();
-  const [decks, setDecks] = useState<string[] | null>(null);
+  const decks = useDeckNames();
   // "New deck" keeps an editable name (defaulting to the export's own name);
   // "existing" picks from the tree. Kept as two explicit options rather than
   // preseeding the tree with a phantom pending deck — a row that vanishes on
@@ -34,28 +34,21 @@ export function ImportTargetDialog({
   );
   // Once the user touches any control, the deck-list load must not yank the
   // mode from under them.
-  const touched = useRef(false);
+  const [touched, setTouched] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    ankiFetch<string[]>("deckNames")
-      .then((names) => {
-        if (cancelled) return;
-        setDecks(names);
-        // Prefer importing back into the source deck when it exists — the
-        // natural round-trip target, and the one noteId matching applies to.
-        if (names.includes(parsed.deckName) && !touched.current) {
-          setMode("existing");
-          setPicked({ deck: parsed.deckName, isNew: false });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setDecks([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [parsed.deckName]);
+  // Prefer importing back into the source deck when it exists — the natural
+  // round-trip target, and the one noteId matching applies to. Applied when
+  // the deck list lands (adjusting state during render, per
+  // https://react.dev/learn/you-might-not-need-an-effect); the touched guard
+  // keeps it from yanking the mode after the user has made a choice.
+  const [prevDecks, setPrevDecks] = useState<string[] | null>(null);
+  if (decks !== prevDecks) {
+    setPrevDecks(decks);
+    if (decks && !touched && decks.includes(parsed.deckName)) {
+      setMode("existing");
+      setPicked({ deck: parsed.deckName, isNew: false });
+    }
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -106,7 +99,7 @@ export function ImportTargetDialog({
               name="target"
               checked={mode === "new"}
               onChange={() => {
-                touched.current = true;
+                setTouched(true);
                 setMode("new");
               }}
               className="mt-1"
@@ -118,7 +111,7 @@ export function ImportTargetDialog({
                   type="text"
                   value={newName}
                   onChange={(e) => {
-                    touched.current = true;
+                    setTouched(true);
                     setNewName(e.target.value);
                   }}
                   onKeyDown={(e) => {
@@ -147,7 +140,7 @@ export function ImportTargetDialog({
               name="target"
               checked={mode === "existing"}
               onChange={() => {
-                touched.current = true;
+                setTouched(true);
                 setMode("existing");
               }}
               disabled={decks !== null && decks.length === 0}
@@ -161,7 +154,7 @@ export function ImportTargetDialog({
                     decks={decks}
                     value={picked?.deck ?? null}
                     onChange={(deck, isNew) => {
-                      touched.current = true;
+                      setTouched(true);
                       setPicked({ deck, isNew });
                     }}
                     allowCreate

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { CaretLeft } from "@phosphor-icons/react/dist/ssr/CaretLeft";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
 import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
@@ -13,6 +13,7 @@ import { moveNotesToDeck } from "@/lib/notes";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { useAllTags } from "@/hooks/use-all-tags";
+import { useDeckNames } from "@/hooks/use-deck-names";
 
 type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
 
@@ -164,7 +165,15 @@ export function CardForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [decks, setDecks] = useState<string[]>([deckName]);
+  // Only the edit form shows the deck selector; adds always target deckName.
+  // Until the list lands (or if the fetch fails) the selector still offers the
+  // note's current deck, and that deck is always present in the list.
+  const allDecks = useDeckNames({ enabled: isEdit });
+  const decks = useMemo(() => {
+    if (!allDecks) return [deckName];
+    const all = allDecks.includes(deckName) ? allDecks : [deckName, ...allDecks];
+    return [...all].sort(compareDeckPaths);
+  }, [allDecks, deckName]);
   const [targetDeck, setTargetDeck] = useState(deckName);
   const [newDeck, setNewDeck] = useState("");
 
@@ -172,21 +181,6 @@ export function CardForm({
   const destDeck = creatingDeck ? newDeck.trim() : targetDeck;
 
   const modalRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isEdit) return;
-    let cancelled = false;
-    ankiFetch<string[]>("deckNames")
-      .then((names) => {
-        if (cancelled) return;
-        const all = names.includes(deckName) ? names : [deckName, ...names];
-        setDecks([...all].sort(compareDeckPaths));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [isEdit, deckName]);
 
   useEffect(() => {
     if (blocked) return;
