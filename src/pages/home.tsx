@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DeckList } from "@/components/deck-list";
 import { FullScreenSpinner } from "@/components/full-screen-spinner";
+import { CenteredSpinner, Spinner } from "@/components/spinner";
 import { StudySummary } from "@/components/study-summary";
 import { useSync } from "@/lib/sync-context";
 import {
@@ -86,9 +87,7 @@ export function HomePage() {
     return isFirstLoad ? (
       <FullScreenSpinner label="Starting Anki…" />
     ) : (
-      <div className="flex min-h-[calc(100dvh-10rem)] items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-      </div>
+      <CenteredSpinner />
     );
   }
 
@@ -148,7 +147,7 @@ function AnkiNotConnected() {
         className="mt-8 inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-60"
       >
         {retrying ? (
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-background/40 border-t-background" />
+          <Spinner size="sm" tone="inverted" />
         ) : (
           <svg
             viewBox="0 0 24 24"

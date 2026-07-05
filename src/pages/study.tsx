@@ -5,6 +5,7 @@ import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Tooltip } from "@/components/tooltip";
+import { Spinner } from "@/components/spinner";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
 import { coveringDecks, isCardInDeck } from "@/lib/deck";
@@ -499,13 +500,7 @@ export function StudyPage() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center pb-[6rem]">
-      {loading && (
-        <div
-          className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground"
-          role="status"
-          aria-label="Loading cards"
-        />
-      )}
+      {loading && <Spinner role="status" aria-label="Loading cards" />}
 
       {error && <p className="text-red-500">{error}</p>}
 
