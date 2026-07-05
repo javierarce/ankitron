@@ -495,6 +495,16 @@
         if (t === "dark") document.documentElement.classList.add("dark");
       } catch (e) { }
     })();
+
+    // Reset the interactive demo on every full page load so each visit (and any
+    // reload) starts from the clean fixtures. The demo persists its in-memory
+    // state to sessionStorage so an import survives the app's own post-import
+    // iframe reload; clearing it here — before the iframe below loads — only
+    // fires on a real parent-page load, not that internal reload, so imports
+    // still work within a session. Key must match fixtures.ts STORAGE_KEY.
+    try {
+      sessionStorage.removeItem("ankitron-demo-state-v1");
+    } catch (e) { }
   </script>
 
   <script defer data-api="/api/event" data-domain="ankitron.com" src="/js/stats.js"></script>
