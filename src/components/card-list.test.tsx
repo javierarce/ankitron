@@ -11,17 +11,20 @@ import type { Note } from "@/lib/types";
 // call resolves harmlessly instead of hitting the network.
 vi.mock("@/lib/anki-fetch", () => ({ ankiFetch: vi.fn(async () => undefined) }));
 
-// Replace the real form with a stub that exposes its callbacks as buttons, so
-// the test drives the save/close contract without the editor's internals.
+// Replace the real form with a stub that exposes its callbacks as buttons (and
+// the deck it was opened on), so tests drive the save/close contract without
+// the editor's internals.
 vi.mock("./card-form", () => ({
   CardForm: ({
+    deckName,
     onSaved,
     onClose,
   }: {
+    deckName: string;
     onSaved?: (n?: unknown) => void;
     onClose: () => void;
   }) => (
-    <div>
+    <div data-testid="stub-form" data-deck={deckName}>
       <button onClick={() => onSaved?.()}>stub-save</button>
       <button onClick={onClose}>stub-close</button>
     </div>
@@ -104,6 +107,37 @@ describe("CardList add flow", () => {
     await user.click(screen.getByText("stub-save"));
 
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("CardList edit form deck", () => {
+  const notes = [
+    {
+      noteId: 1,
+      modelName: "Basic",
+      tags: [],
+      cards: [11],
+      fields: { Front: { value: "Hola", order: 0 }, Back: { value: "Hello", order: 1 } },
+    },
+  ] as Note[];
+
+  it("opens the editor on the note's own subdeck, not the viewed parent", async () => {
+    const user = userEvent.setup();
+
+    renderInRouter(
+      <CardList
+        deckName="Spanish"
+        notes={notes}
+        noteDecks={{ 1: "Spanish::Verbs" }}
+        subdecks={["Spanish::Verbs"]}
+        showAddForm={false}
+        onShowAddForm={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByText("Hola"));
+
+    expect(screen.getByTestId("stub-form").dataset.deck).toBe("Spanish::Verbs");
   });
 });
 

@@ -1510,7 +1510,11 @@ export function CardList({
 
       {editingNote && (
         <CardForm
-          deckName={deckName}
+          // The form's deck baseline must be the note's own deck: seeding it
+          // with the viewed parent both misreports where a subdeck note lives
+          // and turns "move to the parent deck" into a silent no-op (the save
+          // compares against the baseline and sees no change).
+          deckName={homeDeck(editingNote)}
           note={editingNote}
           onDelete={() => setDeletingNote(editingNote)}
           blocked={!!deletingNote}
@@ -1536,7 +1540,7 @@ export function CardList({
           return (
             <CardForm
               key={editSequenceCurrentId(editSeq)}
-              deckName={deckName}
+              deckName={homeDeck(note)}
               note={note}
               position={{ index: editSeq.index, total: editSeq.ids.length }}
               onPrev={() => setEditSeq(editSequencePrev(editSeq))}
