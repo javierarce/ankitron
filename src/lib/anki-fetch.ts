@@ -144,6 +144,24 @@ export async function fetchNoteCount(deckName: string): Promise<number> {
 }
 
 /**
+ * True when the whole collection holds no cards at all. Anki always ships an
+ * empty "Default" deck, so "the user has no decks" never really happens — a
+ * brand-new user has one empty deck instead. This is only called when nothing
+ * is due, so it tells that genuinely empty collection apart from a user who has
+ * simply finished everything for now. Any failure resolves to `false` so a
+ * transient error never masquerades as "empty" and hides real decks behind the
+ * onboarding screen.
+ */
+export async function isCollectionEmpty(): Promise<boolean> {
+  try {
+    const ids = await ankiFetch<number[]>("findNotes", { query: "deck:*" });
+    return ids.length === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Due counts for many decks in a single round trip. getDeckStats accepts every
  * deck at once and returns a map keyed by deck id; each entry's `name` is only
  * the leaf, so we resolve ids back to full deck paths via deckNamesAndIds. This
