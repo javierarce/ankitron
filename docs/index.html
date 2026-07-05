@@ -220,6 +220,8 @@
 
     .demo-frame {
       position: relative;
+      display: flex;
+      flex-direction: column;
       width: 100%;
       height: min(70vh, 660px);
       min-height: 460px;
@@ -228,13 +230,67 @@
       background: var(--background);
       /* Subtle, matching the app's own card shadow (shadow-[0_1px_2px_...]). */
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-      transition: border-color 0.35s ease;
+      transition: border-color 0.35s ease, box-shadow 0.25s ease;
+    }
+
+    /* Lift the window while it's being dragged around the desktop. */
+    .demo.dragging .demo-frame {
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    }
+
+    /* macOS-style window title bar — the drag handle. The iframe itself can't
+       be the handle (it needs its own clicks to run the demo), so this slim bar
+       is what you grab to move the window. */
+    .demo-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: none;
+      height: 2.25rem;
+      padding: 0 0.85rem;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--foreground) 4%, var(--background));
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      transition: background-color 0.35s ease, border-color 0.35s ease;
+    }
+
+    .demo.dragging .demo-titlebar {
+      cursor: grabbing;
+    }
+
+    .demo-traffic {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .demo-traffic span {
+      width: 0.72rem;
+      height: 0.72rem;
+      border-radius: 9999px;
+    }
+
+    .demo-traffic .tl-red { background: #ff5f57; }
+    .demo-traffic .tl-yellow { background: #febc2e; }
+    .demo-traffic .tl-green { background: #28c840; }
+
+    .demo-titlebar-title {
+      flex: 1;
+      margin-right: 2.9rem;
+      /* offset the traffic lights so the title reads centered */
+      text-align: center;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: color-mix(in srgb, var(--foreground) 55%, transparent);
     }
 
     .demo-frame iframe {
       display: block;
+      flex: 1;
       width: 100%;
-      height: 100%;
+      min-height: 0;
       border: 0;
     }
 
@@ -473,6 +529,14 @@
   <div class="desktop">
     <div class="demo">
       <div class="demo-frame">
+        <div class="demo-titlebar" id="demo-titlebar" title="Drag to move the window">
+          <div class="demo-traffic" aria-hidden="true">
+            <span class="tl-red"></span>
+            <span class="tl-yellow"></span>
+            <span class="tl-green"></span>
+          </div>
+          <span class="demo-titlebar-title">Ankitron</span>
+        </div>
         <iframe id="demo" src="demo/" title="Interactive Ankitron demo" allow="clipboard-write"></iframe>
       </div>
     </div>
@@ -646,6 +710,57 @@
     desktopFile.addEventListener("dragend", () => {
       desktopFile.classList.remove("dragging");
     });
+
+    // --- Draggable demo window: grab the title bar to move the window around
+    // the desktop. The iframe can't be the handle (it needs its own clicks to
+    // run the demo), so only the title bar starts a drag. Pointer capture keeps
+    // move events flowing even as the cursor passes over the iframe; we also
+    // disable the iframe's pointer events mid-drag as a belt-and-suspenders.
+    // The window is clamped to stay within the desktop. ---
+    const demo = document.querySelector(".demo");
+    const desktop = document.querySelector(".desktop");
+    const titlebar = document.getElementById("demo-titlebar");
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    let offX = 0;
+    let offY = 0; // committed window offset
+    let drag = null; // active drag state, or null
+
+    titlebar.addEventListener("pointerdown", (e) => {
+      const desk = desktop.getBoundingClientRect();
+      const frame = demo.getBoundingClientRect(); // includes the current offset
+      const baseLeft = frame.left - desk.left - offX;
+      const baseTop = frame.top - desk.top - offY;
+      drag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        baseOffX: offX,
+        baseOffY: offY,
+        // Offsets that keep the window fully inside the desktop.
+        minX: -baseLeft,
+        maxX: desk.width - frame.width - baseLeft,
+        minY: -baseTop,
+        maxY: desk.height - frame.height - baseTop,
+      };
+      demo.classList.add("dragging");
+      demoFrame.style.pointerEvents = "none";
+      titlebar.setPointerCapture(e.pointerId);
+    });
+
+    titlebar.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      offX = clamp(drag.baseOffX + (e.clientX - drag.startX), drag.minX, drag.maxX);
+      offY = clamp(drag.baseOffY + (e.clientY - drag.startY), drag.minY, drag.maxY);
+      demo.style.transform = `translate(${offX}px, ${offY}px)`;
+    });
+
+    const endDrag = () => {
+      if (!drag) return;
+      drag = null;
+      demo.classList.remove("dragging");
+      demoFrame.style.pointerEvents = "";
+    };
+    titlebar.addEventListener("pointerup", endDrag);
+    titlebar.addEventListener("pointercancel", endDrag);
   </script>
 </body>
 
