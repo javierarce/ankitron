@@ -1,438 +1,475 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ankitron — Study Anki decks on your Mac</title>
-    <meta
-      name="description"
-      content="A simple, lightweight Mac app for managing and studying Anki decks."
-    />
-    <link rel="icon" href="https://github.com/javierarce/ankitron/raw/main/src-tauri/icons/32x32.png" />
-    <link rel="canonical" href="https://ankitron.javier.computer/" />
 
-    <!-- Open Graph (LinkedIn, Bluesky, Facebook, Mastodon, …) -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Ankitron" />
-    <meta property="og:url" content="https://ankitron.javier.computer/" />
-    <meta property="og:title" content="Ankitron — Study Anki decks on your Mac" />
-    <meta
-      property="og:description"
-      content="A simple, lightweight Mac app for managing and studying Anki decks."
-    />
-    <!-- 1200×630 social cover. Absolute URL is required; relative paths are
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ankitron — Study Anki decks on your Mac</title>
+  <meta name="description" content="A simple, lightweight Mac app for managing and studying Anki decks." />
+  <link rel="icon" href="https://github.com/javierarce/ankitron/raw/main/src-tauri/icons/32x32.png" />
+  <link rel="canonical" href="https://ankitron.javier.computer/" />
+
+  <!-- Open Graph (LinkedIn, Bluesky, Facebook, Mastodon, …) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Ankitron" />
+  <meta property="og:url" content="https://ankitron.javier.computer/" />
+  <meta property="og:title" content="Ankitron — Study Anki decks on your Mac" />
+  <meta property="og:description" content="A simple, lightweight Mac app for managing and studying Anki decks." />
+  <!-- 1200×630 social cover. Absolute URL is required; relative paths are
          ignored by most scrapers. Add docs/og-cover.png to ship it. -->
-    <meta property="og:image" content="https://ankitron.javier.computer/og-cover.png" />
-    <meta property="og:image:secure_url" content="https://ankitron.javier.computer/og-cover.png" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Ankitron — a simple, lightweight Mac app for managing and studying Anki decks." />
+  <meta property="og:image" content="https://ankitron.javier.computer/og-cover.png" />
+  <meta property="og:image:secure_url" content="https://ankitron.javier.computer/og-cover.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt"
+    content="Ankitron — a simple, lightweight Mac app for managing and studying Anki decks." />
 
-    <!-- X / Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Ankitron — Study Anki decks on your Mac" />
-    <meta
-      name="twitter:description"
-      content="A simple, lightweight Mac app for managing and studying Anki decks."
-    />
-    <meta name="twitter:image" content="https://ankitron.javier.computer/og-cover.png" />
-    <meta name="twitter:image:alt" content="Ankitron — a simple, lightweight Mac app for managing and studying Anki decks." />
+  <!-- X / Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ankitron — Study Anki decks on your Mac" />
+  <meta name="twitter:description" content="A simple, lightweight Mac app for managing and studying Anki decks." />
+  <meta name="twitter:image" content="https://ankitron.javier.computer/og-cover.png" />
+  <meta name="twitter:image:alt"
+    content="Ankitron — a simple, lightweight Mac app for managing and studying Anki decks." />
 
-    <!-- Geist, matching the app's --font-sans -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+  <!-- Geist, matching the app's --font-sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-    <style>
-      /* Mirror the app's theme tokens (see src/app/globals.css). The theme is
+  <style>
+    /* Mirror the app's theme tokens (see src/app/globals.css). The theme is
          driven by a .dark class on <html>, toggled by the button below. */
-      :root {
-        --background: #ffffff;
-        --foreground: #171717;
-        /* Themed border tint. A flat 12% of --foreground reads fine on the
+    :root {
+      --background: #ffffff;
+      --foreground: #171717;
+      /* Themed border tint. A flat 12% of --foreground reads fine on the
            light background but nearly vanishes in dark mode (a faint light
            tint over near-black), so dark mode gets a stronger mix — matching
            the app's ~13% light / ~20% dark border token. */
-        --border: color-mix(in srgb, var(--foreground) 12%, transparent);
-      }
+      --border: color-mix(in srgb, var(--foreground) 12%, transparent);
+    }
 
-      :root.dark {
-        --background: #0a0a0a;
-        --foreground: #ededed;
-        --border: color-mix(in srgb, var(--foreground) 22%, transparent);
-      }
+    :root.dark {
+      --background: #0a0a0a;
+      --foreground: #ededed;
+      --border: color-mix(in srgb, var(--foreground) 22%, transparent);
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    * {
+      box-sizing: border-box;
+    }
 
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-      }
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
 
-      body {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 2.5rem;
-        padding: 4rem 1.5rem;
-        background: var(--background);
-        color: var(--foreground);
-        font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
-          Roboto, "Helvetica Neue", Arial, sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        text-align: center;
-        transition: background-color 0.35s ease, color 0.35s ease;
-      }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2.5rem;
+      padding: 4rem 1.5rem;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-align: center;
+      transition: background-color 0.35s ease, color 0.35s ease;
+    }
 
-      /* Ease the themed text colors when switching modes (transition isn't
+    /* Ease the themed text colors when switching modes (transition isn't
          inherited, so each element that reads a theme token needs its own). */
-      .brand h1,
-      .tagline,
-      .version,
-      .version a,
-      .prereq,
-      .prereq a {
-        transition: color 0.35s ease;
-      }
+    .brand h1,
+    .tagline,
+    .version,
+    .version a,
+    .prereq,
+    .prereq a {
+      transition: color 0.35s ease;
+    }
 
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
 
-      .brand img {
-        width: 56px;
-        height: 56px;
-        border-radius: 14px;
-      }
+    .brand img {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+    }
 
-      .brand h1 {
-        margin: 0;
-        font-size: 2rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-      }
+    .brand h1 {
+      margin: 0;
+      font-size: 3rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
 
-      .tagline {
-        max-width: 34rem;
-        margin: -1rem 0 0;
-        font-size: 1.125rem;
-        line-height: 1.6;
-        color: color-mix(in srgb, var(--foreground) 65%, transparent);
-        /* Balance the wrap so no single word is left orphaned on its own line. */
-        text-wrap: balance;
-      }
+    .tagline {
+      margin: -1rem 0 0;
+      font-size: 1.125rem;
+      line-height: 1.6;
+      color: color-mix(in srgb, var(--foreground) 65%, transparent);
+      /* Balance the wrap so no single word is left orphaned on its own line. */
+      text-wrap: balance;
+    }
 
-      /* Interactive demo — the real app embedded in a framed window, replacing
+    /* Interactive demo — the real app embedded in a framed window, replacing
          the old screenshot slideshow. */
-      .demo {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1rem;
-        width: 100%;
-        max-width: 64rem; /* matches the app's .app-row max-width */
-      }
+    .desktop {
+      display: flex;
+      justify-content: center;
+      width: 1200px;
+      padding: 5.2rem 2rem;
+      background: url("desktop.jpg") no-repeat center/cover;
+      border-radius: 8px;
+    }
 
-      .demo-frame {
-        position: relative;
-        width: 100%;
-        height: min(70vh, 660px);
-        min-height: 460px;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        overflow: hidden;
-        background: var(--background);
-        /* Subtle, matching the app's own card shadow (shadow-[0_1px_2px_...]). */
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-        transition: border-color 0.35s ease;
-      }
+    .demo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 64rem;
+      margin: 0 auto;
+    }
 
-      .demo-frame iframe {
-        display: block;
-        width: 100%;
-        height: 100%;
-        border: 0;
-      }
+    .demo-frame {
+      position: relative;
+      width: 100%;
+      height: min(70vh, 660px);
+      min-height: 460px;
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--background);
+      /* Subtle, matching the app's own card shadow (shadow-[0_1px_2px_...]). */
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      transition: border-color 0.35s ease;
+    }
 
-      .demo-caption {
-        margin: 0;
-        font-size: 0.8125rem;
-        color: color-mix(in srgb, var(--foreground) 50%, transparent);
-        transition: color 0.35s ease;
-      }
+    .demo-frame iframe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
 
-      /* Plain tap targets: drop the double-tap-zoom (and its 300ms delay). */
-      .theme-toggle,
-      .download {
-        touch-action: manipulation;
-      }
+    .demo-caption {
+      margin: 0;
+      font-size: 0.8125rem;
+      color: color-mix(in srgb, var(--foreground) 50%, transparent);
+      transition: color 0.35s ease;
+    }
 
-      /* Light/dark toggle, pinned to the top-right corner. */
-      .theme-toggle {
-        position: fixed;
-        top: 1.25rem;
-        right: 1.25rem;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 2.25rem;
-        height: 2.25rem;
-        padding: 0;
-        border: 1px solid var(--border);
-        border-radius: 9999px;
-        background: color-mix(in srgb, var(--background) 70%, transparent);
-        color: color-mix(in srgb, var(--foreground) 70%, transparent);
-        cursor: pointer;
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
-        transition: color 0.15s, background-color 0.15s, border-color 0.15s;
-      }
+    /* Plain tap targets: drop the double-tap-zoom (and its 300ms delay). */
+    .theme-toggle,
+    .download {
+      touch-action: manipulation;
+    }
 
-      .theme-toggle:hover {
-        color: var(--foreground);
-        background: color-mix(in srgb, var(--foreground) 6%, transparent);
-      }
+    /* Light/dark toggle, pinned to the top-right corner. */
+    .theme-toggle {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.25rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      background: color-mix(in srgb, var(--background) 70%, transparent);
+      color: color-mix(in srgb, var(--foreground) 70%, transparent);
+      cursor: pointer;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+    }
 
-      .theme-toggle svg {
-        width: 1.125rem;
-        height: 1.125rem;
-      }
+    .theme-toggle:hover {
+      color: var(--foreground);
+      background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    }
 
-      /* Show the icon for the mode you'd switch to: moon in light, sun in dark. */
-      .theme-toggle .icon-sun {
-        display: none;
-      }
+    .theme-toggle svg {
+      width: 1.125rem;
+      height: 1.125rem;
+    }
 
-      :root.dark .theme-toggle .icon-sun {
-        display: block;
-      }
+    /* Show the icon for the mode you'd switch to: moon in light, sun in dark. */
+    .theme-toggle .icon-sun {
+      display: none;
+    }
 
-      :root.dark .theme-toggle .icon-moon {
-        display: none;
-      }
+    :root.dark .theme-toggle .icon-sun {
+      display: block;
+    }
 
-      .actions {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.75rem;
-      }
+    :root.dark .theme-toggle .icon-moon {
+      display: none;
+    }
 
-      /* Primary button — same recipe as the app's:
+    .actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    /* Primary button — same recipe as the app's:
          rounded-lg bg-foreground px-... py-... font-medium text-background */
-      .download {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
-        background: var(--foreground);
-        color: var(--background);
-        font-size: 0.95rem;
-        font-weight: 500;
-        text-decoration: none;
-        transition: opacity 0.15s, transform 0.1s,
-          background-color 0.35s ease, color 0.35s ease;
-      }
+    .download {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      background: var(--foreground);
+      color: var(--background);
+      font-size: 1.25rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: opacity 0.15s, transform 0.1s,
+        background-color 0.35s ease, color 0.35s ease;
+    }
 
-      .download:hover {
-        opacity: 0.9;
-      }
+    .download:hover {
+      opacity: 0.9;
+    }
 
-      .download:active {
-        transform: scale(0.98);
-      }
+    .download:active {
+      transform: scale(0.98);
+    }
 
-      .version {
-        font-size: 0.8125rem;
-        color: color-mix(in srgb, var(--foreground) 50%, transparent);
-      }
+    .testimonials {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 64rem;
+      margin: 0 auto 2rem;
+    }
 
-      .version a {
-        color: inherit;
-      }
+    .testimonials-header {
+      margin: 0;
+      font-size: 1.125rem;
+      font-weight: 500;
+      color: color-mix(in srgb, var(--foreground) 65%, transparent);
+    }
 
-      .prereq {
-        max-width: 34rem;
-        margin: 0;
-        font-size: 0.8125rem;
-        line-height: 1.6;
-        color: color-mix(in srgb, var(--foreground) 50%, transparent);
-      }
+    .testimonials-list {
+      display: flex;
+      flex-direction: row;
+      gap: 1.5rem;
+      width: 100%;
+    }
 
-      .prereq a {
-        color: inherit;
-      }
-    </style>
+    .testimonial {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 100%;
+      min-height: 12rem;
+      gap: auto;
+      padding: 1rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      background: color-mix(in srgb, var(--background) 90%, transparent);
+      transition: border-color 0.35s ease, background-color 0.35s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
 
-    <!-- Apply the saved (or system-default) theme before first paint to avoid a
+    .quote {
+      font-size: 1.125rem;
+      line-height: 1.6;
+      color: color-mix(in srgb, var(--foreground) 65%, transparent);
+    }
+
+    .author {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: color-mix(in srgb, var(--foreground) 50%, transparent);
+    }
+
+    .version {
+      font-size: 0.8125rem;
+      color: color-mix(in srgb, var(--foreground) 50%, transparent);
+    }
+
+    .version a {
+      color: inherit;
+    }
+
+    .prereq {
+      max-width: 34rem;
+      margin: 0;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      color: color-mix(in srgb, var(--foreground) 50%, transparent);
+    }
+
+    .prereq a {
+      color: inherit;
+    }
+  </style>
+
+  <!-- Apply the saved (or system-default) theme before first paint to avoid a
          flash of the wrong colors. The toggle only ever stores light/dark. -->
-    <script>
-      (function () {
-        try {
-          var t =
-            localStorage.getItem("theme") ||
-            (window.matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light");
-          if (t === "dark") document.documentElement.classList.add("dark");
-        } catch (e) {}
-      })();
-    </script>
+  <script>
+    (function () {
+      try {
+        var t =
+          localStorage.getItem("theme") ||
+          (window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light");
+        if (t === "dark") document.documentElement.classList.add("dark");
+      } catch (e) { }
+    })();
+  </script>
 
-    <!-- Privacy-friendly analytics by Plausible (proxied first-party via nginx) -->
-    <script
-      defer
-      data-api="/api/event"
-      data-domain="ankitron.javier.computer"
-      src="/js/stats.js"
-    ></script>
-  </head>
+  <!-- Privacy-friendly analytics by Plausible (proxied first-party via nginx) -->
+  <script defer data-api="/api/event" data-domain="ankitron.javier.computer" src="/js/stats.js"></script>
+</head>
 
-  <body>
-    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light or dark mode">
-      <svg
-        class="icon-moon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-      </svg>
-      <svg
-        class="icon-sun"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="5" />
-        <path
-          d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-        />
-      </svg>
-    </button>
+<body>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light or dark mode">
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+      stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+      stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="5" />
+      <path
+        d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  </button>
 
-    <div class="brand">
-      <img
-        src="https://github.com/javierarce/ankitron/raw/main/src-tauri/icons/128x128@2x.png"
-        alt="Ankitron icon"
-      />
-      <h1>Ankitron</h1>
-    </div>
+  <div class="brand">
+    <img src="icon.png" alt="Ankitron icon" />
+    <h1>Ankitron</h1>
+  </div>
 
-    <p class="tagline">
-      A simple, lightweight Mac app for managing and studying Anki decks.
-    </p>
+  <p class="tagline">
+    A simple, lightweight Mac app for managing and studying Anki decks.
+  </p>
 
-    <!-- Interactive demo: the real app running against an in-memory Anki mock
-         (built from src/ with VITE_DEMO=1 into /demo, see build:demo). Visitors
-         can click around before downloading. -->
+  <!-- Interactive demo: the real app running against an in-memory Anki mock
+    (built from src/ with VITE_DEMO=1 into /demo, see build:demo). Visitors
+    can click around before downloading. -->
+  <div class="desktop">
     <div class="demo">
       <div class="demo-frame">
-        <iframe
-          id="demo"
-          src="demo/"
-          title="Interactive Ankitron demo"
-          allow="clipboard-write"
-        ></iframe>
+        <iframe id="demo" src="demo/" title="Interactive Ankitron demo" allow="clipboard-write"></iframe>
       </div>
-      <p class="demo-caption">
-        A live, clickable demo — browse decks and study a few cards. Nothing you
-        do here is saved.
-      </p>
     </div>
+  </div>
 
-    <div class="actions">
-      <a
-        class="download"
-        href="https://github.com/javierarce/ankitron/releases/latest/download/Ankitron.dmg"
-      >
-        Download for macOS
-      </a>
-      <p class="version">
-        <!-- Stamped from package.json at deploy time (see deploy-site.yml). -->
-        Version <span id="version">0.38.1</span> ·
-        <a href="https://github.com/javierarce/ankitron/releases/latest"
-          >Release notes</a
-        >
-      </p>
+
+  <div class="testimonials">
+    <p class="testimonials-header">Here’s what r/Anki users say about Ankitron</p>
+
+    <div class="testimonials-list">
+      <div class="testimonial">
+        <div class="quote">“You know, if you have issue with managing your cards, you don't need a big UI for that.”
+        </div>
+        <div class="author">1Soundwave3</div>
+      </div>
+
+      <div class="testimonial">
+        <div class="quote">“I take a pass on whether this is a good idea or not, but you need to check your facts on
+          some of the key concepts of Anki.”</div>
+        <div class="author">Danika_Dakika</div>
+      </div>
+      <div class="testimonial">
+        <div class="quote">“Dont fix whats not broken. Except here, you just broken it.”</div>
+        <div class="author">Linux765465copy</div>
+      </div>
+
     </div>
+  </div>
 
-    <p class="prereq">
-      Requires the
-      <a href="https://apps.ankiweb.net">Anki desktop</a> app and the
-      <a href="https://ankiweb.net/shared/info/2055492159">AnkiConnect</a>
-      add-on.<br />
-      Ankitron is an unofficial third-party app and is not affiliated with the
-      official Anki project.
+  <div class="actions">
+    <a class="download" href="https://github.com/javierarce/ankitron/releases/latest/download/Ankitron.dmg">
+      Download for macOS
+    </a>
+    <p class="version">
+      <!-- Stamped from package.json at deploy time (see deploy-site.yml). -->
+      Version <span id="version">0.38.1</span> ·
+      <a href="https://github.com/javierarce/ankitron/releases/latest">Release notes</a>
     </p>
+  </div>
 
-    <script>
-      // --- Theme: manual light/dark toggle, persisted. No "system" option;
-      // the system preference is only the first-visit default. ---
-      const root = document.documentElement;
-      const demoFrame = document.getElementById("demo");
+  <p class="prereq">
+    Requires the
+    <a href="https://apps.ankiweb.net">Anki desktop</a> app and the
+    <a href="https://ankiweb.net/shared/info/2055492159">AnkiConnect</a>
+    add-on.<br />
+    Ankitron is an unofficial third-party app and is not affiliated with the
+    official Anki project.
+  </p>
 
-      // Resolve a stored theme ("light" | "dark" | "system") to a boolean. The
-      // demo (the real app) can store "system"; the landing toggle only stores
-      // light/dark, but we handle all three so app → site sync works.
-      const prefersDark = () =>
-        window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const resolveDark = (value) =>
-        value === "dark" || (value !== "light" && prefersDark());
+  <script>
+    // --- Theme: manual light/dark toggle, persisted. No "system" option;
+    // the system preference is only the first-visit default. ---
+    const root = document.documentElement;
+    const demoFrame = document.getElementById("demo");
 
-      let theme = resolveDark(localStorage.getItem("theme")) ? "dark" : "light";
-      root.classList.toggle("dark", theme === "dark"); // initial paint
+    // Resolve a stored theme ("light" | "dark" | "system") to a boolean. The
+    // demo (the real app) can store "system"; the landing toggle only stores
+    // light/dark, but we handle all three so app → site sync works.
+    const prefersDark = () =>
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const resolveDark = (value) =>
+      value === "dark" || (value !== "light" && prefersDark());
 
-      // The embedded demo is the real app, same-origin, sharing this
-      // localStorage — so it reads the same `theme` on load and starts in sync.
-      // On a toggle its own React theme state doesn't change, so we set the
-      // class on its <html> directly to mirror the switch live.
-      const syncDemoTheme = () => {
-        try {
-          const doc = demoFrame.contentDocument;
-          if (doc) doc.documentElement.classList.toggle("dark", theme === "dark");
-        } catch (e) {
-          // Not yet loaded (or blocked) — it'll pick up the theme on its load.
-        }
-      };
-      demoFrame.addEventListener("load", syncDemoTheme);
+    let theme = resolveDark(localStorage.getItem("theme")) ? "dark" : "light";
+    root.classList.toggle("dark", theme === "dark"); // initial paint
 
-      // Flow the switch the other way too: changing the theme inside the demo
-      // (its Settings) writes the same localStorage `theme`. Same-origin, so the
-      // parent gets a `storage` event — mirror it onto the landing page.
-      window.addEventListener("storage", (e) => {
-        if (e.key !== "theme") return;
-        theme = resolveDark(e.newValue) ? "dark" : "light";
-        root.classList.toggle("dark", theme === "dark");
-      });
+    // The embedded demo is the real app, same-origin, sharing this
+    // localStorage — so it reads the same `theme` on load and starts in sync.
+    // On a toggle its own React theme state doesn't change, so we set the
+    // class on its <html> directly to mirror the switch live.
+    const syncDemoTheme = () => {
+      try {
+        const doc = demoFrame.contentDocument;
+        if (doc) doc.documentElement.classList.toggle("dark", theme === "dark");
+      } catch (e) {
+        // Not yet loaded (or blocked) — it'll pick up the theme on its load.
+      }
+    };
+    demoFrame.addEventListener("load", syncDemoTheme);
 
-      document.getElementById("theme-toggle").addEventListener("click", () => {
-        theme = root.classList.contains("dark") ? "light" : "dark";
-        localStorage.setItem("theme", theme);
-        root.classList.toggle("dark", theme === "dark");
-        syncDemoTheme();
-      });
-    </script>
-  </body>
+    // Flow the switch the other way too: changing the theme inside the demo
+    // (its Settings) writes the same localStorage `theme`. Same-origin, so the
+    // parent gets a `storage` event — mirror it onto the landing page.
+    window.addEventListener("storage", (e) => {
+      if (e.key !== "theme") return;
+      theme = resolveDark(e.newValue) ? "dark" : "light";
+      root.classList.toggle("dark", theme === "dark");
+    });
+
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      theme = root.classList.contains("dark") ? "light" : "dark";
+      localStorage.setItem("theme", theme);
+      root.classList.toggle("dark", theme === "dark");
+      syncDemoTheme();
+    });
+  </script>
+</body>
+
 </html>
