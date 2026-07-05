@@ -129,7 +129,8 @@
     .desktop {
       display: flex;
       justify-content: center;
-      width: 1200px;
+      width: 100%;
+      max-width: 1200px;
       padding: 5.2rem 2rem;
       background: url("desktop.jpg") no-repeat center/cover;
       border-radius: 8px;
@@ -283,7 +284,6 @@
       justify-content: space-between;
       width: 100%;
       min-height: 12rem;
-      gap: auto;
       padding: 1rem 1.25rem;
       border: 1px solid var(--border);
       border-radius: 0.5rem;
@@ -323,6 +323,22 @@
 
     .prereq a {
       color: inherit;
+    }
+
+    /* Mobile: stack the testimonials vertically and shrink the desktop-frame
+       padding so the demo has room to breathe on a narrow screen. */
+    @media (max-width: 640px) {
+      .desktop {
+        padding: 1.5rem 1rem;
+      }
+
+      .testimonials-list {
+        flex-direction: column;
+      }
+
+      .testimonial {
+        min-height: 0;
+      }
     }
   </style>
 
