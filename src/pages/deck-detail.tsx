@@ -7,8 +7,6 @@ import { resolveDeckRedirect } from "@/lib/deck-redirects";
 import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
 
-type CardInfo = { cardId: number; deckName: string; queue: number };
-
 // Fetch everything the page renders for a deck, in one place so the initial
 // (spinner-backed) load and the silent post-edit refresh stay in sync.
 async function fetchDeckData(deckName: string) {
@@ -35,15 +33,22 @@ async function fetchDeckData(deckName: string) {
   let suspendedCardIds: number[] = [];
   const noteDecks: Record<number, string> = {};
   if (allCardIds.length > 0) {
-    // One cardsInfo call gives us both each card's deck (to scope the list to a
-    // subdeck) and its scheduling queue (-1 means suspended), so we don't need a
-    // separate areSuspended round-trip.
-    const cards = await ankiFetch<CardInfo[]>("cardsInfo", { cards: allCardIds });
-    const byCard = new Map(cards.map((c) => [c.cardId, c]));
-    suspendedCardIds = allCardIds.filter((id) => byCard.get(id)?.queue === -1);
+    // We only need each card's deck (to scope the list to a subdeck) and
+    // whether it's suspended. getDecks + areSuspended return exactly that;
+    // cardsInfo would also make Anki render every card's question/answer HTML
+    // server-side, which dominates deck-open time on large decks.
+    const [cardsByDeck, suspendedFlags] = await Promise.all([
+      ankiFetch<Record<string, number[]>>("getDecks", { cards: allCardIds }),
+      ankiFetch<(boolean | null)[]>("areSuspended", { cards: allCardIds }),
+    ]);
+    suspendedCardIds = allCardIds.filter((_, i) => suspendedFlags[i] === true);
+    const deckByCard = new Map<number, string>();
+    for (const [deck, ids] of Object.entries(cardsByDeck)) {
+      for (const id of ids) deckByCard.set(id, deck);
+    }
     for (const note of notes) {
-      const firstCard = (note.cards ?? []).find((id) => byCard.has(id));
-      const deck = firstCard != null ? byCard.get(firstCard)?.deckName : undefined;
+      const firstCard = (note.cards ?? []).find((id) => deckByCard.has(id));
+      const deck = firstCard != null ? deckByCard.get(firstCard) : undefined;
       if (deck) noteDecks[note.noteId] = deck;
     }
   }
@@ -116,15 +121,23 @@ export function DeckDetailPage() {
 
   // Silent in-place refresh after a card is added, edited, or deleted — no
   // blocking spinner and no full page reload, so the list just updates under
-  // the (now-closed) editor.
-  const refresh = useCallback(async () => {
+  // the (now-closed) editor. A same-deck single-note edit hands us the updated
+  // note; patch it into state instead of refetching the whole deck (notesInfo
+  // + getDecks over every note, several round trips on a large deck).
+  const refresh = useCallback(async (updatedNote?: Note) => {
+    if (updatedNote && notes.some((n) => n.noteId === updatedNote.noteId)) {
+      setNotes((prev) =>
+        prev.map((n) => (n.noteId === updatedNote.noteId ? updatedNote : n)),
+      );
+      return;
+    }
     try {
       applyData(await fetchDeckData(deckName));
       await refreshDue();
     } catch {
       // Keep the current view if a refresh fails; the user just acted on it.
     }
-  }, [deckName, applyData, refreshDue]);
+  }, [deckName, notes, applyData, refreshDue]);
 
   useEffect(() => {
     let cancelled = false;

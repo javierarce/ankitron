@@ -143,6 +143,7 @@ const MUTATING = new Set([
   "suspend",
   "addNote",
   "updateNoteFields",
+  "updateNote",
   "deleteNotes",
   "addTags",
   "removeTags",
@@ -230,6 +231,25 @@ async function handleAction(
     case "cardsInfo": {
       const ids = (params.cards as number[]) ?? [];
       return ids.map(cardInfo).filter(Boolean);
+    }
+
+    case "getDecks": {
+      // cardIds grouped by the deck that holds them: { deckName: [cardId, …] }.
+      const ids = (params.cards as number[]) ?? [];
+      const out: Record<string, number[]> = {};
+      for (const cardId of ids) {
+        const n = findNote(noteIdOfCard(cardId));
+        if (n) (out[n.deckName] ??= []).push(cardId);
+      }
+      return out;
+    }
+
+    case "areSuspended": {
+      // One flag per input card, in order; null for cards that don't exist.
+      const ids = (params.cards as number[]) ?? [];
+      return ids.map(
+        (cardId) => findNote(noteIdOfCard(cardId))?.suspended ?? null,
+      );
     }
 
     case "getTags":
@@ -333,6 +353,20 @@ async function handleAction(
         const fields = (p.fields as Record<string, string>) ?? {};
         if (fields.Front != null) n.front = fields.Front;
         if (fields.Back != null) n.back = fields.Back;
+      }
+      return null;
+    }
+
+    case "updateNote": {
+      // Combines updateNoteFields with a wholesale tag replacement, matching
+      // AnkiConnect: fields and/or tags, whichever the payload carries.
+      const p = (params.note as Record<string, unknown>) ?? {};
+      const n = findNote(p.id as number);
+      if (n) {
+        const fields = (p.fields as Record<string, string>) ?? {};
+        if (fields.Front != null) n.front = fields.Front;
+        if (fields.Back != null) n.back = fields.Back;
+        if (Array.isArray(p.tags)) n.tags = [...new Set(p.tags as string[])];
       }
       return null;
     }

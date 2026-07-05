@@ -48,8 +48,10 @@ interface CardFormProps {
    * Receives the updated note when fields/tags/deck actually changed, so a
    * sequential editor can keep its list in sync without a full reload; it's
    * called with no argument when nothing was written (a no-op save).
+   * `opts.movedTo` names the destination deck when the save moved the note,
+   * so a deck-scoped list knows an in-place patch isn't enough.
    */
-  onSaved?: (updated?: Note) => void;
+  onSaved?: (updated?: Note, opts?: { movedTo?: string }) => void;
   /**
    * When editing a selection one card at a time, the current position in the
    * run. Drives the "n / total" progress and the prev/next arrows.
@@ -298,38 +300,38 @@ export function CardForm({
             ? clozeText !== initialClozeText || backExtra !== initialBackExtra
             : front !== initialFront || back !== initialBack;
         const tagsChanged =
-          [...tags].sort().join(" ") !==
-          [...initialTags].sort().join(" ");
+          [...tags].sort().join("\u0000") !==
+          [...initialTags].sort().join("\u0000");
         const deckChanged = destDeck !== deckName;
 
-        if (fieldsChanged) {
-          let fields: Record<string, string>;
-          if (customModel) {
-            // Only send the fields that actually changed.
-            fields = {};
-            for (const f of customFields) {
-              const value = customValues[f.name] ?? "";
-              if (value !== f.initial) fields[f.name] = value;
+        if (fieldsChanged || tagsChanged) {
+          // One updateNote call writes fields and tags together. Tags are
+          // replaced wholesale — the previous removeTags-per-tag loop plus
+          // addTags took N+1 requests and could fail midway, leaving the note
+          // stripped of all its tags.
+          const payload: {
+            id: number;
+            fields?: Record<string, string>;
+            tags?: string[];
+          } = { id: note.noteId };
+          if (fieldsChanged) {
+            let fields: Record<string, string>;
+            if (customModel) {
+              // Only send the fields that actually changed.
+              fields = {};
+              for (const f of customFields) {
+                const value = customValues[f.name] ?? "";
+                if (value !== f.initial) fields[f.name] = value;
+              }
+            } else if (isClozeForm) {
+              fields = { Text: clozeText, "Back Extra": backExtra };
+            } else {
+              fields = { [frontKey]: front, [backKey]: back };
             }
-          } else if (isClozeForm) {
-            fields = { Text: clozeText, "Back Extra": backExtra };
-          } else {
-            fields = { [frontKey]: front, [backKey]: back };
+            payload.fields = fields;
           }
-          await ankiFetch("updateNoteFields", {
-            note: { id: note.noteId, fields },
-          });
-        }
-        if (tagsChanged) {
-          for (const tag of note.tags) {
-            await ankiFetch("removeTags", { notes: [note.noteId], tags: tag });
-          }
-          if (tags.length > 0) {
-            await ankiFetch("addTags", {
-              notes: [note.noteId],
-              tags: tags.join(" "),
-            });
-          }
+          if (tagsChanged) payload.tags = tags;
+          await ankiFetch("updateNote", { note: payload });
         }
         if (deckChanged) {
           let cardIds = note.cards ?? [];
@@ -369,7 +371,15 @@ export function CardForm({
             if (updatedFields[backKey])
               updatedFields[backKey] = { ...updatedFields[backKey], value: back };
           }
-          savedNote = { ...note, fields: updatedFields, tags };
+          // Stamp the edit time locally: the "Recently modified" sort reads
+          // `mod`, and an in-place patch never refetches Anki's value, so
+          // without this the edited note would keep its old list position.
+          savedNote = {
+            ...note,
+            fields: updatedFields,
+            tags,
+            mod: Math.floor(Date.now() / 1000),
+          };
         }
       } else {
         const noteData = isClozeForm
@@ -419,7 +429,10 @@ export function CardForm({
         }
       }
       if (onSaved) {
-        onSaved(savedNote);
+        onSaved(
+          savedNote,
+          isEdit && destDeck !== deckName ? { movedTo: destDeck } : undefined,
+        );
       } else {
         onClose();
         window.location.reload();

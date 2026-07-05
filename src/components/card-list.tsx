@@ -111,14 +111,45 @@ function stripCloze(text: string): string {
 
 // A note's searchable text: its field values (HTML and cloze stripped) plus its
 // tags, lowercased and diacritic-folded, for the plain-text substring filter.
+//
+// stripHtml costs a DOM parse per field, and search re-filters on every
+// keystroke, so both this and the display text below are cached per note
+// object (weakly — an edit or refetch replaces the note objects, dropping
+// their stale entries with them). Without the cache a keystroke re-parsed
+// every field of every note in the deck.
+const haystackCache = new WeakMap<Note, string>();
 function noteHaystack(note: Note): string {
+  const cached = haystackCache.get(note);
+  if (cached !== undefined) return cached;
   const text = Object.values(note.fields)
     .map((field) => field?.value)
     .filter(Boolean)
     .map((v) => stripCloze(stripHtml(v as string)))
     .concat(note.tags)
     .join(" ");
-  return foldText(text);
+  const folded = foldText(text);
+  haystackCache.set(note, folded);
+  return folded;
+}
+
+// A note's two display lines for the list row, HTML-stripped and truncated.
+const displayTextCache = new WeakMap<
+  Note,
+  { primary: string; secondary: string | null }
+>();
+function noteDisplayText(note: Note): {
+  primary: string;
+  secondary: string | null;
+} {
+  const cached = displayTextCache.get(note);
+  if (cached !== undefined) return cached;
+  const { primary, secondary } = noteDisplayFields(note);
+  const text = {
+    primary: truncate(stripCloze(stripHtml(primary)), 80),
+    secondary: secondary ? truncate(stripCloze(stripHtml(secondary)), 80) : null,
+  };
+  displayTextCache.set(note, text);
+  return text;
 }
 
 /**
@@ -336,9 +367,11 @@ interface CardListProps {
   /**
    * Called after a card is added, edited, or deleted so the parent can refetch
    * the list in place. Without it these actions fall back to a full page
-   * reload, which blanks the whole app.
+   * reload, which blanks the whole app. A same-deck single-note edit passes
+   * the updated note so the parent can patch it into its list instead of
+   * refetching the whole deck; no argument means "refetch everything".
    */
-  onChanged?: () => void;
+  onChanged?: (updatedNote?: Note) => void;
   /** Add-card form visibility, owned by the page so the button can live in its header. */
   showAddForm: boolean;
   onShowAddForm: (show: boolean) => void;
@@ -508,7 +541,8 @@ export function CardList({
 
   // Refresh the list in place after a write. Falls back to a full page reload
   // only if the parent didn't wire up an in-place refresh.
-  const refreshAfterChange = onChanged ?? (() => window.location.reload());
+  const refreshAfterChange: (updatedNote?: Note) => void =
+    onChanged ?? (() => window.location.reload());
 
   // Resync the list once the run finishes, and only if something was actually
   // written.
@@ -861,7 +895,7 @@ export function CardList({
   // segment covers its whole subtree, so a chip for a parent deck (e.g.
   // "Deutsch") includes every note under it — matching the count on the chip
   // and what a study session for it would review. A note's deck falls back to
-  // the viewed deck if cardsInfo hasn't loaded its mapping yet.
+  // the viewed deck if getDecks hasn't loaded its mapping yet.
   const activeSegmentList = [...activeSegments];
   const segmentNotes =
     activeSegments.size === 0
@@ -1423,15 +1457,13 @@ export function CardList({
                 </button>
                 <div className={`flex-1 min-w-0 ${noteSuspended ? "opacity-50" : ""}`}>
                   {(() => {
-                    const { primary, secondary } = noteDisplayFields(note);
+                    const { primary, secondary } = noteDisplayText(note);
                     return (
                       <>
-                        <p className="text-sm font-medium">
-                          {truncate(stripCloze(stripHtml(primary)), 80)}
-                        </p>
+                        <p className="text-sm font-medium">{primary}</p>
                         {secondary && (
                           <p className="text-sm text-foreground/50 mt-0.5">
-                            {truncate(stripCloze(stripHtml(secondary)), 80)}
+                            {secondary}
                           </p>
                         )}
                       </>
@@ -1483,9 +1515,16 @@ export function CardList({
           onDelete={() => setDeletingNote(editingNote)}
           blocked={!!deletingNote}
           onClose={() => setEditingNote(null)}
-          onSaved={() => {
+          onSaved={(updated, opts) => {
+            const editedId = editingNote.noteId;
             setEditingNote(null);
-            refreshAfterChange();
+            // A no-op save (paged through, untouched) wrote nothing — skip the
+            // refresh entirely. A same-note, same-deck edit can be patched in
+            // place by the parent; a move or note-type change (new note id)
+            // needs the full refetch to fix list membership and deck badges.
+            if (!updated) return;
+            const patchable = updated.noteId === editedId && !opts?.movedTo;
+            refreshAfterChange(patchable ? updated : undefined);
           }}
         />
       )}
