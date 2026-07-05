@@ -13,7 +13,8 @@ const ankiFetch = <T,>(action: string, params?: Record<string, unknown>) =>
 describe("demo import", () => {
   it("importing a new deck makes it (and its notes) appear", async () => {
     const parsed: ExportedDeck = {
-      deckName: "German",
+      deckName: "Norwegian",
+      exportedAt: "2026-01-01T00:00:00.000Z",
       notes: [
         { modelName: "Basic", fields: { Front: "danke", Back: "thank you" }, tags: ["greeting"] },
         { modelName: "Basic", fields: { Front: "Hund", Back: "dog" }, tags: [] },
@@ -21,20 +22,20 @@ describe("demo import", () => {
     };
 
     // The deck doesn't exist yet.
-    expect(await ankiFetch<string[]>("deckNames")).not.toContain("German");
+    expect(await ankiFetch<string[]>("deckNames")).not.toContain("Norwegian");
 
     // What the import flow does for a new target deck.
-    await ankiFetch("createDeck", { deck: "German" });
+    await ankiFetch("createDeck", { deck: "Norwegian" });
     const result = await importDeck(
-      "German",
+      "Norwegian",
       parsed,
       { ankiFetch, ensureClozeTypedModel },
       { addOnly: false },
     );
 
     expect(result.added).toBe(2);
-    expect(await ankiFetch<string[]>("deckNames")).toContain("German");
-    const ids = await ankiFetch<number[]>("findNotes", { query: 'deck:"German"' });
+    expect(await ankiFetch<string[]>("deckNames")).toContain("Norwegian");
+    const ids = await ankiFetch<number[]>("findNotes", { query: 'deck:"Norwegian"' });
     expect(ids.length).toBe(2);
   });
 });
