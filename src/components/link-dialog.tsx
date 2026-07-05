@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { ModalDialog } from "./modal-dialog";
 
 interface LinkDialogProps {
   /** Prefill for the visible text — the selection, or an existing link's text. */
@@ -16,9 +15,9 @@ interface LinkDialogProps {
   onClose: () => void;
 }
 
-/** Two-field link editor (text + URL). Portals to <body> like TtsDialog so it
- * isn't a descendant of the card <form> — otherwise Enter would submit the form
- * and its keystrokes would leak to the editor behind it. */
+/** Two-field link editor (text + URL). The shell portals to <body> so it isn't
+ * a descendant of the card <form> — otherwise Enter would submit the form and
+ * its keystrokes would leak to the editor behind it. */
 export function LinkDialog({
   initialText,
   initialUrl,
@@ -27,10 +26,8 @@ export function LinkDialog({
   onRemove,
   onClose,
 }: LinkDialogProps) {
-  useScrollLock();
   const [text, setText] = useState(initialText);
   const [url, setUrl] = useState(initialUrl);
-  const panelRef = useRef<HTMLDivElement | null>(null);
   const textRef = useRef<HTMLInputElement | null>(null);
   const urlRef = useRef<HTMLInputElement | null>(null);
 
@@ -43,94 +40,16 @@ export function LinkDialog({
     el?.select();
   }, [initialText]);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const canSubmit = url.trim() !== "";
   function submit() {
     if (canSubmit) onSubmit(text, url);
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      // Events bubble across the portal to the form's onKeyDown (Cmd+Enter =
-      // save). Stop them so dialog keystrokes stay in the dialog, and trap Tab
-      // inside the panel (the portal sits outside the form's focus trap).
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        // Escape closes. Handled here rather than via the window listener
-        // below, because that stopPropagation() keeps the event from ever
-        // reaching window for keys pressed inside the dialog.
-        if (e.key === "Escape") {
-          onClose();
-          return;
-        }
-        if (e.key !== "Tab") return;
-        const panel = panelRef.current;
-        if (!panel) return;
-        const focusables = Array.from(
-          panel.querySelectorAll<HTMLElement>(
-            'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"])'
-          )
-        ).filter((el) => el.offsetParent !== null);
-        if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        const active = document.activeElement;
-        if (e.shiftKey && (active === first || !panel.contains(active))) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && (active === last || !panel.contains(active))) {
-          e.preventDefault();
-          first.focus();
-        }
-      }}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg focus:outline-none"
-      >
-        <h3 className="mb-4 text-lg font-semibold">
-          {editing ? "Edit link" : "Add link"}
-        </h3>
-
-        <label className="mb-1 block text-xs text-foreground/50">Text</label>
-        <input
-          ref={textRef}
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-          }}
-          placeholder="Link text"
-          className="mb-4 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
-        />
-
-        <label className="mb-1 block text-xs text-foreground/50">URL</label>
-        <input
-          ref={urlRef}
-          type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-          }}
-          placeholder="https://example.com"
-          spellCheck={false}
-          className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
-        />
-
+  return (
+    <ModalDialog
+      title={editing ? "Edit link" : "Add link"}
+      onClose={onClose}
+      footer={
         <div className="mt-6 flex items-center justify-end gap-3">
           {editing && (
             <button
@@ -157,8 +76,34 @@ export function LinkDialog({
             {editing ? "Update" : "Add"}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body
+      }
+    >
+      <label className="mb-1 block text-xs text-foreground/50">Text</label>
+      <input
+        ref={textRef}
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+        }}
+        placeholder="Link text"
+        className="mb-4 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
+      />
+
+      <label className="mb-1 block text-xs text-foreground/50">URL</label>
+      <input
+        ref={urlRef}
+        type="text"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+        }}
+        placeholder="https://example.com"
+        spellCheck={false}
+        className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
+      />
+    </ModalDialog>
   );
 }

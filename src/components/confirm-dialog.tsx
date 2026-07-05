@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { ModalDialog } from "./modal-dialog";
 
 interface ConfirmDialogProps {
   title: string;
@@ -18,42 +17,21 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   loading = false,
 }: ConfirmDialogProps) {
-  useScrollLock();
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel();
+    <ModalDialog
+      title={title}
+      titleClassName="mb-2"
+      width="sm"
+      busy={loading}
+      onClose={onCancel}
+      footer={{
+        confirmLabel,
+        busyLabel: "Deleting...",
+        confirmDanger: true,
+        onConfirm,
       }}
     >
-      <div className="mx-4 w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-lg">
-        <h3 className="mb-2 text-lg font-semibold">{title}</h3>
-        <p className="mb-6 text-sm text-foreground/60">{message}</p>
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
-          >
-            {loading ? "Deleting..." : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+      <p className="text-sm text-foreground/60">{message}</p>
+    </ModalDialog>
   );
 }

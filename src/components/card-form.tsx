@@ -11,9 +11,9 @@ import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/dec
 import { basicFieldKeys, isClozeNote, orderedFieldNames } from "@/lib/note-fields";
 import { moveNotesToDeck } from "@/lib/notes";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { useAllTags } from "@/hooks/use-all-tags";
 import { useDeckNames } from "@/hooks/use-deck-names";
+import { ModalDialog } from "./modal-dialog";
 
 type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
 
@@ -84,7 +84,6 @@ export function CardForm({
   onDelete,
   blocked,
 }: CardFormProps) {
-  useScrollLock();
   const noteFields = note?.fields ?? {};
 
   function extractValue(field: unknown): string {
@@ -183,15 +182,6 @@ export function CardForm({
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (blocked) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, blocked]);
-
-  useEffect(() => {
     let cancelled = false;
     modalRef.current?.focus();
     function tryFocusEditor() {
@@ -205,16 +195,6 @@ export function CardForm({
       cancelled = true;
     };
   }, []);
-
-  function getFocusables(): HTMLElement[] {
-    const root = modalRef.current;
-    if (!root) return [];
-    const selector =
-      'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [contenteditable="true"]:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
-    return Array.from(root.querySelectorAll<HTMLElement>(selector)).filter(
-      (el) => el.offsetParent !== null,
-    );
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -417,248 +397,230 @@ export function CardForm({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (!blocked && e.target === e.currentTarget) onClose();
-      }}
+    <ModalDialog
+      ariaLabel={isEdit ? "Edit Note" : "Add Note"}
+      width="2xl"
+      scrollable
+      blocked={blocked}
+      onClose={onClose}
+      panelRef={modalRef}
     >
-      <div
-        ref={modalRef}
-        tabIndex={-1}
-        className="mx-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-background p-6 shadow-lg outline-none"
-      >
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold">
-              {isEdit ? "Edit Note" : "Add Note"}
-            </h3>
-            {position && (
-              <span className="text-sm tabular-nums text-foreground/40">
-                {position.index + 1} / {position.total}
-              </span>
-            )}
-          </div>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold">
+            {isEdit ? "Edit Note" : "Add Note"}
+          </h3>
           {position && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={onPrev}
-                disabled={saving || position.index === 0}
-                aria-label="Previous note"
-                className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
-              >
-                <CaretLeft size={18} weight="bold" />
-              </button>
-              <button
-                type="button"
-                onClick={onSkip}
-                disabled={saving || position.index === position.total - 1}
-                aria-label="Next note"
-                className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
-              >
-                <CaretRight size={18} weight="bold" />
-              </button>
+            <span className="text-sm tabular-nums text-foreground/40">
+              {position.index + 1} / {position.total}
+            </span>
+          )}
+        </div>
+        {position && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={saving || position.index === 0}
+              aria-label="Previous note"
+              className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <CaretLeft size={18} weight="bold" />
+            </button>
+            <button
+              type="button"
+              onClick={onSkip}
+              disabled={saving || position.index === position.total - 1}
+              aria-label="Next note"
+              className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <CaretRight size={18} weight="bold" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isEdit && cardType !== initialType && (
+        <p className="mb-4 text-xs text-amber-600 dark:text-amber-500">
+          Changing the note type creates a new note and resets its review history.
+        </p>
+      )}
+
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={(e) => {
+          // Tab is trapped inside the panel by the ModalDialog shell.
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.requestSubmit();
+          }
+        }}
+        className="space-y-4"
+      >
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+            Type
+          </label>
+          {customModel ? (
+            // A custom note type can't be remapped onto our curated types
+            // without losing fields, so the type is shown but not editable.
+            <div className="w-full rounded-md border border-border bg-foreground/[0.03] px-2 py-1.5 text-sm text-foreground/70">
+              {note?.modelName}
             </div>
+          ) : (
+            <select
+              value={cardType}
+              onChange={(e) => changeCardType(e.target.value as CardType)}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+            >
+              {CARD_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           )}
         </div>
 
-        {isEdit && cardType !== initialType && (
-          <p className="mb-4 text-xs text-amber-600 dark:text-amber-500">
-            Changing the note type creates a new note and resets its review history.
-          </p>
-        )}
-
-        <form
-          onSubmit={handleSubmit}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-              e.preventDefault();
-              e.currentTarget.requestSubmit();
-              return;
-            }
-            if (e.key === "Tab") {
-              const focusables = getFocusables();
-              if (focusables.length === 0) return;
-              const first = focusables[0];
-              const last = focusables[focusables.length - 1];
-              const active = document.activeElement as HTMLElement | null;
-              if (e.shiftKey && (active === first || !modalRef.current?.contains(active))) {
-                e.preventDefault();
-                last.focus();
-              } else if (!e.shiftKey && (active === last || !modalRef.current?.contains(active))) {
-                e.preventDefault();
-                first.focus();
-              }
-            }
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-              Type
-            </label>
-            {customModel ? (
-              // A custom note type can't be remapped onto our curated types
-              // without losing fields, so the type is shown but not editable.
-              <div className="w-full rounded-md border border-border bg-foreground/[0.03] px-2 py-1.5 text-sm text-foreground/70">
-                {note?.modelName}
-              </div>
-            ) : (
-              <select
-                value={cardType}
-                onChange={(e) => changeCardType(e.target.value as CardType)}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
-              >
-                {CARD_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {customModel ? (
-            customFields.map((f) => {
-              const isClozeField =
-                f.name === "Text" ||
-                CLOZE_OPEN_RE.test(customValues[f.name] ?? "");
-              return (
-                <div key={f.name}>
-                  <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-                    {f.name}
-                  </label>
-                  <CardEditor
-                    content={customValues[f.name] ?? ""}
-                    onChange={(v) =>
-                      setCustomValues((prev) => ({ ...prev, [f.name]: v }))
-                    }
-                    placeholder={`${f.name}…`}
-                    clozeMode={isClozeField}
-                  />
-                </div>
-              );
-            })
-          ) : isBasicForm ? (
-            <>
-              <div>
+        {customModel ? (
+          customFields.map((f) => {
+            const isClozeField =
+              f.name === "Text" ||
+              CLOZE_OPEN_RE.test(customValues[f.name] ?? "");
+            return (
+              <div key={f.name}>
                 <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-                  Front
-                </label>
-                <CardEditor content={front} onChange={setFront} placeholder="Front side..." />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-                  Back
-                </label>
-                <CardEditor content={back} onChange={setBack} placeholder="Back side..." />
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-                  Text
+                  {f.name}
                 </label>
                 <CardEditor
-                  content={clozeText}
-                  onChange={setClozeText}
-                  placeholder="The capital of {{c1::France}} is {{c2::Paris}}."
-                  clozeMode
+                  content={customValues[f.name] ?? ""}
+                  onChange={(v) =>
+                    setCustomValues((prev) => ({ ...prev, [f.name]: v }))
+                  }
+                  placeholder={`${f.name}…`}
+                  clozeMode={isClozeField}
                 />
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-                  Back Extra <span className="font-normal text-foreground/40">(optional)</span>
-                </label>
-                <CardEditor content={backExtra} onChange={setBackExtra} placeholder="Extra info shown on the back..." />
-              </div>
-            </>
-          )}
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-              Tags
-            </label>
-            <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
-          </div>
-
-          {isEdit && (
+            );
+          })
+        ) : isBasicForm ? (
+          <>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-                Deck
+                Front
               </label>
-              <select
-                value={targetDeck}
-                onChange={(e) => setTargetDeck(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
-              >
-                {decks.map((d) => (
-                  <option key={d} value={d}>
-                    {/* Indent by depth and show only the leaf so the list reads
-                        as a tree instead of exposing "::" paths. The indent uses
-                        non-breaking spaces — the browser strips leading ASCII
-                        spaces from <option> labels. */}
-                    {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
-                  </option>
-                ))}
-                <option value={NEW_DECK}>+ New deck…</option>
-              </select>
-              {creatingDeck && (
-                <input
-                  type="text"
-                  value={newDeck}
-                  onChange={(e) => setNewDeck(e.target.value)}
-                  placeholder="New deck name"
-                  className="mt-2 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
-                />
-              )}
-              {destDeck && destDeck !== deckName && (
-                <p className="mt-1 text-xs text-foreground/50">
-                  The note will be moved to {formatDeckPath(destDeck)} when you
-                  save.
-                </p>
-              )}
+              <CardEditor content={front} onChange={setFront} placeholder="Front side..." />
             </div>
-          )}
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
-          <div className="flex items-center justify-between gap-3 pt-2">
             <div>
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                >
-                  <Trash size={16} weight="bold" />
-                  Delete
-                </button>
-              )}
+              <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                Back
+              </label>
+              <CardEditor content={back} onChange={setBack} placeholder="Back side..." />
             </div>
-            <div className="flex gap-3">
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                Text
+              </label>
+              <CardEditor
+                content={clozeText}
+                onChange={setClozeText}
+                placeholder="The capital of {{c1::France}} is {{c2::Paris}}."
+                clozeMode
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+                Back Extra <span className="font-normal text-foreground/40">(optional)</span>
+              </label>
+              <CardEditor content={backExtra} onChange={setBackExtra} placeholder="Extra info shown on the back..." />
+            </div>
+          </>
+        )}
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+            Tags
+          </label>
+          <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
+        </div>
+
+        {isEdit && (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
+              Deck
+            </label>
+            <select
+              value={targetDeck}
+              onChange={(e) => setTargetDeck(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
+            >
+              {decks.map((d) => (
+                <option key={d} value={d}>
+                  {/* Indent by depth and show only the leaf so the list reads
+                      as a tree instead of exposing "::" paths. The indent uses
+                      non-breaking spaces — the browser strips leading ASCII
+                      spaces from <option> labels. */}
+                  {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
+                </option>
+              ))}
+              <option value={NEW_DECK}>+ New deck…</option>
+            </select>
+            {creatingDeck && (
+              <input
+                type="text"
+                value={newDeck}
+                onChange={(e) => setNewDeck(e.target.value)}
+                placeholder="New deck name"
+                className="mt-2 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+              />
+            )}
+            {destDeck && destDeck !== deckName && (
+              <p className="mt-1 text-xs text-foreground/50">
+                The note will be moved to {formatDeckPath(destDeck)} when you
+                save.
+              </p>
+            )}
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <div>
+            {onDelete && (
               <button
                 type="button"
-                onClick={onClose}
+                onClick={onDelete}
                 disabled={saving}
-                className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
               >
-                Cancel
+                <Trash size={16} weight="bold" />
+                Delete
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
-              >
-                {saving ? "Saving..." : isEdit ? "Update Note" : "Add Note"}
-              </button>
-            </div>
+            )}
           </div>
-        </form>
-      </div>
-    </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : isEdit ? "Update Note" : "Add Note"}
+            </button>
+          </div>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }
