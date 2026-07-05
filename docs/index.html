@@ -127,6 +127,7 @@
     /* Interactive demo — the real app embedded in a framed window, replacing
          the old screenshot slideshow. */
     .desktop {
+      position: relative;
       display: flex;
       justify-content: center;
       width: 100%;
@@ -134,6 +135,70 @@
       padding: 5.2rem 2rem;
       background: url("desktop.jpg") no-repeat center/cover;
       border-radius: 4px;
+    }
+
+    /* A fake file sitting on the desktop, bottom-right. Visitors drag it into
+       the embedded app to see how importing a deck works; the drag carries the
+       deck JSON (see the dragstart handler and #sample-deck payload below). */
+    .desktop-file {
+      position: absolute;
+      right: 1rem;
+      bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      width: 6rem;
+      padding: 0.5rem;
+      border: 0;
+      border-radius: 0.5rem;
+      background: transparent;
+      color: #fff;
+      /* Keep the label legible over the bright parts of the painting. */
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      transition: background-color 0.15s ease, transform 0.15s ease;
+      /* A gentle idle bob to draw the eye to it. */
+      animation: file-bob 2.4s ease-in-out infinite;
+    }
+
+    .desktop-file:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    .desktop-file:active {
+      cursor: grabbing;
+    }
+
+    /* Dim it while it's being dragged. */
+    .desktop-file.dragging {
+      opacity: 0.35;
+      animation: none;
+    }
+
+    .desktop-file svg {
+      width: 3.25rem;
+      height: 3.25rem;
+      filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+    }
+
+    .desktop-file-name {
+      font-size: 0.75rem;
+      font-weight: 500;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    @keyframes file-bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .desktop-file { animation: none; }
     }
 
     .demo {
@@ -340,6 +405,12 @@
         padding: 1.5rem 1rem;
       }
 
+      /* Drag-to-import is a pointer interaction with no room over the thin
+         mobile painting margin — hide the fake file on small screens. */
+      .desktop-file {
+        display: none;
+      }
+
       .testimonials-list {
         flex-direction: column;
       }
@@ -405,7 +476,56 @@
         <iframe id="demo" src="demo/" title="Interactive Ankitron demo" allow="clipboard-write"></iframe>
       </div>
     </div>
+
+    <!-- A fake deck file on the desktop. Dragging it into the demo above
+      imports the deck (#sample-deck payload), showing off drag-and-drop import.
+      draggable + a dragstart handler that stashes the JSON is all it takes. -->
+    <div class="desktop-file" id="desktop-file" draggable="true" role="img"
+      aria-label="Sample deck file — drag it into the app to import"
+      title="Drag me into Ankitron to import">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+        <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
+      </svg>
+      <span class="desktop-file-name">Sample deck.json</span>
+    </div>
   </div>
+
+  <!-- Payload for the draggable file above: a real, importable deck export
+    (the demo's "Historical Anomalies" content, renamed so dropping it adds a
+    fresh deck rather than re-importing an existing one). -->
+  <script type="application/json" id="sample-deck">
+    {
+      "deckName": "Sample deck",
+      "notes": [
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Volume of molasses released during the 1919 Great Molasses Flood?",
+            "Back": "2.3 million U.S. gallons (8,700 cubic meters)"
+          },
+          "tags": ["molasses", "boston"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Roughly how many people compulsively danced for weeks during the Dancing Plague of 1518?",
+            "Back": "Somewhere between 50 and 400 people"
+          },
+          "tags": ["plagues"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "How many frozen pizzas were destroyed during the Great Michigan Pizza Funeral?",
+            "Back": "29,188 cheese-and-mushroom pizzas"
+          },
+          "tags": ["pizza", "michigan"]
+        }
+      ]
+    }
+  </script>
 
 
   <div class="testimonials">
@@ -504,6 +624,27 @@
       localStorage.setItem("theme", theme);
       root.classList.toggle("dark", theme === "dark");
       syncDemoTheme();
+    });
+
+    // --- Draggable "Sample deck.json": drag it into the embedded app to
+    // import the deck. HTML5 drag data can't carry a real File, so we stash the
+    // deck JSON under a custom type the app's drop handler reads (see
+    // file-drop-zone.tsx: DECK_DRAG_TYPE). The demo is same-origin, so the drag
+    // crosses into the iframe and the app runs its normal import flow. ---
+    const DECK_DRAG_TYPE = "application/x-ankitron-deck";
+    const desktopFile = document.getElementById("desktop-file");
+    // The <script> payload is pretty-printed for readability; compact it once.
+    const sampleDeck = JSON.stringify(
+      JSON.parse(document.getElementById("sample-deck").textContent),
+    );
+    desktopFile.addEventListener("dragstart", (e) => {
+      e.dataTransfer.effectAllowed = "copy";
+      e.dataTransfer.setData(DECK_DRAG_TYPE, sampleDeck);
+      e.dataTransfer.setData("text/plain", sampleDeck); // graceful fallback
+      desktopFile.classList.add("dragging");
+    });
+    desktopFile.addEventListener("dragend", () => {
+      desktopFile.classList.remove("dragging");
     });
   </script>
 </body>
