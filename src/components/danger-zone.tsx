@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { canDeleteDeck } from "@/lib/deck";
 
 interface DangerZoneProps {
   deckName: string;
@@ -15,6 +16,9 @@ export function DangerZone({ deckName }: DangerZoneProps) {
   // opens; default to 0 until then.
   const [noteCount, setNoteCount] = useState(0);
   const [subdeckCount, setSubdeckCount] = useState(0);
+  // Until the counts load we don't know if an empty Default deck should disable
+  // deletion, so keep the button enabled rather than flickering it off.
+  const [countsLoaded, setCountsLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +36,7 @@ export function DangerZone({ deckName }: DangerZoneProps) {
         setSubdeckCount(
           allDecks.filter((d) => d.startsWith(deckName + "::")).length,
         );
+        setCountsLoaded(true);
       } catch {
         // Leave the counts at 0; the warning still conveys the deletion is final.
       }
@@ -42,16 +47,23 @@ export function DangerZone({ deckName }: DangerZoneProps) {
     };
   }, [deckName]);
 
+  // The Default deck can't be deleted, only emptied — so once it has no notes
+  // there's nothing left to do and the button is disabled.
+  const deleteDisabled = countsLoaded && !canDeleteDeck(deckName, noteCount);
+
   return (
     <>
       <section className="mt-16 border-t border-red-500/20 pt-6">
         <h2 className="mb-1 text-sm font-semibold text-red-500">Danger Zone</h2>
         <p className="mb-4 text-sm text-foreground/50">
-          Permanently delete this deck and all its notes from Anki.
+          {deleteDisabled
+            ? "The Default deck can’t be deleted and has no notes to remove."
+            : "Permanently delete this deck and all its notes from Anki."}
         </p>
         <button
           onClick={() => setShowConfirm(true)}
-          className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/5 transition-colors dark:border-red-500/30"
+          disabled={deleteDisabled}
+          className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/5 transition-colors dark:border-red-500/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           Delete Deck
         </button>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ankiFetch, fetchNoteCount } from "@/lib/anki-fetch";
-import { deckDeleteMessage, formatDeckPath } from "@/lib/deck";
+import { deckDeleteMessage, formatDeckPath, isDefaultDeck } from "@/lib/deck";
 
 interface DeleteDeckDialogProps {
   deckName: string;
@@ -50,12 +50,15 @@ export function DeleteDeckDialog({
     };
   }, [deckName, noteCount]);
 
+  const isDefault = isDefaultDeck(deckName);
   const count = noteCount ?? fetchedCount;
   // While the on-demand count is in flight, warn without asserting a number
   // rather than flashing a misleading "0 notes".
   const message =
     count === undefined
-      ? `Permanently delete “${formatDeckPath(deckName)}” and everything in it? This cannot be undone.`
+      ? isDefault
+        ? "The Default deck cannot be deleted, but this will permanently remove all of its notes. This action cannot be undone."
+        : `Permanently delete “${formatDeckPath(deckName)}” and everything in it? This cannot be undone.`
       : deckDeleteMessage(deckName, count, subdeckCount);
 
   async function handleDelete() {
@@ -71,8 +74,9 @@ export function DeleteDeckDialog({
 
   return (
     <ConfirmDialog
-      title="Delete Deck"
+      title={isDefault ? "Empty Default Deck" : "Delete Deck"}
       message={message}
+      confirmLabel={isDefault ? "Remove Notes" : "Delete"}
       onConfirm={handleDelete}
       onCancel={onCancel}
       loading={deleting}

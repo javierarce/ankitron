@@ -7,6 +7,7 @@ import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVerti
 import { ankiFetch } from "@/lib/anki-fetch";
 import {
   buildDeckTree,
+  canDeleteDeck,
   compareDeckPaths,
   deckLeaf,
   deckParent,
@@ -535,6 +536,7 @@ function TreeRows({
         <DeckRowMenu
           deck={node.fullName}
           canStudy={deckCanStudy(node.fullName, dueCounts, dueLoaded)}
+          canDelete={canDeleteDeck(node.fullName, noteCounts[node.fullName])}
           onAddCard={() => onAddCard(node.fullName)}
           onMove={() => onMove(node.fullName)}
           onExport={() => onExport(node.fullName)}
@@ -600,6 +602,7 @@ function SearchRow({
       <DeckRowMenu
         deck={deck}
         canStudy={canStudy}
+        canDelete={canDeleteDeck(deck, count)}
         onAddCard={onAddCard}
         onMove={onMove}
         onExport={onExport}
@@ -612,6 +615,7 @@ function SearchRow({
 function DeckRowMenu({
   deck,
   canStudy,
+  canDelete,
   onAddCard,
   onMove,
   onExport,
@@ -619,6 +623,7 @@ function DeckRowMenu({
 }: {
   deck: string;
   canStudy: boolean;
+  canDelete: boolean;
   onAddCard: () => void;
   onMove: () => void;
   onExport: () => void;
@@ -721,11 +726,15 @@ function DeckRowMenu({
               Settings
             </button>
             <button
+              disabled={!canDelete}
               onClick={() => {
                 setOpen(false);
                 onDelete();
               }}
-              className="w-full px-3 py-1.5 text-left text-sm text-red-500 transition-colors hover:bg-foreground/5"
+              title={
+                canDelete ? undefined : "The Default deck has no notes to remove"
+              }
+              className="w-full px-3 py-1.5 text-left text-sm text-red-500 transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:text-red-500/30 disabled:hover:bg-transparent"
             >
               Delete deck
             </button>
