@@ -143,6 +143,14 @@
       width: 100%;
       max-width: 64rem;
       margin: 0 auto;
+      /* Start hidden and fade the whole demo window in once the app has
+         loaded (see the load handler below) to simulate it booting up. */
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+
+    .demo.is-loaded {
+      opacity: 1;
     }
 
     .demo-frame {
@@ -472,7 +480,15 @@
         // Not yet loaded (or blocked) — it'll pick up the theme on its load.
       }
     };
-    demoFrame.addEventListener("load", syncDemoTheme);
+    // Fade the demo in once it's loaded, to simulate the app booting up.
+    // Fallback timer reveals it even if the load event never fires (e.g. the
+    // frame is blocked), so it can't get stuck invisible.
+    const revealDemo = () => demoFrame.closest(".demo").classList.add("is-loaded");
+    demoFrame.addEventListener("load", () => {
+      syncDemoTheme();
+      revealDemo();
+    });
+    setTimeout(revealDemo, 3000);
 
     // Flow the switch the other way too: changing the theme inside the demo
     // (its Settings) writes the same localStorage `theme`. Same-origin, so the
