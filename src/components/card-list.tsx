@@ -46,6 +46,16 @@ import { deckLeaf, formatDeckPath, isCardInDeck } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
+import { useToast } from "@/lib/toast-context";
+
+// The toast copy for a failed mutation. A real AnkiConnect failure is thrown
+// as an Error whose message is AnkiConnect's own explanation (anki-fetch.ts
+// throws `new Error(data.error)`) — surface it. Anything else (the Tauri
+// proxy rejects with a plain string like "AnkiConnect request failed: …" when
+// Anki itself is unreachable) is technical noise, so fall back to fixed copy.
+function failureMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
 
 /**
  * A segment's label, split into a dimmed parent path and the highlighted leaf,
@@ -251,6 +261,7 @@ export function CardList({
   initialSegments,
   onSegmentsChange,
 }: CardListProps) {
+  const toast = useToast();
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -370,8 +381,11 @@ export function CardList({
         await ankiFetch(op.action, { notes: op.noteIds, tags: op.tag });
       }
       refreshAfterChange();
-    } catch {
+    } catch (err) {
       // A failed undo just stays undone rather than retrying in a loop.
+      toast.error(
+        failureMessage(err, "Couldn't undo the tag change. Is Anki still running?"),
+      );
     }
   }
 
@@ -417,8 +431,11 @@ export function CardList({
       await ankiFetch("deleteNotes", { notes: [editSequenceCurrentId(editSeq)] });
       setSeqDeleteOpen(false);
       applyStep(editSequenceDeleted(editSeq));
-    } catch {
+    } catch (err) {
       setSeqDeleteOpen(false);
+      toast.error(
+        failureMessage(err, "Couldn't delete the note. Is Anki still running?"),
+      );
     } finally {
       setSeqDeleting(false);
     }
@@ -712,8 +729,15 @@ export function CardList({
             });
             onSuspendChange?.();
           })
-          .catch(() => {
-            // silently fail
+          .catch((err) => {
+            toast.error(
+              failureMessage(
+                err,
+                allSuspended
+                  ? "Couldn't unsuspend the notes. Is Anki still running?"
+                  : "Couldn't suspend the notes. Is Anki still running?",
+              ),
+            );
           });
         return;
       }
@@ -741,7 +765,7 @@ export function CardList({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasDialog, selectedIds, tagUndo, notes, suspended, onSuspendChange]);
+  }, [hasDialog, selectedIds, tagUndo, notes, suspended, onSuspendChange, toast]);
 
   // Scope to the active segments first; "All" (empty set) keeps every note. A
   // segment covers its whole subtree, so a chip for a parent deck (e.g.
@@ -795,8 +819,15 @@ export function CardList({
         return next;
       });
       onSuspendChange?.();
-    } catch {
-      // silently fail
+    } catch (err) {
+      toast.error(
+        failureMessage(
+          err,
+          isSuspended
+            ? "Couldn't unsuspend the note. Is Anki still running?"
+            : "Couldn't suspend the note. Is Anki still running?",
+        ),
+      );
     }
   }
 
@@ -809,8 +840,11 @@ export function CardList({
       // Close the editor too — it may have been the delete's entry point.
       setEditingNote(null);
       refreshAfterChange();
-    } catch {
+    } catch (err) {
       setDeletingNote(null);
+      toast.error(
+        failureMessage(err, "Couldn't delete the note. Is Anki still running?"),
+      );
     } finally {
       setDeleting(false);
     }
@@ -883,8 +917,15 @@ export function CardList({
         return next;
       });
       onSuspendChange?.();
-    } catch {
-      // silently fail
+    } catch (err) {
+      toast.error(
+        failureMessage(
+          err,
+          suspend
+            ? "Couldn't suspend the selected notes. Is Anki still running?"
+            : "Couldn't unsuspend the selected notes. Is Anki still running?",
+        ),
+      );
     }
   }
 
@@ -898,8 +939,14 @@ export function CardList({
       setBulkDeleteOpen(false);
       clearSelection();
       refreshAfterChange();
-    } catch {
+    } catch (err) {
       setBulkDeleteOpen(false);
+      toast.error(
+        failureMessage(
+          err,
+          "Couldn't delete the selected notes. Is Anki still running?",
+        ),
+      );
     } finally {
       setBulkDeleting(false);
     }
@@ -952,8 +999,16 @@ export function CardList({
         return next;
       });
       onCardsMoved?.();
-    } catch {
-      // Leave the list untouched if the move fails.
+    } catch (err) {
+      // Leave the list untouched if the move fails — just say so.
+      toast.error(
+        failureMessage(
+          err,
+          toMove.length === 1
+            ? "Couldn't move the note. Is Anki still running?"
+            : "Couldn't move the notes. Is Anki still running?",
+        ),
+      );
     }
   }
 

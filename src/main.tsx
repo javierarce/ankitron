@@ -10,24 +10,27 @@ import { StudyPage } from "./pages/study";
 import { SettingsPage } from "./pages/settings";
 import { ThemeProvider } from "./lib/theme";
 import { UpdateProvider } from "./components/update-provider";
+import { ToastProvider } from "./components/toast-provider";
 import "./app/globals.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <UpdateProvider>
-        <BrowserRouter basename={import.meta.env.BASE_URL}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<HomePage />} />
-              <Route path="decks" element={<DecksPage />} />
-              <Route path="decks/:deckName" element={<DeckDetailPage />} />
-              <Route path="decks/:deckName/settings" element={<DeckSettingsPage />} />
-              <Route path="decks/:deckName/study" element={<StudyPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <ToastProvider>
+          <BrowserRouter basename={import.meta.env.BASE_URL}>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route index element={<HomePage />} />
+                <Route path="decks" element={<DecksPage />} />
+                <Route path="decks/:deckName" element={<DeckDetailPage />} />
+                <Route path="decks/:deckName/settings" element={<DeckSettingsPage />} />
+                <Route path="decks/:deckName/study" element={<StudyPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </ToastProvider>
       </UpdateProvider>
     </ThemeProvider>
   </StrictMode>,

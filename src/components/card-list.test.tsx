@@ -32,6 +32,8 @@ vi.mock("./card-form", () => ({
 }));
 
 import { CardList } from "./card-list";
+import { ToastProvider } from "./toast-provider";
+import { ankiFetch } from "@/lib/anki-fetch";
 
 const baseProps = {
   deckName: "Spanish",
@@ -170,5 +172,48 @@ describe("CardList count label", () => {
     );
 
     expect(screen.getByText("2 notes")).toBeTruthy();
+  });
+});
+
+describe("CardList delete failure", () => {
+  const notes = [
+    {
+      noteId: 1,
+      modelName: "Basic",
+      tags: [],
+      cards: [11],
+      fields: { Front: { value: "Hola", order: 0 }, Back: { value: "Hello", order: 1 } },
+    },
+  ] as Note[];
+
+  it("shows an error toast when the delete call fails", async () => {
+    const user = userEvent.setup();
+    const onChanged = vi.fn();
+    // The Tauri proxy rejects with a plain string when Anki is unreachable —
+    // not an Error — so the toast should fall back to the fixed copy.
+    vi.mocked(ankiFetch).mockRejectedValueOnce("AnkiConnect request failed");
+
+    renderInRouter(
+      <ToastProvider>
+        <CardList
+          deckName="Spanish"
+          notes={notes}
+          showAddForm={false}
+          onShowAddForm={vi.fn()}
+          onChanged={onChanged}
+        />
+      </ToastProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByText("Delete"));
+    // The confirm dialog's destructive button.
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(
+      "Couldn't delete the note. Is Anki still running?",
+    );
+    expect(onChanged).not.toHaveBeenCalled();
   });
 });
