@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { subdecksOf } from "@/lib/deck";
 
 interface DangerZoneProps {
   deckName: string;
@@ -29,9 +30,7 @@ export function DangerZone({ deckName }: DangerZoneProps) {
         ]);
         if (cancelled) return;
         setNoteCount(noteIds.length);
-        setSubdeckCount(
-          allDecks.filter((d) => d.startsWith(deckName + "::")).length,
-        );
+        setSubdeckCount(subdecksOf(allDecks, deckName).length);
       } catch {
         // Leave the counts at 0; the warning still conveys the deletion is final.
       }

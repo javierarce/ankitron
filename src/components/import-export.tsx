@@ -1,11 +1,6 @@
 import { useRef, useState } from "react";
 import { Note } from "@/lib/types";
-import { ankiFetch } from "@/lib/anki-fetch";
-import {
-  buildExport,
-  downloadDeckJson,
-  fetchCardDecksByNoteId,
-} from "@/lib/import-export";
+import { exportDeckToJson } from "@/lib/import-export";
 import { useDeckImport } from "@/hooks/use-deck-import";
 import { ImportResultModal } from "./import-result-modal";
 
@@ -24,9 +19,7 @@ export function ImportExport({ deckName, notes }: ImportExportProps) {
   async function handleExport() {
     setExportError(null);
     try {
-      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
-      const payload = buildExport(deckName, notes, undefined, cardDecksByNoteId);
-      await downloadDeckJson(payload, deckName);
+      await exportDeckToJson(deckName, notes);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed.");
     }

@@ -11,17 +11,15 @@ import {
   deckLeaf,
   deckParent,
   formatDeckPath,
+  isCardInDeck,
   renameDeck,
+  subdecksOf,
   type DeckNode,
 } from "@/lib/deck";
 import { recordDeckRedirect } from "@/lib/deck-redirects";
 import { foldText } from "@/lib/fold-text";
-import {
-  buildExport,
-  downloadDeckJson,
-  fetchCardDecksByNoteId,
-} from "@/lib/import-export";
-import type { DueCounts, Note } from "@/lib/types";
+import { exportDeckToJson } from "@/lib/import-export";
+import type { DueCounts } from "@/lib/types";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { useMenuPlacement } from "@/hooks/use-menu-placement";
@@ -41,10 +39,7 @@ function deckCanStudy(
 ): boolean {
   if (!dueLoaded) return true;
   for (const [name, due] of Object.entries(dueCounts)) {
-    if (
-      (name === deck || name.startsWith(deck + "::")) &&
-      due.new + due.learn + due.review > 0
-    ) {
+    if (isCardInDeck(name, deck) && due.new + due.learn + due.review > 0) {
       return true;
     }
   }
@@ -239,7 +234,7 @@ export function AllDecksList({
   // may be undefined; pass it through and let the dialog count on demand rather
   // than warning about "0 notes".
   const deletingSubdeckCount = deletingDeck
-    ? decks.filter((d) => d.startsWith(deletingDeck + "::")).length
+    ? subdecksOf(decks, deletingDeck).length
     : 0;
   const deletingNoteTotal = deletingDeck ? noteCounts[deletingDeck] : undefined;
 
@@ -268,16 +263,7 @@ export function AllDecksList({
   async function handleExport(deck: string) {
     setExportError(null);
     try {
-      const noteIds = await ankiFetch<number[]>("findNotes", {
-        query: `deck:"${deck}"`,
-      });
-      const notes =
-        noteIds.length === 0
-          ? []
-          : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
-      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
-      const payload = buildExport(deck, notes, undefined, cardDecksByNoteId);
-      await downloadDeckJson(payload, deck);
+      await exportDeckToJson(deck);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed.");
     }

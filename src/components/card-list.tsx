@@ -40,8 +40,10 @@ import {
   type EditSequence,
   type SequenceStep,
 } from "@/lib/edit-sequence";
-import { stripSoundTags } from "@/lib/audio";
+import { stripCloze } from "@/lib/cloze";
+import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
+import { moveNotesToDeck } from "@/lib/notes";
 import { deckLeaf, formatDeckPath, isCardInDeck } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
 import { useVimNav } from "@/hooks/use-vim-nav";
@@ -76,37 +78,6 @@ function EmptyState({ heading, hint }: { heading: string; hint: string }) {
       <p className="text-sm text-foreground/40">{hint}</p>
     </div>
   );
-}
-
-function decodeHtml(html: string): string {
-  if (typeof document === "undefined") {
-    return html
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&nbsp;/g, " ");
-  }
-  const txt = document.createElement("textarea");
-  txt.innerHTML = html;
-  return txt.value;
-}
-
-function stripHtml(html: string): string {
-  return decodeHtml(stripSoundTags(html).replace(/<[^>]*>/g, "")).trim();
-}
-
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max) + "\u2026";
-}
-
-function stripCloze(text: string): string {
-  return text.replace(/\{\{c\d+::(.*?)\}\}/g, (_, inner: string) => {
-    const hintIdx = inner.lastIndexOf("::");
-    return hintIdx === -1 ? inner : inner.slice(0, hintIdx);
-  });
 }
 
 // A note's searchable text: its field values (HTML and cloze stripped) plus its
@@ -1083,21 +1054,11 @@ export function CardList({
 
   // Move the given notes into a target (sub)deck, updating the list in place
   // rather than reloading. Notes already in the target are skipped.
-  async function moveNotesToDeck(noteList: Note[], target: string) {
+  async function handleMoveToDeck(noteList: Note[], target: string) {
     const toMove = noteList.filter((n) => (decks[n.noteId] ?? deckName) !== target);
     if (toMove.length === 0) return;
-    let cardIds = toMove.flatMap((n) => n.cards ?? []);
-    if (cardIds.length === 0) {
-      cardIds = await ankiFetch<number[]>("findCards", {
-        query: toMove.map((n) => `nid:${n.noteId}`).join(" OR "),
-      });
-    }
-    if (cardIds.length === 0) return;
     try {
-      await ankiFetch("changeDeck", { cards: cardIds, deck: target });
-      // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an active
-      // reviewer doesn't keep serving the moved card.
-      await ankiFetch("reloadCollection").catch(() => {});
+      await moveNotesToDeck(toMove, target);
       setDecks((prev) => {
         const next = { ...prev };
         for (const n of toMove) next[n.noteId] = target;
@@ -1176,7 +1137,7 @@ export function CardList({
     setDragOverDeck(null);
     if (ids.length === 0) return;
     const idSet = new Set(ids);
-    void moveNotesToDeck(
+    void handleMoveToDeck(
       notes.filter((n) => idSet.has(n.noteId)),
       target,
     );

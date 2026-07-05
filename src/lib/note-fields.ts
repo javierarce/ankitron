@@ -38,11 +38,13 @@ export function orderedFieldNames(
 /**
  * A note is "cloze" if its model is one of Anki's cloze types, or it has the
  * cloze-defining `Text` field. These notes render Text/Back Extra rather than
- * a front/back pair.
+ * a front/back pair. Only field *names* matter here, so this accepts both a
+ * live Note and an ExportedNote (whose fields are flat strings).
  */
-export function isClozeNote(
-  note: Pick<Note, "modelName" | "fields">,
-): boolean {
+export function isClozeNote(note: {
+  modelName: string;
+  fields: Record<string, unknown>;
+}): boolean {
   return isClozeModelName(note.modelName) || "Text" in note.fields;
 }
 

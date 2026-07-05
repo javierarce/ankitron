@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { ankiFetch, fetchAllDueCounts } from "@/lib/anki-fetch";
-import { compareDeckPaths, coveringDecks, deckLeaf, isCardInDeck } from "@/lib/deck";
+import {
+  compareDeckPaths,
+  coveringDecks,
+  deckLeaf,
+  isCardInDeck,
+  subdecksOf,
+} from "@/lib/deck";
 import { resolveDeckRedirect } from "@/lib/deck-redirects";
 import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
@@ -20,9 +26,7 @@ async function fetchDeckData(deckName: string) {
   // return [] and render a phantom empty deck under the old name.
   const exists = allDeckNames.includes(deckName);
 
-  const subdecks = allDeckNames
-    .filter((n) => n.startsWith(deckName + "::"))
-    .sort(compareDeckPaths);
+  const subdecks = subdecksOf(allDeckNames, deckName).sort(compareDeckPaths);
 
   const notes =
     noteIds.length === 0
@@ -97,10 +101,7 @@ export function DeckDetailPage() {
   const refreshDue = useCallback(async () => {
     try {
       const allNames = await ankiFetch<string[]>("deckNames");
-      const segments = [
-        deckName,
-        ...allNames.filter((n) => n.startsWith(deckName + "::")),
-      ];
+      const segments = [deckName, ...subdecksOf(allNames, deckName)];
       const counts = await fetchAllDueCounts(segments);
       setDueBySegment(counts);
       setDue(counts[deckName] ?? { new: 0, learn: 0, review: 0 });

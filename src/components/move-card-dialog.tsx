@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
+import { moveNotesToDeck } from "@/lib/notes";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { DeckPicker } from "./deck-picker";
 
@@ -59,26 +60,10 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
     setMoving(true);
     setError(null);
     try {
-      let cardIds = notes.flatMap((n) => n.cards ?? []);
-      if (cardIds.length === 0) {
-        cardIds = await ankiFetch<number[]>("findCards", {
-          query: notes.map((n) => `nid:${n.noteId}`).join(" OR "),
-        });
-      }
-      if (cardIds.length === 0) {
-        throw new Error(
-          count === 1
-            ? "Could not find the note to move."
-            : "Could not find the notes to move."
-        );
-      }
       if (target.isNew) {
         await ankiFetch("createDeck", { deck: target.deck });
       }
-      await ankiFetch("changeDeck", { cards: cardIds, deck: target.deck });
-      // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
-      // active reviewer doesn't keep serving the moved card.
-      await ankiFetch("reloadCollection").catch(() => {});
+      await moveNotesToDeck(notes, target.deck);
       if (onMoved) {
         onMoved();
       } else {

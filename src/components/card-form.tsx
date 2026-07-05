@@ -6,8 +6,10 @@ import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { CLOZE_OPEN_RE, hasClozePattern } from "@/lib/cloze";
 import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
-import { basicFieldKeys, orderedFieldNames } from "@/lib/note-fields";
+import { basicFieldKeys, isClozeNote, orderedFieldNames } from "@/lib/note-fields";
+import { moveNotesToDeck } from "@/lib/notes";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { useAllTags } from "@/hooks/use-all-tags";
@@ -68,19 +70,6 @@ interface CardFormProps {
    * form ignores Escape and backdrop clicks and lets that dialog handle them.
    */
   blocked?: boolean;
-}
-
-function isClozeNote(note: Note): boolean {
-  return (
-    note.modelName === "Cloze" ||
-    note.modelName === CLOZE_TYPED_MODEL ||
-    "Text" in note.fields
-  );
-}
-
-function hasClozePattern(html: string): boolean {
-  const text = html.replace(/<[^>]*>/g, "");
-  return /\{\{c\d+::.*?\}\}/.test(text);
 }
 
 export function CardForm({
@@ -334,18 +323,7 @@ export function CardForm({
           await ankiFetch("updateNote", { note: payload });
         }
         if (deckChanged) {
-          let cardIds = note.cards ?? [];
-          if (cardIds.length === 0) {
-            cardIds = await ankiFetch<number[]>("findCards", {
-              query: `nid:${note.noteId}`,
-            });
-          }
-          if (cardIds.length > 0) {
-            await ankiFetch("changeDeck", { cards: cardIds, deck: destDeck });
-            // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
-            // active reviewer doesn't keep serving the moved card.
-            await ankiFetch("reloadCollection").catch(() => {});
-          }
+          await moveNotesToDeck([note], destDeck);
         }
         if (fieldsChanged || tagsChanged || deckChanged) {
           const updatedFields = { ...note.fields };
@@ -551,7 +529,7 @@ export function CardForm({
             customFields.map((f) => {
               const isClozeField =
                 f.name === "Text" ||
-                /\{\{c\d+::/.test(customValues[f.name] ?? "");
+                CLOZE_OPEN_RE.test(customValues[f.name] ?? "");
               return (
                 <div key={f.name}>
                   <label className="mb-1.5 block text-sm font-medium text-foreground/70">

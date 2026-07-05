@@ -16,6 +16,7 @@
 // ./decks — see ./fixtures, which loads and validates them. This module is just
 // the simulator logic.
 
+import { isCardInDeck } from "../deck";
 import {
   addDemoNote,
   DECKS,
@@ -40,11 +41,8 @@ const deckId = (name: string) => DECKS.find((d) => d.name === name)?.id ?? 0;
 // Helpers over the model
 // ---------------------------------------------------------------------------
 
-const inSubtree = (deck: string, root: string) =>
-  deck === root || deck.startsWith(root + "::");
-
 const notesInSubtree = (root: string) =>
-  NOTES.filter((n) => inSubtree(n.deckName, root));
+  NOTES.filter((n) => isCardInDeck(n.deckName, root));
 
 const findNote = (noteId: number) => NOTES.find((n) => n.noteId === noteId);
 
@@ -340,7 +338,7 @@ async function handleAction(
       );
       // If a session is open on a deck that contains the new card, let it join
       // the queue so "Add note" mid-study behaves like the real app.
-      if (review.deck && inSubtree(n.deckName, review.deck)) {
+      if (review.deck && isCardInDeck(n.deckName, review.deck)) {
         review.queue.push(cardIdOf(n.noteId));
       }
       return n.noteId;
@@ -434,7 +432,7 @@ async function handleAction(
       for (const name of decks) {
         if (cardsToo) {
           for (let i = NOTES.length - 1; i >= 0; i--) {
-            if (inSubtree(NOTES[i].deckName, name)) NOTES.splice(i, 1);
+            if (isCardInDeck(NOTES[i].deckName, name)) NOTES.splice(i, 1);
           }
         }
         removeDeckSubtree(name);

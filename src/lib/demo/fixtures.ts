@@ -8,7 +8,7 @@
 // the study queue contains. To change the demo's content, edit those JSON files
 // — counts, study queues, search, and tags all derive from them here.
 
-import { compareDeckPaths } from "@/lib/deck";
+import { compareDeckPaths, isCardInDeck } from "@/lib/deck";
 import { isExportedDeck } from "@/lib/import-export";
 import demoConfig from "./demo-config.json";
 
@@ -127,7 +127,7 @@ export function ensureDeck(path: string): void {
 export function removeDeckSubtree(name: string): void {
   for (let i = DECKS.length - 1; i >= 0; i--) {
     const { name: deck } = DECKS[i];
-    if (deck === name || deck.startsWith(name + "::")) {
+    if (isCardInDeck(deck, name)) {
       DECKS.splice(i, 1);
       deckIdByName.delete(deck);
     }

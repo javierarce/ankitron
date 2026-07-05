@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ankiFetch } from "@/lib/anki-fetch";
-import { Note } from "@/lib/types";
-import {
-  buildExport,
-  downloadDeckJson,
-  fetchCardDecksByNoteId,
-} from "@/lib/import-export";
+import { exportDeckToJson } from "@/lib/import-export";
 import { useDeckImport } from "@/hooks/use-deck-import";
 import { DeckPicker } from "./deck-picker";
 import { ImportResultModal } from "./import-result-modal";
@@ -108,16 +102,7 @@ function ExportPickerDialog({
     if (!selected) return;
     setWorking(true);
     try {
-      const noteIds = await ankiFetch<number[]>("findNotes", {
-        query: `deck:"${selected}"`,
-      });
-      const notes =
-        noteIds.length === 0
-          ? []
-          : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
-      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
-      const payload = buildExport(selected, notes, undefined, cardDecksByNoteId);
-      await downloadDeckJson(payload, selected);
+      await exportDeckToJson(selected);
       onDone();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Export failed.");
