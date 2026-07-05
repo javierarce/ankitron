@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
+import { CenteredSpinner } from "@/components/spinner";
 import { ankiFetch, fetchAllDueCounts } from "@/lib/anki-fetch";
 import {
   compareDeckPaths,
@@ -176,11 +177,7 @@ export function DeckDetailPage() {
   }, [deckName, applyData, refreshDue, navigate]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[calc(100dvh-10rem)] items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-      </div>
-    );
+    return <CenteredSpinner />;
   }
 
   const totalDue = due.new + due.learn + due.review;
