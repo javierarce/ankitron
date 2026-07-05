@@ -1,9 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Minus } from "@phosphor-icons/react/dist/ssr/Minus";
-import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { ankiFetch } from "@/lib/anki-fetch";
 import {
   buildDeckTree,
@@ -22,7 +20,7 @@ import { exportDeckToJson } from "@/lib/import-export";
 import type { DueCounts } from "@/lib/types";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
-import { useMenuPlacement } from "@/hooks/use-menu-placement";
+import { ActionsMenu } from "./actions-menu";
 import { CardForm } from "./card-form";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { MoveDeckDialog } from "./move-deck-dialog";
@@ -611,113 +609,28 @@ function DeckRowMenu({
   onDelete: () => void;
 }) {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // Render in a portal (escaping the table's overflow-hidden clip) at flip-aware
-  // fixed coordinates, so a menu near the bottom of the list opens upward
-  // instead of being cut off.
-  const style = useMenuPlacement(open, btnRef, menuRef);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
-      setOpen(false);
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("mousedown", handleClick);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
-
   const encoded = encodeURIComponent(deck);
 
   return (
-    <>
-      <button
-        ref={btnRef}
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Deck actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="shrink-0 rounded-md p-1 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60"
-      >
-        <DotsThreeVertical size={22} weight="bold" />
-      </button>
-      {open &&
-        createPortal(
-          <div
-            ref={menuRef}
-            role="menu"
-            style={style}
-            className="z-50 flex w-max min-w-[160px] flex-col overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-lg"
-          >
-            <button
-              disabled={!canStudy}
-              onClick={() => {
-                setOpen(false);
-                navigate(`/decks/${encoded}/study`);
-              }}
-              title={canStudy ? undefined : "Nothing to study in this deck"}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:text-foreground/30 disabled:hover:bg-transparent"
-            >
-              Study
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onAddCard();
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Add a note
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onMove();
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Move
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onExport();
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Export
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                navigate(`/decks/${encoded}/settings`);
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Settings
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onDelete();
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-red-500 transition-colors hover:bg-foreground/5"
-            >
-              Delete deck
-            </button>
-          </div>,
-          document.body,
-        )}
-    </>
+    <ActionsMenu
+      label="Deck actions"
+      menuClassName="min-w-[160px]"
+      items={[
+        {
+          label: "Study",
+          disabled: !canStudy,
+          title: canStudy ? undefined : "Nothing to study in this deck",
+          onSelect: () => navigate(`/decks/${encoded}/study`),
+        },
+        { label: "Add a note", onSelect: onAddCard },
+        { label: "Move", onSelect: onMove },
+        { label: "Export", onSelect: onExport },
+        {
+          label: "Settings",
+          onSelect: () => navigate(`/decks/${encoded}/settings`),
+        },
+        { label: "Delete deck", danger: true, onSelect: onDelete },
+      ]}
+    />
   );
 }

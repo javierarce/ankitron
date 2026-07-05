@@ -5,8 +5,6 @@ import {
   type MouseEvent as ReactMouseEvent,
   type DragEvent as ReactDragEvent,
 } from "react";
-import { createPortal } from "react-dom";
-import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { Check } from "@phosphor-icons/react/dist/ssr/Check";
 import { Checks } from "@phosphor-icons/react/dist/ssr/Checks";
 import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
@@ -24,7 +22,7 @@ import {
   hasOperators,
   type SuggestionSources,
 } from "@/lib/search-query";
-import { useMenuPlacement } from "@/hooks/use-menu-placement";
+import { ActionsMenu, Kbd } from "./actions-menu";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { BulkTagDialog, type TagChange } from "./bulk-tag-dialog";
@@ -204,123 +202,6 @@ function sortNotes(notes: Note[], mode: SortMode): Note[] {
     case "modified-desc":
       return sorted.sort((a, b) => modifiedAt(b) - modifiedAt(a));
   }
-}
-
-// A muted keyboard hint shown next to an action's label, so the single-key
-// shortcuts (e/s/t) are discoverable from the controls that trigger them.
-function Kbd({ children }: { children: string }) {
-  return (
-    // The hint font is smaller than the label it sits beside; flex centering
-    // lands its tight line box a hair high, so nudge it down a pixel to line up
-    // optically with the text baseline.
-    <kbd className="relative top-px font-sans text-[11px] leading-none text-foreground/30">
-      {children}
-    </kbd>
-  );
-}
-
-function CardMenu({
-  onEdit,
-  isSuspended,
-  onToggleSuspend,
-  onMove,
-  onDelete,
-}: {
-  onEdit: () => void;
-  isSuspended: boolean;
-  onToggleSuspend: () => void;
-  onMove: () => void;
-  onDelete: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // Portal + flip-aware placement so a row near the bottom of the (scrollable)
-  // note list opens its menu upward instead of off-screen.
-  const style = useMenuPlacement(open, btnRef, menuRef);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
-      setOpen(false);
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("mousedown", handleClick);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Note actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="shrink-0 rounded-md p-1 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60"
-      >
-        <DotsThreeVertical size={22} weight="bold" />
-      </button>
-      {open &&
-        createPortal(
-          <div
-            ref={menuRef}
-            role="menu"
-            style={style}
-            className="z-50 flex w-max flex-col overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-lg"
-          >
-          <button
-            onClick={() => {
-              setOpen(false);
-              onEdit();
-            }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
-          >
-            <span>Edit</span>
-            <Kbd>E</Kbd>
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onToggleSuspend();
-            }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
-          >
-            <span>{isSuspended ? "Unsuspend" : "Suspend"}</span>
-            <Kbd>S</Kbd>
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onMove();
-            }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
-          >
-            <span>Move to deck&hellip;</span>
-            <Kbd>M</Kbd>
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-            className="w-full px-3 py-1.5 text-left text-sm text-red-500 hover:bg-foreground/5 transition-colors"
-          >
-            Delete
-          </button>
-          </div>,
-          document.body,
-        )}
-    </>
-  );
 }
 
 interface CardListProps {
@@ -1444,12 +1325,30 @@ export function CardList({
                   )}
                 </div>
                 <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <CardMenu
-                    onEdit={() => setEditingNote(note)}
-                    isSuspended={noteSuspended}
-                    onToggleSuspend={() => handleToggleSuspend(note)}
-                    onMove={() => setMovingNote(note)}
-                    onDelete={() => setDeletingNote(note)}
+                  <ActionsMenu
+                    label="Note actions"
+                    items={[
+                      {
+                        label: "Edit",
+                        kbd: "E",
+                        onSelect: () => setEditingNote(note),
+                      },
+                      {
+                        label: noteSuspended ? "Unsuspend" : "Suspend",
+                        kbd: "S",
+                        onSelect: () => handleToggleSuspend(note),
+                      },
+                      {
+                        label: "Move to deck…",
+                        kbd: "M",
+                        onSelect: () => setMovingNote(note),
+                      },
+                      {
+                        label: "Delete",
+                        danger: true,
+                        onSelect: () => setDeletingNote(note),
+                      },
+                    ]}
                   />
                 </div>
               </div>
