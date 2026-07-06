@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { deckLeaf, deckParent, isCardInDeck, joinDeck } from "@/lib/deck";
+import {
+  deckLeaf,
+  deckParent,
+  isCardInDeck,
+  isDefaultDeck,
+  joinDeck,
+} from "@/lib/deck";
 import { useDeckNames } from "@/hooks/use-deck-names";
 import { DeckPicker } from "./deck-picker";
 import { ModalDialog } from "./modal-dialog";
@@ -33,7 +39,7 @@ export function MoveDeckDialog({
   function disableDeck(deck: string): string | null {
     if (deck === deckName) return "This is the deck being moved";
     if (isCardInDeck(deck, deckName)) return "A deck can't be moved inside itself";
-    if (deck === "Default") return "The Default deck can't have subdecks";
+    if (isDefaultDeck(deck)) return "The Default deck can't have subdecks";
     return null;
   }
 

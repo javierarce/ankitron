@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   buildDeckTree,
+  canDeleteDeck,
   compareDeckPaths,
   coveringDecks,
   deckDeleteMessage,
@@ -55,6 +56,33 @@ describe("deck path helpers", () => {
     expect(deckDeleteMessage("Spanish", 0, 3)).toBe(
       "Delete “Spanish” and its 3 subdecks? This permanently removes 0 notes and cannot be undone.",
     );
+  });
+
+  it("warns that the Default deck is only emptied, not deleted", () => {
+    expect(deckDeleteMessage("Default", 5, 0)).toBe(
+      "The Default deck cannot be deleted, but this will permanently remove all 5 of its notes. This action cannot be undone.",
+    );
+    // Singular note reads naturally rather than "all 1 of its notes".
+    expect(deckDeleteMessage("Default", 1, 0)).toBe(
+      "The Default deck cannot be deleted, but this will permanently remove its 1 note. This action cannot be undone.",
+    );
+    // Zero notes reads naturally rather than "all 0 of its notes" — reachable if
+    // the dialog opens before counts load.
+    expect(deckDeleteMessage("Default", 0, 0)).toBe(
+      "The Default deck cannot be deleted, and it has no notes to remove.",
+    );
+  });
+
+  it("disables delete only for an empty Default deck", () => {
+    // Default deck with notes: emptying it is still a real action.
+    expect(canDeleteDeck("Default", 3)).toBe(true);
+    // Empty Default deck: nothing to delete or empty, so disable.
+    expect(canDeleteDeck("Default", 0)).toBe(false);
+    // Count not loaded yet: keep it enabled rather than flicker off.
+    expect(canDeleteDeck("Default", undefined)).toBe(true);
+    // Ordinary decks are always deletable, empty or not.
+    expect(canDeleteDeck("Spanish", 0)).toBe(true);
+    expect(canDeleteDeck("Spanish", 5)).toBe(true);
   });
 
   it("reports nesting depth", () => {

@@ -6,6 +6,21 @@ import { SyncContext, type SyncStatus } from "@/lib/sync-context";
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+// Set the first time a sync succeeds on this install. We use it to tell a
+// configured user (whose sync genuinely failed and should see it) apart from a
+// brand-new one who never set up AnkiWeb — the launch sync always fails for the
+// latter, and a red "Sync failed" pill on an untouched app is alarming and
+// unactionable. Persisted so the distinction survives restarts.
+const SYNCED_BEFORE_KEY = "ankitron.hasSyncedBefore";
+
+function readSyncedBefore(): boolean {
+  try {
+    return localStorage.getItem(SYNCED_BEFORE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Owns the launch sync and exposes its status. The sync runs in the background
  * — the app is already interactive — instead of blocking startup behind a
@@ -18,6 +33,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [syncedAt, setSyncedAt] = useState(0);
   const [pageLoads, setPageLoads] = useState(0);
+  const [syncedBefore, setSyncedBefore] = useState(readSyncedBefore);
   const inFlight = useRef(false);
 
   const registerPageLoad = useCallback(() => {
@@ -38,6 +54,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       await ankiFetch("sync");
       setSyncedAt((n) => n + 1);
       setStatus("idle");
+      // Record that sync works here, so future failures are shown as real.
+      try {
+        localStorage.setItem(SYNCED_BEFORE_KEY, "1");
+      } catch {
+        // Best-effort — a blocked localStorage just means we re-suppress the
+        // error pill next launch, which is the safe direction.
+      }
+      setSyncedBefore(true);
     } catch (e) {
       // Sync failure is non-fatal — the app keeps working on local data. The
       // indicator surfaces the failure so it isn't silently swallowed.
@@ -62,7 +86,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       value={{ status, syncedAt, sync, pageLoading, registerPageLoad }}
     >
       {children}
-      <SyncIndicator status={status} pageLoading={pageLoading} onRetry={sync} />
+      <SyncIndicator
+        status={status}
+        pageLoading={pageLoading}
+        syncedBefore={syncedBefore}
+        onRetry={sync}
+      />
     </SyncContext.Provider>
   );
 }
@@ -70,10 +99,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 function SyncIndicator({
   status,
   pageLoading,
+  syncedBefore,
   onRetry,
 }: {
   status: SyncStatus;
   pageLoading: boolean;
+  syncedBefore: boolean;
   onRetry: () => void;
 }) {
   if (status === "idle") return null;
@@ -82,6 +113,11 @@ function SyncIndicator({
   // corner spinner on top of it. Failures still surface, since the page spinner
   // can't communicate a failed sync.
   if (status === "syncing" && pageLoading) return null;
+
+  // Suppress the failure pill until sync has worked at least once here: on a
+  // fresh, never-configured install the launch sync always fails, and a red
+  // alert the user can do nothing about just sours first impressions.
+  if (status === "error" && !syncedBefore) return null;
 
   if (status === "error") {
     return (

@@ -47,6 +47,25 @@ export function formatDeckPath(name: string): string {
   return name.split("::").join(" / ");
 }
 
+/** Anki's built-in deck. Special-cased by name (Anki has no isDefault flag). */
+export function isDefaultDeck(name: string): boolean {
+  return name === "Default";
+}
+
+/**
+ * Whether "delete" does anything for a deck. Anki never removes the Default deck
+ * itself — deleting it only clears its notes — so an empty Default deck has
+ * nothing to act on and the delete affordance should be disabled. A note count
+ * of undefined means "not loaded yet"; treat that as deletable to avoid
+ * flickering the control off before the count arrives.
+ */
+export function canDeleteDeck(
+  name: string,
+  noteCount: number | undefined,
+): boolean {
+  return !(isDefaultDeck(name) && noteCount === 0);
+}
+
 /**
  * The confirmation wording for deleting a deck. Centralised so every entry point
  * (the decks list, a deck's Danger Zone, …) warns with the same human-readable
@@ -57,11 +76,24 @@ export function deckDeleteMessage(
   noteCount: number,
   subdeckCount: number,
 ): string {
+  const notes = `${noteCount} ${noteCount === 1 ? "note" : "notes"}`;
+  // Anki can't delete the Default deck itself — it stays and is only emptied —
+  // so warn about the notes being removed rather than the deck being deleted.
+  if (isDefaultDeck(name)) {
+    // An empty Default deck has nothing to act on. The delete control is
+    // normally disabled in this state, but the counts can still be unloaded when
+    // the dialog opens, so word it sensibly rather than "all 0 of its notes".
+    if (noteCount === 0) {
+      return "The Default deck cannot be deleted, and it has no notes to remove.";
+    }
+    const removed =
+      noteCount === 1 ? "its 1 note" : `all ${noteCount} of its notes`;
+    return `The Default deck cannot be deleted, but this will permanently remove ${removed}. This action cannot be undone.`;
+  }
   const subdecks =
     subdeckCount > 0
       ? ` and its ${subdeckCount} ${subdeckCount === 1 ? "subdeck" : "subdecks"}`
       : "";
-  const notes = `${noteCount} ${noteCount === 1 ? "note" : "notes"}`;
   return `Delete “${formatDeckPath(name)}”${subdecks}? This permanently removes ${notes} and cannot be undone.`;
 }
 

@@ -44,7 +44,16 @@ beforeEach(() => {
   ankiFetch.mockClear();
   controls.resolve = undefined;
   controls.reject = undefined;
+  localStorage.clear();
 });
+
+// The failure pill is suppressed until a sync has succeeded on this install
+// (a fresh, never-configured install always fails its launch sync — see
+// SYNCED_BEFORE_KEY in sync-provider.tsx). Tests that assert the pill mark
+// the install as previously synced first.
+function markSyncedBefore() {
+  localStorage.setItem("ankitron.hasSyncedBefore", "1");
+}
 
 afterEach(cleanup);
 
@@ -73,6 +82,7 @@ describe("SyncProvider", () => {
 
   it("surfaces a failed sync and retries when the pill is clicked", async () => {
     const user = userEvent.setup();
+    markSyncedBefore();
     render(
       <SyncProvider>
         <Consumer />
@@ -112,6 +122,7 @@ describe("SyncProvider", () => {
   });
 
   it("still shows a sync failure even while a page is loading", async () => {
+    markSyncedBefore();
     render(
       <SyncProvider>
         <Consumer pageLoadAtFirst />
