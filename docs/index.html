@@ -130,8 +130,13 @@
       position: relative;
       display: flex;
       justify-content: center;
+      align-items: center;
       width: 100%;
       max-width: 1200px;
+      /* A stable height (window height + vertical padding) that doesn't depend
+         on the window, so minimizing doesn't collapse it and maximizing fills it
+         instead of stretching the whole desktop taller. */
+      min-height: calc(min(70vh, 660px) + 10.4rem);
       padding: 5.2rem 2rem;
       background: url("desktop.jpg") no-repeat center/cover;
       border-radius: 4px;
@@ -142,6 +147,8 @@
        repositionable and stay where you drop them (see the drag handlers). */
     .desk-icon {
       position: absolute;
+      /* Sit below the app window (see .demo z-index). */
+      z-index: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -161,9 +168,7 @@
       user-select: none;
       -webkit-user-select: none;
       touch-action: none;
-      transition: background-color 0.15s ease, transform 0.15s ease;
-      /* A gentle idle bob to draw the eye to it (stops once moved/dragged). */
-      animation: file-bob 2.4s ease-in-out infinite;
+      transition: background-color 0.15s ease;
     }
 
     .desk-icon:hover {
@@ -178,10 +183,6 @@
     .desk-icon.dragging,
     .desk-icon.moved {
       animation: none;
-    }
-
-    .desk-icon.dragging {
-      opacity: 0.35;
     }
 
     .desk-icon svg,
@@ -212,35 +213,36 @@
       bottom: 1rem;
     }
 
-    /* The minimized-app icon starts top-left; shown only while minimized. */
+    /* The minimized-app icon starts top-left; shown only while minimized. A
+       gentle bob hints that it's there to click (the deck file stays still). */
     .ankitron-file {
       left: 1.5rem;
       top: 1.5rem;
       display: none;
+      animation: file-bob 2.4s ease-in-out infinite;
     }
 
     .desktop.minimized .ankitron-file {
       display: flex;
     }
 
-    /* Hide the app window while minimized, but keep the desktop at roughly its
-       open height (window height + the desktop's vertical padding) so it doesn't
-       collapse to a thin strip when the window disappears. */
-    .desktop.minimized {
-      min-height: calc(min(70vh, 660px) + 10.4rem);
-    }
-
+    /* Hide the app window while minimized (the desktop keeps its height via the
+       .desktop min-height, so it doesn't collapse). */
     .desktop.minimized .demo {
       display: none;
     }
 
-    /* Maximize: grow the window to fill the desktop and pin the drag. */
+    /* Maximize: fill the desktop with the window (absolute inset) rather than
+       growing the frame, which would stretch the whole desktop taller. */
     .desktop.maximized .demo {
+      position: absolute;
+      inset: 1rem;
       max-width: none;
+      margin: 0;
     }
 
     .desktop.maximized .demo-frame {
-      height: min(82vh, 820px);
+      height: 100%;
     }
 
     .desktop.maximized .demo-titlebar {
@@ -253,10 +255,13 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .desktop-file { animation: none; }
+      .ankitron-file { animation: none; }
     }
 
     .demo {
+      position: relative;
+      /* Above the desktop icons so the window sits on top of the deck file. */
+      z-index: 2;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -639,7 +644,7 @@
     <!-- The minimized app: hidden until the window is closed/minimized, then it
       appears as a desktop icon. Click it to reopen the window; drag to move. -->
     <div class="desk-icon ankitron-file" id="ankitron-file" role="button" tabindex="0"
-      aria-label="Ankitron — open the app" title="Open Ankitron">
+      aria-label="Ankitron — double-click to open the app" title="Double-click to open">
       <img src="icon.png" alt="" />
       <span class="desk-icon-name">Ankitron</span>
     </div>
@@ -889,53 +894,84 @@
     const demo = document.querySelector(".demo");
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+    // Move an absolutely-placed desktop icon so the point grabbed at (gx, gy)
+    // sits under (clientX, clientY), clamped to the desktop.
+    function moveIcon(el, clientX, clientY, gx, gy) {
+      const desk = desktop.getBoundingClientRect();
+      el.style.left = clamp(clientX - desk.left - gx, 0, desk.width - el.offsetWidth) + "px";
+      el.style.top = clamp(clientY - desk.top - gy, 0, desk.height - el.offsetHeight) + "px";
+      el.style.right = "auto";
+      el.style.bottom = "auto";
+    }
+
     // --- Draggable "Shyamalan.json" deck file --------------------------------
     // Drag it into the embedded app to import. HTML5 drag data can't carry a
     // real File, so we stash the deck JSON under a custom type the app's drop
     // handler reads (file-drop-zone.tsx: DECK_DRAG_TYPE); the same-origin drag
-    // crosses into the iframe and the app runs its normal import flow. On
-    // release the file stays wherever it was dropped (a native drag would snap
-    // it back to its origin otherwise).
+    // crosses into the iframe and the app runs its normal import flow.
+    //
+    // A native drag normally moves a translucent "ghost" while the real element
+    // sits still until you drop — which feels sluggish. We suppress that ghost
+    // and move the element itself under the cursor on every dragover, so it
+    // glides like the window, then stays wherever it's dropped.
     const DECK_DRAG_TYPE = "application/x-ankitron-deck";
     const desktopFile = document.getElementById("desktop-file");
-    // The <script> payload is pretty-printed for readability; compact it once.
     const sampleDeck = JSON.stringify(
       JSON.parse(document.getElementById("sample-deck").textContent),
     );
-    // Native `dragend` coordinates are unreliable across browsers; track the
-    // last drag point over the page as a fallback.
-    let lastDragX = 0;
+    // A transparent 1x1 image to replace (hide) the native drag ghost.
+    const blankDragImg = new Image();
+    blankDragImg.src =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    let fileGrabX = 0;
+    let fileGrabY = 0;
+    let lastDragX = 0; // dragend coords are unreliable; fall back to these
     let lastDragY = 0;
-    document.addEventListener("dragover", (e) => {
-      lastDragX = e.clientX;
-      lastDragY = e.clientY;
-    });
+
     desktopFile.addEventListener("dragstart", (e) => {
       e.dataTransfer.effectAllowed = "copy";
       e.dataTransfer.setData(DECK_DRAG_TYPE, sampleDeck);
       e.dataTransfer.setData("text/plain", sampleDeck); // graceful fallback
-      desktopFile.classList.add("dragging");
+      try {
+        e.dataTransfer.setDragImage(blankDragImg, 0, 0);
+      } catch (err) {
+        // Some browsers reject a custom drag image — fall back to the default.
+      }
+      const r = desktopFile.getBoundingClientRect();
+      fileGrabX = e.clientX - r.left;
+      fileGrabY = e.clientY - r.top;
+      desktopFile.classList.add("dragging", "moved");
     });
+
+    // Follow the cursor live while the file is dragged over the page. Over the
+    // iframe the parent gets no drag events, so it just settles on dragend.
+    document.addEventListener("dragover", (e) => {
+      if (!desktopFile.classList.contains("dragging")) return;
+      lastDragX = e.clientX;
+      lastDragY = e.clientY;
+      moveIcon(desktopFile, e.clientX, e.clientY, fileGrabX, fileGrabY);
+    });
+
+    // Show a copy cursor (not "no-drop") while dragging over the desktop itself.
+    desktop.addEventListener("dragover", (e) => {
+      if (Array.from(e.dataTransfer.types).includes(DECK_DRAG_TYPE)) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }
+    });
+
     desktopFile.addEventListener("dragend", (e) => {
       desktopFile.classList.remove("dragging");
-      const x = e.clientX || lastDragX;
-      const y = e.clientY || lastDragY;
-      const desk = desktop.getBoundingClientRect();
-      const w = desktopFile.offsetWidth;
-      const h = desktopFile.offsetHeight;
-      // The drop point becomes the icon's new center, clamped to the desktop.
-      desktopFile.style.left = clamp(x - desk.left - w / 2, 0, desk.width - w) + "px";
-      desktopFile.style.top = clamp(y - desk.top - h / 2, 0, desk.height - h) + "px";
-      desktopFile.style.right = "auto";
-      desktopFile.style.bottom = "auto";
-      desktopFile.classList.add("moved");
+      moveIcon(desktopFile, e.clientX || lastDragX, e.clientY || lastDragY, fileGrabX, fileGrabY);
     });
 
     // --- Free pointer-drag for a desktop icon (used by the Ankitron icon) ----
-    // Tells a drag (reposition) from a tap (calls onTap). Not usable on the deck
-    // file, which relies on native HTML5 drag for the import.
-    function makeDraggable(el, onTap) {
+    // Distinguishes a drag (reposition) from a double-tap (calls onDoubleTap, to
+    // reopen the app). Not usable on the deck file, which relies on native HTML5
+    // drag for the import.
+    function makeDraggable(el, onDoubleTap) {
       let st = null;
+      let lastTap = 0;
       el.addEventListener("pointerdown", (e) => {
         if (e.button && e.button !== 0) return;
         const r = el.getBoundingClientRect();
@@ -948,20 +984,26 @@
           st.moved = true;
           el.classList.add("dragging");
         }
-        if (!st.moved) return;
-        const desk = desktop.getBoundingClientRect();
-        el.style.left = clamp(e.clientX - desk.left - st.gx, 0, desk.width - el.offsetWidth) + "px";
-        el.style.top = clamp(e.clientY - desk.top - st.gy, 0, desk.height - el.offsetHeight) + "px";
-        el.style.right = "auto";
-        el.style.bottom = "auto";
+        if (st.moved) moveIcon(el, e.clientX, e.clientY, st.gx, st.gy);
       });
-      const up = () => {
+      const up = (e) => {
         if (!st) return;
         const moved = st.moved;
         st = null;
         el.classList.remove("dragging");
-        if (moved) el.classList.add("moved");
-        else if (onTap) onTap();
+        if (moved) {
+          el.classList.add("moved");
+          lastTap = 0;
+          return;
+        }
+        // A tap: open only on a quick second tap (double-click to open).
+        const now = e.timeStamp || 0;
+        if (onDoubleTap && lastTap && now - lastTap < 350) {
+          lastTap = 0;
+          onDoubleTap();
+        } else {
+          lastTap = now;
+        }
       };
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
@@ -1020,8 +1062,8 @@
 
     // --- Window controls (the traffic lights) --------------------------------
     // Red/yellow close/minimize the window down to a desktop "Ankitron" icon;
-    // click that icon (or press it) to bring the window back. Green zooms the
-    // window to fill the desktop and back.
+    // double-click that icon (or focus + Enter) to bring the window back. Green
+    // zooms the window to fill the desktop and back.
     const minimize = () => desktop.classList.add("minimized");
     const restore = () => desktop.classList.remove("minimized");
     const toggleZoom = () => {
