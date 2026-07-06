@@ -3,7 +3,7 @@ import { useTheme, type Theme } from "@/lib/theme-context";
 import { useUpdate } from "@/components/update-context";
 import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
 import { isExperimentalEnabled, setExperimentalEnabled } from "@/lib/experimental";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { syncCollection } from "@/lib/anki-fetch";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -39,7 +39,7 @@ export function SettingsPage() {
     setSync("syncing");
     setSyncError("");
     try {
-      await ankiFetch("sync");
+      await syncCollection();
       setSync("ok");
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : String(e));

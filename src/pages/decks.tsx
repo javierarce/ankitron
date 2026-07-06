@@ -2,11 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AllDecksList } from "@/components/all-decks-list";
 import { CenteredSpinner } from "@/components/spinner";
 import { useSync } from "@/lib/sync-context";
-import {
-  ankiFetch,
-  fetchAllDueCounts,
-  fetchAllNoteCounts,
-} from "@/lib/anki-fetch";
+import { fetchAllDueCounts, fetchAllNoteCounts } from "@/lib/anki-fetch";
+import { fetchDeckNames } from "@/lib/decks";
 import type { DueCounts } from "@/lib/types";
 
 export function DecksPage() {
@@ -27,7 +24,7 @@ export function DecksPage() {
   // No spinner here (loading is already false), so it's fine to await counts.
   const reload = useCallback(async () => {
     try {
-      const deckNames = await ankiFetch<string[]>("deckNames");
+      const deckNames = await fetchDeckNames();
       setDecks(deckNames);
       setHasError(false);
       setNoteCounts(deckNames.length ? await fetchAllNoteCounts(deckNames) : {});
@@ -53,7 +50,7 @@ export function DecksPage() {
     let cancelled = false;
     async function load() {
       try {
-        const deckNames = await ankiFetch<string[]>("deckNames");
+        const deckNames = await fetchDeckNames();
         if (cancelled) return;
         setDecks(deckNames);
         setHasError(false);

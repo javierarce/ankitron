@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { fetchDeckNames } from "@/lib/decks";
 
 /**
  * The collection's deck names, fetched once on mount. `null` while loading so
@@ -15,7 +15,7 @@ export function useDeckNames({ enabled = true }: { enabled?: boolean } = {}):
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    ankiFetch<string[]>("deckNames")
+    fetchDeckNames()
       .then((names) => {
         if (!cancelled) setDecks(names);
       })
