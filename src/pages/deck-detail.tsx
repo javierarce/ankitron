@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { CenteredSpinner } from "@/components/spinner";
-import { ankiFetch, fetchAllDueCounts } from "@/lib/anki-fetch";
+import { fetchAllDueCounts } from "@/lib/anki-fetch";
+import { areSuspended, fetchCardDecks } from "@/lib/cards";
 import {
   compareDeckPaths,
   coveringDecks,
@@ -10,7 +11,9 @@ import {
   isCardInDeck,
   subdecksOf,
 } from "@/lib/deck";
+import { fetchDeckNames } from "@/lib/decks";
 import { resolveDeckRedirect } from "@/lib/deck-redirects";
+import { fetchNotes, findNoteIds } from "@/lib/notes";
 import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
 
@@ -18,8 +21,8 @@ import type { Note, DueCounts } from "@/lib/types";
 // (spinner-backed) load and the silent post-edit refresh stay in sync.
 async function fetchDeckData(deckName: string) {
   const [noteIds, allDeckNames] = await Promise.all([
-    ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` }),
-    ankiFetch<string[]>("deckNames"),
+    findNoteIds(`deck:"${deckName}"`),
+    fetchDeckNames(),
   ]);
 
   // deckNames is authoritative for existence: a deck reached via a stale
@@ -29,10 +32,7 @@ async function fetchDeckData(deckName: string) {
 
   const subdecks = subdecksOf(allDeckNames, deckName).sort(compareDeckPaths);
 
-  const notes =
-    noteIds.length === 0
-      ? []
-      : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
+  const notes = await fetchNotes(noteIds);
 
   const allCardIds = notes.flatMap((n) => n.cards ?? []);
   let suspendedCardIds: number[] = [];
@@ -43,8 +43,8 @@ async function fetchDeckData(deckName: string) {
     // cardsInfo would also make Anki render every card's question/answer HTML
     // server-side, which dominates deck-open time on large decks.
     const [cardsByDeck, suspendedFlags] = await Promise.all([
-      ankiFetch<Record<string, number[]>>("getDecks", { cards: allCardIds }),
-      ankiFetch<(boolean | null)[]>("areSuspended", { cards: allCardIds }),
+      fetchCardDecks(allCardIds),
+      areSuspended(allCardIds),
     ]);
     suspendedCardIds = allCardIds.filter((_, i) => suspendedFlags[i] === true);
     const deckByCard = new Map<number, string>();
@@ -101,7 +101,7 @@ export function DeckDetailPage() {
 
   const refreshDue = useCallback(async () => {
     try {
-      const allNames = await ankiFetch<string[]>("deckNames");
+      const allNames = await fetchDeckNames();
       const segments = [deckName, ...subdecksOf(allNames, deckName)];
       const counts = await fetchAllDueCounts(segments);
       setDueBySegment(counts);

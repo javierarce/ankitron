@@ -6,11 +6,11 @@ import { CenteredSpinner, Spinner } from "@/components/spinner";
 import { StudySummary } from "@/components/study-summary";
 import { useSync } from "@/lib/sync-context";
 import {
-  ankiFetch,
   fetchAllDueCounts,
   fetchTodayStudyStats,
   isCollectionEmpty,
 } from "@/lib/anki-fetch";
+import { fetchDeckNames } from "@/lib/decks";
 import type { DueCounts, StudyStats } from "@/lib/types";
 
 const isTauri =
@@ -53,7 +53,7 @@ export function HomePage() {
 
     async function load() {
       try {
-        const deckNames = await ankiFetch<string[]>("deckNames");
+        const deckNames = await fetchDeckNames();
         if (cancelled) return;
         setDecks(deckNames);
 

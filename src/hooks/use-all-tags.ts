@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { fetchAllTags } from "@/lib/notes";
 
 /**
  * Every tag defined in the collection, sorted, for autocomplete. Fetched once on
@@ -10,7 +10,7 @@ export function useAllTags(): string[] {
   const [tags, setTags] = useState<string[]>([]);
   useEffect(() => {
     let cancelled = false;
-    ankiFetch<string[]>("getTags")
+    fetchAllTags()
       .then((all) => {
         if (!cancelled) setTags([...all].sort((a, b) => a.localeCompare(b)));
       })

@@ -5,9 +5,10 @@ import { DeckSettings } from "@/components/deck-settings";
 import { ImportExport } from "@/components/import-export";
 import { MoveDeckDialog } from "@/components/move-deck-dialog";
 import { RenameDeckDialog } from "@/components/rename-deck-dialog";
-import { ankiFetch } from "@/lib/anki-fetch";
-import { deckLeaf, deckParent, formatDeckPath, renameDeck } from "@/lib/deck";
+import { deckLeaf, deckParent, formatDeckPath } from "@/lib/deck";
+import { renameDeck } from "@/lib/decks";
 import { recordDeckRedirect } from "@/lib/deck-redirects";
+import { fetchNotes, findNoteIds } from "@/lib/notes";
 import type { Note } from "@/lib/types";
 
 export function DeckSettingsPage() {
@@ -30,7 +31,7 @@ export function DeckSettingsPage() {
     setBusy(true);
     setActionError(null);
     try {
-      const renames = await renameDeck(deckName, newName, ankiFetch);
+      const renames = await renameDeck(deckName, newName);
       // The destination is the same route, so this component reconciles in place
       // rather than remounting — clear dialog state ourselves or it stays stuck
       // (which also blocks the dialog's Escape/backdrop dismissal).
@@ -59,13 +60,8 @@ export function DeckSettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const noteIds = await ankiFetch<number[]>("findNotes", {
-          query: `deck:"${deckName}"`,
-        });
-        const fetchedNotes =
-          noteIds.length === 0
-            ? []
-            : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
+        const noteIds = await findNoteIds(`deck:"${deckName}"`);
+        const fetchedNotes = await fetchNotes(noteIds);
         if (!cancelled) setNotes(fetchedNotes);
       } catch {
         if (!cancelled)
