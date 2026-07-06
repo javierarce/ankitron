@@ -179,10 +179,16 @@
       cursor: grabbing;
     }
 
-    /* Stop bobbing while dragging or once the icon has been moved. */
-    .desk-icon.dragging,
-    .desk-icon.moved {
-      animation: none;
+    /* A dragged icon lifts above the app window; it drops back to its normal
+       layer (below the window) once released. */
+    .desk-icon.dragging {
+      z-index: 3;
+    }
+
+    /* While gliding the deck file over the window, it must not intercept its own
+       drop — let the drag reach the iframe underneath. */
+    .desktop-file.dragging {
+      pointer-events: none;
     }
 
     .desk-icon svg,
@@ -213,13 +219,9 @@
       bottom: 1rem;
     }
 
-    /* The minimized-app icon starts top-left; shown only while minimized. A
-       gentle bob hints that it's there to click (the deck file stays still). */
+    /* The minimized-app icon; hidden until minimized, then centered by JS. */
     .ankitron-file {
-      left: 1.5rem;
-      top: 1.5rem;
       display: none;
-      animation: file-bob 2.4s ease-in-out infinite;
     }
 
     .desktop.minimized .ankitron-file {
@@ -237,6 +239,9 @@
     .desktop.maximized .demo {
       position: absolute;
       inset: 1rem;
+      /* width:auto lets the left/right insets set the size; the inherited
+         width:100% would otherwise overflow past the right inset. */
+      width: auto;
       max-width: none;
       margin: 0;
     }
@@ -247,15 +252,6 @@
 
     .desktop.maximized .demo-titlebar {
       cursor: default;
-    }
-
-    @keyframes file-bob {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-4px); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .ankitron-file { animation: none; }
     }
 
     .demo {
@@ -952,13 +948,9 @@
       moveIcon(desktopFile, e.clientX, e.clientY, fileGrabX, fileGrabY);
     });
 
-    // Show a copy cursor (not "no-drop") while dragging over the desktop itself.
-    desktop.addEventListener("dragover", (e) => {
-      if (Array.from(e.dataTransfer.types).includes(DECK_DRAG_TYPE)) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
-      }
-    });
+    // Deliberately don't mark the desktop as a drop target: the drop cursor
+    // should only appear when the file is over the app window (the iframe's
+    // FileDropZone handles that), not while moving it around the desktop.
 
     desktopFile.addEventListener("dragend", (e) => {
       desktopFile.classList.remove("dragging");
@@ -1064,8 +1056,18 @@
     // Red/yellow close/minimize the window down to a desktop "Ankitron" icon;
     // double-click that icon (or focus + Enter) to bring the window back. Green
     // zooms the window to fill the desktop and back.
-    const minimize = () => desktop.classList.add("minimized");
+    const ankitronFile = document.getElementById("ankitron-file");
     const restore = () => desktop.classList.remove("minimized");
+    const minimize = () => {
+      desktop.classList.add("minimized"); // makes the icon measurable first
+      // Center the icon on the desktop each time we minimize.
+      const desk = desktop.getBoundingClientRect();
+      ankitronFile.style.left = (desk.width - ankitronFile.offsetWidth) / 2 + "px";
+      ankitronFile.style.top = (desk.height - ankitronFile.offsetHeight) / 2 + "px";
+      ankitronFile.style.right = "auto";
+      ankitronFile.style.bottom = "auto";
+      ankitronFile.classList.remove("moved");
+    };
     const toggleZoom = () => {
       desktop.classList.toggle("maximized");
       // A zoom re-centers the window, so drop any prior drag offset.
@@ -1077,7 +1079,6 @@
     document.querySelector(".tl-yellow").addEventListener("click", minimize);
     document.querySelector(".tl-green").addEventListener("click", toggleZoom);
 
-    const ankitronFile = document.getElementById("ankitron-file");
     makeDraggable(ankitronFile, restore);
     ankitronFile.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
