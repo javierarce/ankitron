@@ -19,12 +19,28 @@ export async function startDeckReview(deck: string): Promise<void> {
 }
 
 /**
- * The reviewer's current card, or null when the queue is empty. Anki's
+ * The reviewer's current card, or null when it isn't showing one. Anki's
  * "current card" is collection-wide, so callers must check its deckName
  * against the deck they're studying before showing it.
+ *
+ * Real AnkiConnect answers guiCurrentCard with an ERROR — not null — once a
+ * deck runs out and Anki lands on its congrats screen ("Gui review is not
+ * currently active"). Matching on the message would be version-brittle, so
+ * distinguish "no card" from "Anki is gone" with a cheap probe instead: if
+ * Anki still answers deckNames, there's simply no current card; otherwise
+ * rethrow the original failure so the session surfaces a connection error.
  */
 export async function fetchCurrentCard(): Promise<CurrentCard | null> {
-  return ankiFetch<CurrentCard | null>("guiCurrentCard");
+  try {
+    return await ankiFetch<CurrentCard | null>("guiCurrentCard");
+  } catch (err) {
+    try {
+      await ankiFetch("deckNames");
+    } catch {
+      throw err;
+    }
+    return null;
+  }
 }
 
 /**
