@@ -127,6 +127,7 @@
     /* Interactive demo — the real app embedded in a framed window, replacing
          the old screenshot slideshow. */
     .desktop {
+      position: relative;
       display: flex;
       justify-content: center;
       width: 100%;
@@ -134,6 +135,73 @@
       padding: 5.2rem 2rem;
       background: url("desktop.jpg") no-repeat center/cover;
       border-radius: 4px;
+    }
+
+    /* A fake file sitting on the desktop, bottom-right. Visitors drag it into
+       the embedded app to see how importing a deck works; the drag carries the
+       deck JSON (see the dragstart handler and #sample-deck payload below). */
+    .desktop-file {
+      position: absolute;
+      right: 1rem;
+      bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      /* Size to the filename so a single-token name stays on one line, but keep
+         a sensible minimum so the icon has a comfortable hit area. */
+      width: max-content;
+      min-width: 6rem;
+      padding: 0.5rem;
+      border: 0;
+      border-radius: 0.5rem;
+      background: transparent;
+      color: #fff;
+      /* Keep the label legible over the bright parts of the painting. */
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      transition: background-color 0.15s ease, transform 0.15s ease;
+      /* A gentle idle bob to draw the eye to it. */
+      animation: file-bob 2.4s ease-in-out infinite;
+    }
+
+    .desktop-file:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    .desktop-file:active {
+      cursor: grabbing;
+    }
+
+    /* Dim it while it's being dragged. */
+    .desktop-file.dragging {
+      opacity: 0.35;
+      animation: none;
+    }
+
+    .desktop-file svg {
+      width: 3.25rem;
+      height: 3.25rem;
+      filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+    }
+
+    .desktop-file-name {
+      font-size: 0.75rem;
+      font-weight: 500;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    @keyframes file-bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .desktop-file { animation: none; }
     }
 
     .demo {
@@ -155,6 +223,8 @@
 
     .demo-frame {
       position: relative;
+      display: flex;
+      flex-direction: column;
       width: 100%;
       height: min(70vh, 660px);
       min-height: 460px;
@@ -163,13 +233,67 @@
       background: var(--background);
       /* Subtle, matching the app's own card shadow (shadow-[0_1px_2px_...]). */
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-      transition: border-color 0.35s ease;
+      transition: border-color 0.35s ease, box-shadow 0.25s ease;
+    }
+
+    /* Lift the window while it's being dragged around the desktop. */
+    .demo.dragging .demo-frame {
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    }
+
+    /* macOS-style window title bar — the drag handle. The iframe itself can't
+       be the handle (it needs its own clicks to run the demo), so this slim bar
+       is what you grab to move the window. */
+    .demo-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: none;
+      height: 2.25rem;
+      padding: 0 0.85rem;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--foreground) 4%, var(--background));
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      transition: background-color 0.35s ease, border-color 0.35s ease;
+    }
+
+    .demo.dragging .demo-titlebar {
+      cursor: grabbing;
+    }
+
+    .demo-traffic {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .demo-traffic span {
+      width: 0.72rem;
+      height: 0.72rem;
+      border-radius: 9999px;
+    }
+
+    .demo-traffic .tl-red { background: #ff5f57; }
+    .demo-traffic .tl-yellow { background: #febc2e; }
+    .demo-traffic .tl-green { background: #28c840; }
+
+    .demo-titlebar-title {
+      flex: 1;
+      margin-right: 2.9rem;
+      /* offset the traffic lights so the title reads centered */
+      text-align: center;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: color-mix(in srgb, var(--foreground) 55%, transparent);
     }
 
     .demo-frame iframe {
       display: block;
+      flex: 1;
       width: 100%;
-      height: 100%;
+      min-height: 0;
       border: 0;
     }
 
@@ -340,6 +464,12 @@
         padding: 1.5rem 1rem;
       }
 
+      /* Drag-to-import is a pointer interaction with no room over the thin
+         mobile painting margin — hide the fake file on small screens. */
+      .desktop-file {
+        display: none;
+      }
+
       .testimonials-list {
         flex-direction: column;
       }
@@ -368,6 +498,16 @@
         if (t === "dark") document.documentElement.classList.add("dark");
       } catch (e) { }
     })();
+
+    // Reset the interactive demo on every full page load so each visit (and any
+    // reload) starts from the clean fixtures. The demo persists its in-memory
+    // state to sessionStorage so an import survives the app's own post-import
+    // iframe reload; clearing it here — before the iframe below loads — only
+    // fires on a real parent-page load, not that internal reload, so imports
+    // still work within a session. Key must match fixtures.ts STORAGE_KEY.
+    try {
+      sessionStorage.removeItem("ankitron-demo-state-v1");
+    } catch (e) { }
   </script>
 
   <script defer data-api="/api/event" data-domain="ankitron.com" src="/js/stats.js"></script>
@@ -402,10 +542,172 @@
   <div class="desktop">
     <div class="demo">
       <div class="demo-frame">
+        <div class="demo-titlebar" id="demo-titlebar" title="Drag to move the window">
+          <div class="demo-traffic" aria-hidden="true">
+            <span class="tl-red"></span>
+            <span class="tl-yellow"></span>
+            <span class="tl-green"></span>
+          </div>
+          <span class="demo-titlebar-title">Ankitron</span>
+        </div>
         <iframe id="demo" src="demo/" title="Interactive Ankitron demo" allow="clipboard-write"></iframe>
       </div>
     </div>
+
+    <!-- A fake deck file on the desktop. Dragging it into the demo above
+      imports the deck (#sample-deck payload), showing off drag-and-drop import.
+      draggable + a dragstart handler that stashes the JSON is all it takes. -->
+    <div class="desktop-file" id="desktop-file" draggable="true" role="img"
+      aria-label="Shyamalan.json deck file — drag it into the app to import"
+      title="Drag me into Ankitron to import">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+        <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
+      </svg>
+      <span class="desktop-file-name">Shyamalan.json</span>
+    </div>
   </div>
+
+  <!-- Payload for the draggable file above: a real, importable deck export.
+    Its deckName differs from the demo's built-in decks, so dropping it adds a
+    fresh deck rather than re-importing an existing one. -->
+  <script type="application/json" id="sample-deck">
+    {
+      "deckName": "M. Night Shyamalan Filmography",
+      "exportedAt": "2026-07-06T00:00:00.000Z",
+      "notes": [
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A young Indian American man returns to the land of his heritage to scatter his late father's ashes, only to confront the sectarian tensions, prejudice, and personal disillusionment simmering in the city where he was born. Semi-autobiographical, it marked the director's own screen debut in the lead role.",
+            "Back": "Praying with Anger (1992)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A ten-year-old boy at a Catholic school launches a private investigation to find God after the death of his beloved grandfather, hoping for a sign that there is life beyond this one. A gentle coming-of-age story with an early supernatural flourish.",
+            "Back": "Wide Awake (1998)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A grieving child psychologist tries to help a withdrawn boy who claims he can perceive the lingering dead. Their sessions build toward a revelation that reframes everything the audience thought it understood.",
+            "Back": "The Sixth Sense (1999)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "The sole survivor of a catastrophic train wreck emerges without a scratch, and a brittle-boned art dealer obsessed with comic book mythology insists this proves something extraordinary about who the man really is.",
+            "Back": "Unbreakable (2000)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A former minister who has lost his faith discovers enormous geometric patterns flattened into his cornfields, as global events suggest his rural family is caught up in something far larger and stranger than a local prank.",
+            "Back": "Signs (2002)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "An isolated 19th-century settlement lives in fear of nameless creatures in the surrounding woods, bound by a pact never to cross the treeline, until a blind young woman must venture out for medicine and uncovers the truth behind the community's rules.",
+            "Back": "The Village (2004)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "The superintendent of an apartment complex discovers a mysterious water nymph from a bedtime-story mythology living in the pool, and rallies his eccentric tenants to protect her from lurking creatures and help her return home.",
+            "Back": "Lady in the Water (2006)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A science teacher flees the Northeast with his family as people begin inexplicably killing themselves en masse, and the unseen threat seems to be carried on the wind itself, possibly from the plants.",
+            "Back": "The Happening (2008)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "In a world where certain people can manipulate the four classical elements, a young bald monk is revealed as the reincarnated master destined to restore balance and stop an imperial nation's conquest. A live-action adaptation of an animated series.",
+            "Back": "The Last Airbender (2010)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A thousand years after humanity abandoned a ruined Earth, a legendary military commander and his estranged teenage son crash-land on the now-hostile planet. Injured, the father must guide the boy across deadly terrain by radio to retrieve a rescue beacon.",
+            "Back": "After Earth (2013)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Two siblings visit the rural grandparents they've never met and document the trip on camera, but the old couple's increasingly bizarre and frightening nighttime behavior suggests something is deeply wrong on the farm.",
+            "Back": "The Visit (2015)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Three teenage girls are abducted and held captive by a man harboring two dozen distinct personalities, some of whom warn of a monstrous final identity about to emerge and take control of his body.",
+            "Back": "Split (2016)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "In a series of escalating encounters, a former security guard uses his supernatural abilities to track a disturbed man with twenty-four personalities, while a shadowy mastermind who holds secrets critical to both men manipulates events from within a psychiatric institution.",
+            "Back": "Glass (2019)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Vacationers on a secluded tropical cove discover they are aging years within hours, their lifespans collapsing into a single day, and they race to understand the beach's terrible property before time runs out.",
+            "Back": "Old (2021)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Two fathers and their young daughter are held hostage in a remote cabin by four armed strangers who insist the family must willingly choose to sacrifice one of their own in order to avert the apocalypse.",
+            "Back": "Knock at the Cabin (2023)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A devoted father takes his daughter to a pop concert, only to realize the arena is the site of a massive police sting designed to capture a notorious serial killer, and that the trap has been laid specifically for him.",
+            "Back": "Trap (2024)"
+          },
+          "tags": ["shyamalan"]
+        }
+      ]
+    }
+  </script>
 
 
   <div class="testimonials">
@@ -505,6 +807,78 @@
       root.classList.toggle("dark", theme === "dark");
       syncDemoTheme();
     });
+
+    // --- Draggable "Shyamalan.json": drag it into the embedded app to
+    // import the deck. HTML5 drag data can't carry a real File, so we stash the
+    // deck JSON under a custom type the app's drop handler reads (see
+    // file-drop-zone.tsx: DECK_DRAG_TYPE). The demo is same-origin, so the drag
+    // crosses into the iframe and the app runs its normal import flow. ---
+    const DECK_DRAG_TYPE = "application/x-ankitron-deck";
+    const desktopFile = document.getElementById("desktop-file");
+    // The <script> payload is pretty-printed for readability; compact it once.
+    const sampleDeck = JSON.stringify(
+      JSON.parse(document.getElementById("sample-deck").textContent),
+    );
+    desktopFile.addEventListener("dragstart", (e) => {
+      e.dataTransfer.effectAllowed = "copy";
+      e.dataTransfer.setData(DECK_DRAG_TYPE, sampleDeck);
+      e.dataTransfer.setData("text/plain", sampleDeck); // graceful fallback
+      desktopFile.classList.add("dragging");
+    });
+    desktopFile.addEventListener("dragend", () => {
+      desktopFile.classList.remove("dragging");
+    });
+
+    // --- Draggable demo window: grab the title bar to move the window around
+    // the desktop. The iframe can't be the handle (it needs its own clicks to
+    // run the demo), so only the title bar starts a drag. Pointer capture keeps
+    // move events flowing even as the cursor passes over the iframe; we also
+    // disable the iframe's pointer events mid-drag as a belt-and-suspenders.
+    // The window is clamped to stay within the desktop. ---
+    const demo = document.querySelector(".demo");
+    const desktop = document.querySelector(".desktop");
+    const titlebar = document.getElementById("demo-titlebar");
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    let offX = 0;
+    let offY = 0; // committed window offset
+    let drag = null; // active drag state, or null
+
+    titlebar.addEventListener("pointerdown", (e) => {
+      const desk = desktop.getBoundingClientRect();
+      const frame = demo.getBoundingClientRect(); // includes the current offset
+      const baseLeft = frame.left - desk.left - offX;
+      const baseTop = frame.top - desk.top - offY;
+      drag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        baseOffX: offX,
+        baseOffY: offY,
+        // Offsets that keep the window fully inside the desktop.
+        minX: -baseLeft,
+        maxX: desk.width - frame.width - baseLeft,
+        minY: -baseTop,
+        maxY: desk.height - frame.height - baseTop,
+      };
+      demo.classList.add("dragging");
+      demoFrame.style.pointerEvents = "none";
+      titlebar.setPointerCapture(e.pointerId);
+    });
+
+    titlebar.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      offX = clamp(drag.baseOffX + (e.clientX - drag.startX), drag.minX, drag.maxX);
+      offY = clamp(drag.baseOffY + (e.clientY - drag.startY), drag.minY, drag.maxY);
+      demo.style.transform = `translate(${offX}px, ${offY}px)`;
+    });
+
+    const endDrag = () => {
+      if (!drag) return;
+      drag = null;
+      demo.classList.remove("dragging");
+      demoFrame.style.pointerEvents = "";
+    };
+    titlebar.addEventListener("pointerup", endDrag);
+    titlebar.addEventListener("pointercancel", endDrag);
   </script>
 </body>
 

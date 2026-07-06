@@ -11,11 +11,18 @@ interface FileDropZoneProps {
   children: ReactNode;
 }
 
-// We only take over drags that carry external files; internal drags (e.g. the
-// card-list segment chips) set custom data types instead and must pass through
-// untouched — never preventing their default would break those drops.
-function hasFiles(e: React.DragEvent) {
-  return Array.from(e.dataTransfer.types).includes("Files");
+// A same-origin page (the landing page's embedded demo) can't hand us a real
+// OS file, so its draggable "sample deck" carries the deck JSON as a string
+// under this custom type. Such a drag is treated exactly like a file drop.
+export const DECK_DRAG_TYPE = "application/x-ankitron-deck";
+
+// We only take over drags that carry a deck to import — an external file, or a
+// same-origin deck payload (above). Internal drags (e.g. the card-list segment
+// chips) set other custom data types and must pass through untouched; never
+// preventing their default would break those drops.
+function hasImportPayload(e: React.DragEvent) {
+  const types = Array.from(e.dataTransfer.types);
+  return types.includes("Files") || types.includes(DECK_DRAG_TYPE);
 }
 
 /**
@@ -56,24 +63,24 @@ export function FileDropZone({
     <div
       className={className}
       onDragEnter={(e) => {
-        if (!hasFiles(e) || blockedByOtherOverlay()) return;
+        if (!hasImportPayload(e) || blockedByOtherOverlay()) return;
         e.preventDefault();
         depth.current += 1;
         setDragging(true);
       }}
       onDragOver={(e) => {
-        if (!hasFiles(e) || blockedByOtherOverlay()) return;
+        if (!hasImportPayload(e) || blockedByOtherOverlay()) return;
         // Required for the element to be a valid drop target.
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
       }}
       onDragLeave={(e) => {
-        if (!hasFiles(e) || blockedByOtherOverlay()) return;
+        if (!hasImportPayload(e) || blockedByOtherOverlay()) return;
         depth.current -= 1;
         if (depth.current <= 0) reset();
       }}
       onDrop={(e) => {
-        if (!hasFiles(e) || blockedByOtherOverlay()) return;
+        if (!hasImportPayload(e) || blockedByOtherOverlay()) return;
         reset();
         // A deeper handler may have already claimed this drop — e.g. the card
         // editor inserting a dropped audio file. It calls preventDefault, so
@@ -81,7 +88,16 @@ export function FileDropZone({
         if (e.defaultPrevented) return;
         e.preventDefault();
         const file = e.dataTransfer.files[0];
-        if (file) onFile(file);
+        if (file) {
+          onFile(file);
+          return;
+        }
+        // No OS file — a same-origin drag handed us the deck JSON directly.
+        // Wrap it in a File so it flows through the identical import path.
+        const deckJson = e.dataTransfer.getData(DECK_DRAG_TYPE);
+        if (deckJson) {
+          onFile(new File([deckJson], "deck.json", { type: "application/json" }));
+        }
       }}
     >
       {children}
