@@ -183,12 +183,7 @@
        layer (below the window) once released. */
     .desk-icon.dragging {
       z-index: 3;
-    }
-
-    /* While gliding the deck file over the window, it must not intercept its own
-       drop — let the drag reach the iframe underneath. */
-    .desktop-file.dragging {
-      pointer-events: none;
+      cursor: grabbing;
     }
 
     .desk-icon svg,
@@ -204,6 +199,9 @@
     .desk-icon img {
       border-radius: 0.7rem;
       filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+      /* Never let the browser start a native image drag (it would cancel our
+         pointer-drag). */
+      -webkit-user-drag: none;
     }
 
     .desk-icon-name {
@@ -622,11 +620,9 @@
       </div>
     </div>
 
-    <!-- A fake deck file on the desktop. Dragging it into the demo above
-      imports the deck (#sample-deck payload), showing off drag-and-drop import.
-      draggable + a dragstart handler that stashes the JSON is all it takes. It
-      also stays wherever it's dropped (see the dragend handler). -->
-    <div class="desk-icon desktop-file" id="desktop-file" draggable="true" role="img"
+    <!-- A fake deck file on the desktop. Pointer-drag it onto the demo window
+      to import (#sample-deck payload); see the drag handlers below. -->
+    <div class="desk-icon desktop-file" id="desktop-file" role="img"
       aria-label="Shyamalan.json deck file — drag it into the app to import"
       title="Drag me into Ankitron to import">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
@@ -641,7 +637,7 @@
       appears as a desktop icon. Click it to reopen the window; drag to move. -->
     <div class="desk-icon ankitron-file" id="ankitron-file" role="button" tabindex="0"
       aria-label="Ankitron — double-click to open the app" title="Double-click to open">
-      <img src="icon.png" alt="" />
+      <img src="icon.png" alt="" draggable="false" />
       <span class="desk-icon-name">Ankitron</span>
     </div>
   </div>
@@ -901,69 +897,49 @@
     }
 
     // --- Draggable "Shyamalan.json" deck file --------------------------------
-    // Drag it into the embedded app to import. HTML5 drag data can't carry a
-    // real File, so we stash the deck JSON under a custom type the app's drop
-    // handler reads (file-drop-zone.tsx: DECK_DRAG_TYPE); the same-origin drag
-    // crosses into the iframe and the app runs its normal import flow.
-    //
-    // A native drag normally moves a translucent "ghost" while the real element
-    // sits still until you drop — which feels sluggish. We suppress that ghost
-    // and move the element itself under the cursor on every dragover, so it
-    // glides like the window, then stays wherever it's dropped.
+    // The file is pointer-dragged (smooth, like the window and the app icon), so
+    // we control its cursor and layering directly — no native HTML5 drag. When
+    // it's released over the app window we import the deck by synthesizing a drop
+    // into the same-origin demo iframe, carrying the deck JSON under a custom
+    // type its FileDropZone reads (file-drop-zone.tsx: DECK_DRAG_TYPE).
     const DECK_DRAG_TYPE = "application/x-ankitron-deck";
     const desktopFile = document.getElementById("desktop-file");
     const sampleDeck = JSON.stringify(
       JSON.parse(document.getElementById("sample-deck").textContent),
     );
-    // A transparent 1x1 image to replace (hide) the native drag ghost.
-    const blankDragImg = new Image();
-    blankDragImg.src =
-      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-    let fileGrabX = 0;
-    let fileGrabY = 0;
-    let lastDragX = 0; // dragend coords are unreliable; fall back to these
-    let lastDragY = 0;
 
-    desktopFile.addEventListener("dragstart", (e) => {
-      e.dataTransfer.effectAllowed = "copy";
-      e.dataTransfer.setData(DECK_DRAG_TYPE, sampleDeck);
-      e.dataTransfer.setData("text/plain", sampleDeck); // graceful fallback
-      try {
-        e.dataTransfer.setDragImage(blankDragImg, 0, 0);
-      } catch (err) {
-        // Some browsers reject a custom drag image — fall back to the default.
+    // If (clientX, clientY) lands on the app window, import the deck: dispatch a
+    // drop carrying the deck JSON into the iframe's document at that point.
+    function dropDeckAt(clientX, clientY) {
+      const ir = demoFrame.getBoundingClientRect();
+      if (clientX < ir.left || clientX > ir.right || clientY < ir.top || clientY > ir.bottom) {
+        return; // released on the desktop, not the app — just leave it there
       }
-      const r = desktopFile.getBoundingClientRect();
-      fileGrabX = e.clientX - r.left;
-      fileGrabY = e.clientY - r.top;
-      desktopFile.classList.add("dragging", "moved");
-    });
+      const doc = demoFrame.contentDocument;
+      if (!doc) return;
+      const x = clientX - ir.left;
+      const y = clientY - ir.top;
+      const target = doc.elementFromPoint(x, y) || doc.body;
+      const dt = new DataTransfer();
+      dt.setData(DECK_DRAG_TYPE, sampleDeck);
+      dt.setData("text/plain", sampleDeck);
+      for (const type of ["dragenter", "dragover", "drop"]) {
+        target.dispatchEvent(
+          new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true, clientX: x, clientY: y }),
+        );
+      }
+    }
 
-    // Follow the cursor live while the file is dragged over the page. Over the
-    // iframe the parent gets no drag events, so it just settles on dragend.
-    document.addEventListener("dragover", (e) => {
-      if (!desktopFile.classList.contains("dragging")) return;
-      lastDragX = e.clientX;
-      lastDragY = e.clientY;
-      moveIcon(desktopFile, e.clientX, e.clientY, fileGrabX, fileGrabY);
-    });
-
-    // Deliberately don't mark the desktop as a drop target: the drop cursor
-    // should only appear when the file is over the app window (the iframe's
-    // FileDropZone handles that), not while moving it around the desktop.
-
-    desktopFile.addEventListener("dragend", (e) => {
-      desktopFile.classList.remove("dragging");
-      moveIcon(desktopFile, e.clientX || lastDragX, e.clientY || lastDragY, fileGrabX, fileGrabY);
-    });
-
-    // --- Free pointer-drag for a desktop icon (used by the Ankitron icon) ----
-    // Distinguishes a drag (reposition) from a double-tap (calls onDoubleTap, to
-    // reopen the app). Not usable on the deck file, which relies on native HTML5
-    // drag for the import.
-    function makeDraggable(el, onDoubleTap) {
+    // --- Free pointer-drag for a desktop icon --------------------------------
+    // Moves the icon under the cursor (clamped to the desktop). After a real
+    // drag it calls opts.onDrop(x, y); a quick double-tap calls opts.onDoubleTap.
+    // A dragstart guard kills any native drag (e.g. of an inner <img>) that would
+    // otherwise cancel the pointer-drag.
+    function makeDraggable(el, opts) {
+      opts = opts || {};
       let st = null;
       let lastTap = 0;
+      el.addEventListener("dragstart", (e) => e.preventDefault());
       el.addEventListener("pointerdown", (e) => {
         if (e.button && e.button !== 0) return;
         const r = el.getBoundingClientRect();
@@ -986,13 +962,14 @@
         if (moved) {
           el.classList.add("moved");
           lastTap = 0;
+          if (opts.onDrop) opts.onDrop(e.clientX, e.clientY);
           return;
         }
-        // A tap: open only on a quick second tap (double-click to open).
+        // A tap: fire onDoubleTap only on a quick second tap (double-click).
         const now = e.timeStamp || 0;
-        if (onDoubleTap && lastTap && now - lastTap < 350) {
+        if (opts.onDoubleTap && lastTap && now - lastTap < 350) {
           lastTap = 0;
-          onDoubleTap();
+          opts.onDoubleTap();
         } else {
           lastTap = now;
         }
@@ -1000,6 +977,8 @@
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
     }
+
+    makeDraggable(desktopFile, { onDrop: dropDeckAt });
 
     // --- Draggable demo window: grab the title bar to move the window around
     // the desktop. The iframe can't be the handle (it needs its own clicks to
@@ -1079,7 +1058,7 @@
     document.querySelector(".tl-yellow").addEventListener("click", minimize);
     document.querySelector(".tl-green").addEventListener("click", toggleZoom);
 
-    makeDraggable(ankitronFile, restore);
+    makeDraggable(ankitronFile, { onDoubleTap: restore });
     ankitronFile.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
