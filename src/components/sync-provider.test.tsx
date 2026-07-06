@@ -44,7 +44,19 @@ beforeEach(() => {
   ankiFetch.mockClear();
   controls.resolve = undefined;
   controls.reject = undefined;
-  localStorage.clear();
+  // Node's own experimental localStorage global shadows jsdom's here and its
+  // methods aren't functional, so give each test a real in-memory stand-in
+  // (same approach as card-list.test.tsx).
+  const store = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    },
+  });
 });
 
 // The failure pill is suppressed until a sync has succeeded on this install
