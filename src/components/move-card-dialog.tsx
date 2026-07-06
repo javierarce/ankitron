@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Note } from "@/lib/types";
-import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
+import { createDeck } from "@/lib/decks";
 import { moveNotesToDeck } from "@/lib/notes";
 import { useDeckNames } from "@/hooks/use-deck-names";
 import { DeckPicker } from "./deck-picker";
@@ -37,7 +37,7 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
     setError(null);
     try {
       if (target.isNew) {
-        await ankiFetch("createDeck", { deck: target.deck });
+        await createDeck(target.deck);
       }
       await moveNotesToDeck(notes, target.deck);
       if (onMoved) {

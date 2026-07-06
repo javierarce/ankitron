@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { syncCollection } from "@/lib/anki-fetch";
 import { Spinner } from "@/components/spinner";
 import { SyncContext, type SyncStatus } from "@/lib/sync-context";
 
@@ -51,7 +51,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     inFlight.current = true;
     setStatus("syncing");
     try {
-      await ankiFetch("sync");
+      await syncCollection();
       setSyncedAt((n) => n + 1);
       setStatus("idle");
       // Record that sync works here, so future failures are shown as real.

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Minus } from "@phosphor-icons/react/dist/ssr/Minus";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { createDeck, renameDeck } from "@/lib/decks";
 import {
   buildDeckTree,
   canDeleteDeck,
@@ -11,7 +11,6 @@ import {
   deckParent,
   formatDeckPath,
   isCardInDeck,
-  renameDeck,
   subdecksOf,
   type DeckNode,
 } from "@/lib/deck";
@@ -210,7 +209,7 @@ export function AllDecksList({
     setCreating(true);
     setError(null);
     try {
-      await ankiFetch("createDeck", { deck: name });
+      await createDeck(name);
       closeDialog();
       navigate(`/decks/${encodeURIComponent(name)}`);
     } catch (err) {
@@ -243,7 +242,7 @@ export function AllDecksList({
     setMoving(true);
     setMoveError(null);
     try {
-      const renames = await renameDeck(movingDeck, newName, ankiFetch);
+      const renames = await renameDeck(movingDeck, newName);
       setMovingDeck(null);
       setMoving(false);
       // No-op (e.g. a case-only change) — nothing moved.

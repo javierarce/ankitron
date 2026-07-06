@@ -21,6 +21,31 @@ export default defineConfig([
     },
   },
   {
+    // Keep the raw AnkiConnect transport inside the domain layer: UI code goes
+    // through the typed modules. Only the `ankiFetch` symbol is restricted —
+    // the typed helpers that also live in anki-fetch.ts (syncCollection,
+    // reloadCollection, fetchAllDueCounts, …) stay importable from anywhere.
+    // src/lib/** is the domain layer itself, and tests mock the transport
+    // module, so both are exempt.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/**", "src/**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/anki-fetch"],
+              importNamePattern: "^ankiFetch$",
+              message:
+                "Import the typed API from @/lib/notes|cards|decks|review instead; raw ankiFetch lives only in src/lib.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Node-side scripts (icon generation, configs).
     files: ["scripts/**/*.mjs", "*.config.{ts,mjs}"],
     extends: [js.configs.recommended],

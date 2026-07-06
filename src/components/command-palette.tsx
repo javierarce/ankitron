@@ -10,7 +10,7 @@ import { Sun } from "@phosphor-icons/react/dist/ssr/Sun";
 import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";
 import { Desktop } from "@phosphor-icons/react/dist/ssr/Desktop";
 import type { Icon } from "@phosphor-icons/react";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { fetchDeckNames } from "@/lib/decks";
 import { formatDeckPath } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
 import { useScrollLock, isScrollLocked } from "@/hooks/use-scroll-lock";
@@ -104,7 +104,7 @@ export function CommandPalette() {
     let cancelled = false;
     (async () => {
       try {
-        const names = await ankiFetch<string[]>("deckNames");
+        const names = await fetchDeckNames();
         if (!cancelled) setDecks([...names].sort((a, b) => a.localeCompare(b)));
       } catch {
         if (!cancelled) setDecks([]);
