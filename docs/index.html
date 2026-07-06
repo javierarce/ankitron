@@ -148,7 +148,10 @@
       flex-direction: column;
       align-items: center;
       gap: 0.4rem;
-      width: 6rem;
+      /* Size to the filename so a single-token name stays on one line, but keep
+         a sensible minimum so the icon has a comfortable hit area. */
+      width: max-content;
+      min-width: 6rem;
       padding: 0.5rem;
       border: 0;
       border-radius: 0.5rem;
@@ -189,7 +192,7 @@
       font-size: 0.75rem;
       font-weight: 500;
       line-height: 1.2;
-      word-break: break-word;
+      white-space: nowrap;
     }
 
     @keyframes file-bob {
@@ -555,47 +558,160 @@
       imports the deck (#sample-deck payload), showing off drag-and-drop import.
       draggable + a dragstart handler that stashes the JSON is all it takes. -->
     <div class="desktop-file" id="desktop-file" draggable="true" role="img"
-      aria-label="Sample deck file — drag it into the app to import"
+      aria-label="Shyamalan.json deck file — drag it into the app to import"
       title="Drag me into Ankitron to import">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M14 3v4a1 1 0 0 0 1 1h4" />
         <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
       </svg>
-      <span class="desktop-file-name">Sample deck.json</span>
+      <span class="desktop-file-name">Shyamalan.json</span>
     </div>
   </div>
 
-  <!-- Payload for the draggable file above: a real, importable deck export
-    (the demo's "Historical Anomalies" content, renamed so dropping it adds a
-    fresh deck rather than re-importing an existing one). -->
+  <!-- Payload for the draggable file above: a real, importable deck export.
+    Its deckName differs from the demo's built-in decks, so dropping it adds a
+    fresh deck rather than re-importing an existing one. -->
   <script type="application/json" id="sample-deck">
     {
-      "deckName": "Sample deck",
+      "deckName": "M. Night Shyamalan Filmography",
+      "exportedAt": "2026-07-06T00:00:00.000Z",
       "notes": [
         {
           "modelName": "Basic",
           "fields": {
-            "Front": "Volume of molasses released during the 1919 Great Molasses Flood?",
-            "Back": "2.3 million U.S. gallons (8,700 cubic meters)"
+            "Front": "A young Indian American man returns to the land of his heritage to scatter his late father's ashes, only to confront the sectarian tensions, prejudice, and personal disillusionment simmering in the city where he was born. Semi-autobiographical, it marked the director's own screen debut in the lead role.",
+            "Back": "Praying with Anger (1992)"
           },
-          "tags": ["molasses", "boston"]
+          "tags": ["shyamalan"]
         },
         {
           "modelName": "Basic",
           "fields": {
-            "Front": "Roughly how many people compulsively danced for weeks during the Dancing Plague of 1518?",
-            "Back": "Somewhere between 50 and 400 people"
+            "Front": "A ten-year-old boy at a Catholic school launches a private investigation to find God after the death of his beloved grandfather, hoping for a sign that there is life beyond this one. A gentle coming-of-age story with an early supernatural flourish.",
+            "Back": "Wide Awake (1998)"
           },
-          "tags": ["plagues"]
+          "tags": ["shyamalan"]
         },
         {
           "modelName": "Basic",
           "fields": {
-            "Front": "How many frozen pizzas were destroyed during the Great Michigan Pizza Funeral?",
-            "Back": "29,188 cheese-and-mushroom pizzas"
+            "Front": "A grieving child psychologist tries to help a withdrawn boy who claims he can perceive the lingering dead. Their sessions build toward a revelation that reframes everything the audience thought it understood.",
+            "Back": "The Sixth Sense (1999)"
           },
-          "tags": ["pizza", "michigan"]
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "The sole survivor of a catastrophic train wreck emerges without a scratch, and a brittle-boned art dealer obsessed with comic book mythology insists this proves something extraordinary about who the man really is.",
+            "Back": "Unbreakable (2000)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A former minister who has lost his faith discovers enormous geometric patterns flattened into his cornfields, as global events suggest his rural family is caught up in something far larger and stranger than a local prank.",
+            "Back": "Signs (2002)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "An isolated 19th-century settlement lives in fear of nameless creatures in the surrounding woods, bound by a pact never to cross the treeline, until a blind young woman must venture out for medicine and uncovers the truth behind the community's rules.",
+            "Back": "The Village (2004)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "The superintendent of an apartment complex discovers a mysterious water nymph from a bedtime-story mythology living in the pool, and rallies his eccentric tenants to protect her from lurking creatures and help her return home.",
+            "Back": "Lady in the Water (2006)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A science teacher flees the Northeast with his family as people begin inexplicably killing themselves en masse, and the unseen threat seems to be carried on the wind itself, possibly from the plants.",
+            "Back": "The Happening (2008)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "In a world where certain people can manipulate the four classical elements, a young bald monk is revealed as the reincarnated master destined to restore balance and stop an imperial nation's conquest. A live-action adaptation of an animated series.",
+            "Back": "The Last Airbender (2010)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A thousand years after humanity abandoned a ruined Earth, a legendary military commander and his estranged teenage son crash-land on the now-hostile planet. Injured, the father must guide the boy across deadly terrain by radio to retrieve a rescue beacon.",
+            "Back": "After Earth (2013)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Two siblings visit the rural grandparents they've never met and document the trip on camera, but the old couple's increasingly bizarre and frightening nighttime behavior suggests something is deeply wrong on the farm.",
+            "Back": "The Visit (2015)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Three teenage girls are abducted and held captive by a man harboring two dozen distinct personalities, some of whom warn of a monstrous final identity about to emerge and take control of his body.",
+            "Back": "Split (2016)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "In a series of escalating encounters, a former security guard uses his supernatural abilities to track a disturbed man with twenty-four personalities, while a shadowy mastermind who holds secrets critical to both men manipulates events from within a psychiatric institution.",
+            "Back": "Glass (2019)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Vacationers on a secluded tropical cove discover they are aging years within hours, their lifespans collapsing into a single day, and they race to understand the beach's terrible property before time runs out.",
+            "Back": "Old (2021)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "Two fathers and their young daughter are held hostage in a remote cabin by four armed strangers who insist the family must willingly choose to sacrifice one of their own in order to avert the apocalypse.",
+            "Back": "Knock at the Cabin (2023)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A devoted father takes his daughter to a pop concert, only to realize the arena is the site of a massive police sting designed to capture a notorious serial killer, and that the trap has been laid specifically for him.",
+            "Back": "Trap (2024)"
+          },
+          "tags": ["shyamalan"]
+        },
+        {
+          "modelName": "Basic",
+          "fields": {
+            "Front": "A grief-stricken author retreats to a seaside inn to work, where an encounter with a mysterious guest blurs the line between the living and the dead. An adaptation of a novel co-written with a bestselling horror author, released in 2026.",
+            "Back": "Remain (2026)"
+          },
+          "tags": ["shyamalan"]
         }
       ]
     }
@@ -700,7 +816,7 @@
       syncDemoTheme();
     });
 
-    // --- Draggable "Sample deck.json": drag it into the embedded app to
+    // --- Draggable "Shyamalan.json": drag it into the embedded app to
     // import the deck. HTML5 drag data can't carry a real File, so we stash the
     // deck JSON under a custom type the app's drop handler reads (see
     // file-drop-zone.tsx: DECK_DRAG_TYPE). The demo is same-origin, so the drag
