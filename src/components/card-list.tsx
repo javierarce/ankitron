@@ -26,7 +26,7 @@ import { ActionsMenu, Kbd } from "./actions-menu";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { BulkTagDialog, type TagChange } from "./bulk-tag-dialog";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { setSuspended as setCardsSuspended } from "@/lib/cards";
 import {
   createEditSequence,
   editSequencePrev,
@@ -41,7 +41,13 @@ import {
 import { stripCloze } from "@/lib/cloze";
 import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
-import { moveNotesToDeck } from "@/lib/notes";
+import {
+  addTagsToNotes,
+  deleteNotes,
+  findNoteIds,
+  moveNotesToDeck,
+  removeTagsFromNotes,
+} from "@/lib/notes";
 import { deckLeaf, formatDeckPath, isCardInDeck } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
 import { useVimNav } from "@/hooks/use-vim-nav";
@@ -300,7 +306,7 @@ export function CardList({
     const key = contextQ;
     let cancelled = false;
     const handle = setTimeout(() => {
-      ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}" (${key})` })
+      findNoteIds(`deck:"${deckName}" (${key})`)
         .then((ids) => !cancelled && setContextResult({ key, ids: new Set(ids) }))
         .catch(() => !cancelled && setContextResult({ key, ids: new Set() }));
     }, 150);
@@ -319,7 +325,7 @@ export function CardList({
     const key = effective;
     let cancelled = false;
     const handle = setTimeout(() => {
-      ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}" (${key})` })
+      findNoteIds(`deck:"${deckName}" (${key})`)
         .then((ids) => !cancelled && setBackendResult({ key, ids: new Set(ids) }))
         .catch(() => !cancelled && setBackendResult({ key, ids: new Set() }));
     }, 150);
@@ -378,7 +384,11 @@ export function CardList({
     clearTagUndo();
     try {
       for (const op of change.ops) {
-        await ankiFetch(op.action, { notes: op.noteIds, tags: op.tag });
+        if (op.action === "addTags") {
+          await addTagsToNotes(op.noteIds, [op.tag]);
+        } else {
+          await removeTagsFromNotes(op.noteIds, [op.tag]);
+        }
       }
       refreshAfterChange();
     } catch (err) {
@@ -428,7 +438,7 @@ export function CardList({
     if (!editSeq) return;
     setSeqDeleting(true);
     try {
-      await ankiFetch("deleteNotes", { notes: [editSequenceCurrentId(editSeq)] });
+      await deleteNotes([editSequenceCurrentId(editSeq)]);
       setSeqDeleteOpen(false);
       applyStep(editSequenceDeleted(editSeq));
     } catch (err) {
@@ -717,7 +727,7 @@ export function CardList({
         const allSuspended = targetNotes.every((n) =>
           (n.cards ?? []).some((id) => suspended.has(id))
         );
-        ankiFetch(allSuspended ? "unsuspend" : "suspend", { cards: cardIds })
+        setCardsSuspended(cardIds, !allSuspended)
           .then(() => {
             setSuspended((prev) => {
               const next = new Set(prev);
@@ -809,7 +819,7 @@ export function CardList({
     if (cardIds.length === 0) return;
     const isSuspended = isNoteSuspended(note);
     try {
-      await ankiFetch(isSuspended ? "unsuspend" : "suspend", { cards: cardIds });
+      await setCardsSuspended(cardIds, !isSuspended);
       setSuspended((prev) => {
         const next = new Set(prev);
         for (const id of cardIds) {
@@ -835,7 +845,7 @@ export function CardList({
     if (!deletingNote) return;
     setDeleting(true);
     try {
-      await ankiFetch("deleteNotes", { notes: [deletingNote.noteId] });
+      await deleteNotes([deletingNote.noteId]);
       setDeletingNote(null);
       // Close the editor too — it may have been the delete's entry point.
       setEditingNote(null);
@@ -907,7 +917,7 @@ export function CardList({
     const cardIds = selectedNotes.flatMap((n) => n.cards ?? []);
     if (cardIds.length === 0) return;
     try {
-      await ankiFetch(suspend ? "suspend" : "unsuspend", { cards: cardIds });
+      await setCardsSuspended(cardIds, suspend);
       setSuspended((prev) => {
         const next = new Set(prev);
         for (const id of cardIds) {
@@ -933,9 +943,7 @@ export function CardList({
     if (selectedNotes.length === 0) return;
     setBulkDeleting(true);
     try {
-      await ankiFetch("deleteNotes", {
-        notes: selectedNotes.map((n) => n.noteId),
-      });
+      await deleteNotes(selectedNotes.map((n) => n.noteId));
       setBulkDeleteOpen(false);
       clearSelection();
       refreshAfterChange();

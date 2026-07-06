@@ -5,11 +5,18 @@ import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
 import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
-import { ankiFetch } from "@/lib/anki-fetch";
 import { CLOZE_OPEN_RE, hasClozePattern } from "@/lib/cloze";
 import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
+import { createDeck } from "@/lib/decks";
 import { basicFieldKeys, isClozeNote, orderedFieldNames } from "@/lib/note-fields";
-import { moveNotesToDeck } from "@/lib/notes";
+import {
+  addNote,
+  addTagsToNotes,
+  deleteNotes,
+  moveNotesToDeck,
+  updateNote,
+  type NewNote,
+} from "@/lib/notes";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
 import { useAllTags } from "@/hooks/use-all-tags";
 import { useDeckNames } from "@/hooks/use-deck-names";
@@ -241,7 +248,7 @@ export function CardForm({
       }
 
       if (creatingDeck) {
-        await ankiFetch("createDeck", { deck: destDeck });
+        await createDeck(destDeck);
       }
 
       const modelName =
@@ -294,7 +301,7 @@ export function CardForm({
             payload.fields = fields;
           }
           if (tagsChanged) payload.tags = tags;
-          await ankiFetch("updateNote", { note: payload });
+          await updateNote(payload);
         }
         if (deckChanged) {
           await moveNotesToDeck([note], destDeck);
@@ -334,7 +341,7 @@ export function CardForm({
           };
         }
       } else {
-        const noteData = isClozeForm
+        const noteData: NewNote = isClozeForm
           ? {
               deckName: destDeck,
               modelName,
@@ -348,15 +355,12 @@ export function CardForm({
               tags,
             };
 
-        const noteId = await ankiFetch<number>("addNote", { note: noteData });
+        const noteId = await addNote(noteData);
         if (tags.length > 0 && noteId) {
-          await ankiFetch("addTags", {
-            notes: [noteId],
-            tags: tags.join(" "),
-          });
+          await addTagsToNotes([noteId], tags);
         }
         if (isEdit) {
-          await ankiFetch("deleteNotes", { notes: [note.noteId] });
+          await deleteNotes([note.noteId]);
           // A type change replaces the note with a new id. Report the rebuilt
           // note so a sequential editor can refresh on close and repoint its
           // run at the new id for correct back-navigation.

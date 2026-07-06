@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "./confirm-dialog";
-import { ankiFetch, fetchNoteCount } from "@/lib/anki-fetch";
+import { fetchNoteCount } from "@/lib/anki-fetch";
 import { deckDeleteMessage, formatDeckPath, isDefaultDeck } from "@/lib/deck";
+import { deleteDecks } from "@/lib/decks";
 
 interface DeleteDeckDialogProps {
   deckName: string;
@@ -64,7 +65,7 @@ export function DeleteDeckDialog({
   async function handleDelete() {
     setDeleting(true);
     try {
-      await ankiFetch("deleteDecks", { decks: [deckName], cardsToo: true });
+      await deleteDecks([deckName], { cardsToo: true });
       onDeleted();
     } catch {
       // Leave the dialog open so the user can retry.
