@@ -85,7 +85,10 @@ export function CommandPalette() {
         // Quick-nav to Study (1) / Decks (2). Skip while editing a card (any
         // dialog holds the scroll lock) or mid-study, where these would
         // interrupt what the user is doing.
-        if (isScrollLocked() || window.location.pathname.endsWith("/study")) {
+        // pathname + hash so this holds under both history and hash routing
+        // (the demo build uses HashRouter, where the route lives in the hash).
+        const route = window.location.pathname + window.location.hash;
+        if (isScrollLocked() || route.endsWith("/study")) {
           return;
         }
         e.preventDefault();
