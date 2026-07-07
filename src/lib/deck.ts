@@ -47,6 +47,23 @@ export function formatDeckPath(name: string): string {
   return name.split("::").join(" / ");
 }
 
+/**
+ * A segment's label, split into a dimmed parent path and the highlighted leaf,
+ * relative to the deck being viewed: the deck itself is just its own leaf
+ * ("Spanish"), and a subdeck shows the path beneath it
+ * ("Spanish::Verbs::Irregular" → prefix "Verbs / ", leaf "Irregular").
+ */
+export function segmentLabelParts(
+  deck: string,
+  parent: string,
+): { prefix: string | null; leaf: string } {
+  const rel = deck === parent ? deckLeaf(parent) : deck.slice(parent.length + 2);
+  const parts = rel.split("::");
+  const leaf = parts[parts.length - 1];
+  const prefix = parts.length > 1 ? parts.slice(0, -1).join(" / ") + " / " : null;
+  return { prefix, leaf };
+}
+
 /** Anki's built-in deck. Special-cased by name (Anki has no isDefault flag). */
 export function isDefaultDeck(name: string): boolean {
   return name === "Default";

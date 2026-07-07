@@ -6,21 +6,27 @@ import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Spinner } from "@/components/spinner";
-import { reloadCollection, syncCollection } from "@/lib/anki-fetch";
+import { syncCollection } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
-import { fetchCardsInfo, setSuspended } from "@/lib/cards";
 import { coveringDecks, isCardInDeck } from "@/lib/deck";
 import { fetchDeckStats } from "@/lib/decks";
 import {
   answerCard,
-  fetchCurrentCard,
   resolveNoteForCard,
   showAnswer,
-  startCardTimer,
-  startDeckReview,
   undoReview,
 } from "@/lib/review";
-import { canUndo } from "@/lib/study";
+import {
+  canUndo,
+  createReviewSession,
+  nextCard,
+  reenterAndLoad,
+  refreshCurrentCard,
+  startSession,
+  suspendCurrentAndAdvance,
+  type NextCardResult,
+  type ReviewSession,
+} from "@/lib/review-session";
 
 // Duration of the card fade transitions (must match the CSS transition below).
 const FADE_MS = 180;
@@ -48,9 +54,10 @@ export function StudyPage() {
     const cover = coveringDecks(segParams);
     return cover.length > 0 ? cover : [deckName];
   }, [segParams, deckName]);
-  // Index into studyDecks of the deck currently being reviewed. A ref so the
-  // async review loop always reads the latest value without re-subscribing.
-  const deckIdxRef = useRef(0);
+  // The session state machine (deck cursor, queue walking, recovery) lives in
+  // lib/review-session; the component only holds it and renders its results.
+  // A ref so the async handlers always see the session the start effect built.
+  const sessionRef = useRef<ReviewSession | null>(null);
 
   const [card, setCard] = useState<CurrentCard | null>(null);
   const [isRevealed, setIsRevealed] = useState(false);
@@ -103,55 +110,30 @@ export function StudyPage() {
     return () => cancelAnimationFrame(id);
   }, [loading, card]);
 
-  const loadCurrentCard = useCallback(async () => {
-    try {
-      // Walk the remaining decks from the active one, serving the first card
-      // we find. Each deck's queue is reviewed in turn; when one empties we
-      // re-enter review on the next and keep going, only completing the session
-      // once every deck is exhausted.
-      for (let i = deckIdxRef.current; i < studyDecks.length; i++) {
-        const deck = studyDecks[i];
-        // The first deck is already in review (entered by startReview/the prior
-        // card); enter each subsequent deck as we reach it.
-        if (i !== deckIdxRef.current) {
-          await startDeckReview(deck);
-        }
-        let result = await fetchCurrentCard();
-        // A foreign card here usually means the reviewer queue is stale —
-        // changeDeck writes raw SQL, so moving the current card to another deck
-        // leaves it queued. Rebuild the queues and re-enter review once before
-        // moving on from this deck.
-        if (result?.deckName && !isCardInDeck(result.deckName, deck)) {
-          await reloadCollection();
-          await startDeckReview(deck);
-          result = await fetchCurrentCard();
-        }
-        // Anki's "current card" is collection-wide; only show one that belongs
-        // to this deck (or its breadcrumb would mismatch the card). Anything
-        // else means this deck is done — advance to the next.
-        if (result && result.deckName && isCardInDeck(result.deckName, deck)) {
-          deckIdxRef.current = i;
-          setCard(result);
-          setIsRevealed(false);
-          await startCardTimer();
-          return;
-        }
-      }
+  // Render a session result: the next card, the completion screen, or — when
+  // the walk hit a transport failure mid-session — the error state, so a
+  // flaky AnkiConnect never masquerades as "Session complete!".
+  const applyResult = useCallback((result: NextCardResult) => {
+    if (result.kind === "card") {
+      setCard(result.card);
+      setIsRevealed(false);
+    } else if (result.kind === "completed") {
       setCompleted(true);
       setCard(null);
-    } catch {
-      setCompleted(true);
+    } else {
+      setError("Lost the connection to Anki mid-session.");
       setCard(null);
     }
-  }, [studyDecks]);
+  }, []);
 
   useEffect(() => {
     async function startReview() {
       setLoading(true);
       setError(null);
-      deckIdxRef.current = 0;
+      const session = createReviewSession(studyDecks);
+      sessionRef.current = session;
       try {
-        await startDeckReview(studyDecks[0]);
+        await startSession(session);
         try {
           // Sum across every deck in the session. The covering decks are
           // disjoint subtrees and getDeckStats counts are subtree-inclusive, so
@@ -169,7 +151,7 @@ export function StudyPage() {
         } catch {
           // progress bar will simply not show — non-fatal
         }
-        await loadCurrentCard();
+        applyResult(await nextCard(session));
       } catch {
         setError(
           "Could not start review. Make sure Anki is running and the deck has due cards."
@@ -179,13 +161,15 @@ export function StudyPage() {
       }
     }
     startReview();
-  }, [studyDecks, loadCurrentCard]);
+  }, [studyDecks, applyResult]);
 
   const handleUndo = useCallback(async () => {
     // Undo only steps back through this session's reviews (see canUndo): not
     // once complete (no card to return to), and not before anything is reviewed
     // — Anki's undo is global, so it would otherwise reach into another deck.
     if (!canUndo({ completed, reviewed })) return;
+    const session = sessionRef.current;
+    if (!session) return;
     try {
       await undoReview();
     } catch {
@@ -199,13 +183,8 @@ export function StudyPage() {
     // collection is back in its pre-answer state, so the undone card is
     // served again. (Undo steps back within the deck being reviewed; it doesn't
     // cross back into an earlier deck of a multi-deck session.)
-    try {
-      await startDeckReview(studyDecks[deckIdxRef.current]);
-    } catch {
-      // ignore — loadCurrentCard will surface any real failure
-    }
-    await loadCurrentCard();
-  }, [completed, reviewed, studyDecks, loadCurrentCard]);
+    applyResult(await reenterAndLoad(session));
+  }, [completed, reviewed, applyResult]);
 
   const handleEdit = useCallback(async () => {
     if (!card) return;
@@ -320,45 +299,21 @@ export function StudyPage() {
     // Something changed, so refresh to pick up the edit. Wrap the whole swap in
     // a single fade so it reads as a smooth transition rather than a snap, and
     // restore the answer side if it was showing before the edit.
+    const session = sessionRef.current;
     const wasRevealed = isRevealed;
     const editedCardId = card?.cardId;
     setCardVisible(false);
     setEditingNote(null);
     await delay(FADE_MS);
 
-    // Refresh the edited card *in place* rather than re-entering review.
-    // guiDeckReview rebuilds the scheduler queue and serves whatever card lands
-    // on top — usually a different one — which is why an edit would sometimes
-    // jump to the next card. cardsInfo renders straight from the collection (the
-    // offscreen reviewer caches its current card and wouldn't show the edit
-    // without a queue rebuild), so it gives us the freshly rendered question and
-    // answer for the exact card we just edited. The reviewer's current card is
-    // untouched, so grading still lands on this card.
-    let refreshed: CurrentCard | null = null;
-    if (editedCardId != null) {
-      try {
-        const info = await fetchCardsInfo([editedCardId]);
-        const ci = info[0];
-        // Stay in place only while the card still belongs to this deck. A
-        // note-type change deletes and replaces it (cardsInfo comes back empty)
-        // and a deck move sends it elsewhere — both should advance instead.
-        if (
-          ci &&
-          ci.deckName &&
-          isCardInDeck(ci.deckName, studyDecks[deckIdxRef.current])
-        ) {
-          refreshed = {
-            cardId: ci.cardId,
-            question: ci.question,
-            answer: ci.answer,
-            deckName: ci.deckName,
-            fields: ci.fields,
-          };
-        }
-      } catch {
-        // fall through to a queue rebuild
-      }
-    }
+    // Refresh the edited card *in place* rather than re-entering review, so
+    // an edit doesn't jump to the next card; null means the card left this
+    // deck (moved, or its note type changed) and we should advance instead —
+    // see refreshCurrentCard for the protocol details.
+    const refreshed =
+      session && editedCardId != null
+        ? await refreshCurrentCard(session, editedCardId)
+        : null;
 
     if (refreshed) {
       setCard(refreshed);
@@ -375,15 +330,10 @@ export function StudyPage() {
         }
       }
       setIsRevealed(wasRevealed);
-    } else {
+    } else if (session) {
       // The card left this deck (moved or its note type changed). Rebuild the
       // queue and serve whatever's next.
-      try {
-        await startDeckReview(studyDecks[deckIdxRef.current]);
-      } catch {
-        // ignore
-      }
-      await loadCurrentCard();
+      applyResult(await reenterAndLoad(session));
       if (wasRevealed) {
         try {
           await showAnswer();
@@ -398,40 +348,25 @@ export function StudyPage() {
 
   async function handleAddSaved() {
     setShowAddForm(false);
+    const session = sessionRef.current;
+    if (!session) return;
     // Re-enter review so the freshly added card can join this session's queue.
-    try {
-      await startDeckReview(studyDecks[deckIdxRef.current]);
-    } catch {
-      // ignore
-    }
-    await loadCurrentCard();
+    applyResult(await reenterAndLoad(session));
   }
 
   async function handleSuspend() {
-    if (!card || transitioningRef.current) return;
+    const session = sessionRef.current;
+    if (!card || !session || transitioningRef.current) return;
     transitioningRef.current = true;
     setAnswering(true);
     // Fade the card out, drop the note from the queue while hidden, then fade in.
     setCardVisible(false);
     await delay(FADE_MS);
     try {
-      // Suspend the whole note, not just this card. The rest of the app treats
-      // suspension as note-level — the card list shows a note as suspended and
-      // toggles all its cards together — so suspending a single card of a
-      // multi-card note (e.g. the forward side of a Basic-and-reversed note)
-      // would leave the list unable to represent the partial state.
-      //
-      // guiCurrentCard doesn't return a note id, so resolve the note from the
-      // card (as handleEdit does) and suspend all of its cards. Fall back to
-      // just this card if resolution fails.
-      const note = await resolveNoteForCard(card.cardId);
-      const cardIds = note?.cards?.length ? note.cards : [card.cardId];
-      await setSuspended(cardIds, true);
-      // The offscreen reviewer's queue still holds the just-suspended card(s);
-      // re-enter review to rebuild it (queue -1 cards drop out), then serve the
-      // next. Suspending isn't a review, so the reviewed count is left untouched.
-      await startDeckReview(studyDecks[deckIdxRef.current]);
-      await loadCurrentCard();
+      // Suspend the whole note (not just this card — see the session module
+      // for why), rebuild the queue, and serve the next card. Suspending isn't
+      // a review, so the reviewed count is left untouched.
+      applyResult(await suspendCurrentAndAdvance(session, card));
     } catch {
       setError("Failed to suspend note. Try again.");
     } finally {
@@ -442,7 +377,8 @@ export function StudyPage() {
   }
 
   async function handleAnswer(ease: Ease) {
-    if (transitioningRef.current) return;
+    const session = sessionRef.current;
+    if (!session || transitioningRef.current) return;
     transitioningRef.current = true;
     setAnswering(true);
     // Fade the answered card out, load the next card while hidden, then fade in.
@@ -452,7 +388,7 @@ export function StudyPage() {
       const success = await answerCard(ease);
       if (success) {
         setReviewed((r) => r + 1);
-        await loadCurrentCard();
+        applyResult(await nextCard(session));
       }
     } catch {
       setError("Failed to record answer. Try again.");
