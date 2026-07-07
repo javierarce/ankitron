@@ -198,6 +198,15 @@ function isMatches(note: DemoNote, state: string): boolean {
   }
 }
 
+// Substring match against a note's fields+tags, with `*` wildcards, folded.
+function textMatch(note: DemoNote, raw: string): boolean {
+  const needle = foldText(unquote(raw));
+  if (needle === "") return true;
+  return needle.includes("*")
+    ? wildcardRegExp(needle, false).test(haystack(note))
+    : haystack(note).includes(needle);
+}
+
 function leafMatches(note: DemoNote, term: string): boolean {
   const colon = term.indexOf(":");
   if (colon > 0) {
@@ -214,15 +223,15 @@ function leafMatches(note: DemoNote, term: string): boolean {
         return isMatches(note, value.toLowerCase());
       case "note":
         return matchesValue(note.modelName, value);
-      // Everything else (prop:, added:, field searches, …) has no structured
-      // data behind it here, so fall through to a plain text match on the value.
     }
+    // An unhandled qualifier — a field search (`front:hello`) or an operator we
+    // can't evaluate (`prop:`, `added:`, …). Approximate with a text match on the
+    // value, so `front:perro` still finds a note whose Front is "el perro". Also
+    // try the whole term, so a plain word that merely contains a colon (a URL, a
+    // "3:4" ratio) still matches literally rather than being read as a field.
+    return textMatch(note, value) || textMatch(note, term);
   }
-  const needle = foldText(unquote(term));
-  if (needle === "") return true;
-  return needle.includes("*")
-    ? wildcardRegExp(needle, false).test(haystack(note))
-    : haystack(note).includes(needle);
+  return textMatch(note, term);
 }
 
 function evaluate(node: Node, note: DemoNote): boolean {

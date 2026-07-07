@@ -91,4 +91,17 @@ describe("notesMatchingSearch", () => {
     expect(ids("perro")).toEqual([1]);
     expect(ids("chi*n")).toEqual([3]);
   });
+
+  it("falls back to matching the value for an unhandled field qualifier", () => {
+    // front:perro should find the note whose Front is "el perro", not require
+    // the literal substring "front:perro".
+    expect(ids("front:perro")).toEqual([1]);
+  });
+
+  it("still matches a plain term that merely contains a colon", () => {
+    const withUrl = [note({ noteId: 9, front: "see https://ankitron.app" })];
+    expect(
+      notesMatchingSearch(withUrl, "https://ankitron.app").map((n) => n.noteId),
+    ).toEqual([9]);
+  });
 });
