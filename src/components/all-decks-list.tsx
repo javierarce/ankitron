@@ -1,9 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Minus } from "@phosphor-icons/react/dist/ssr/Minus";
-import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { ankiFetch } from "@/lib/anki-fetch";
 import {
   buildDeckTree,
@@ -12,25 +10,23 @@ import {
   deckLeaf,
   deckParent,
   formatDeckPath,
+  isCardInDeck,
   renameDeck,
+  subdecksOf,
   type DeckNode,
 } from "@/lib/deck";
 import { recordDeckRedirect } from "@/lib/deck-redirects";
 import { foldText } from "@/lib/fold-text";
-import {
-  buildExport,
-  downloadDeckJson,
-  fetchCardDecksByNoteId,
-} from "@/lib/import-export";
-import type { DueCounts, Note } from "@/lib/types";
+import { exportDeckToJson } from "@/lib/import-export";
+import type { DueCounts } from "@/lib/types";
 import { useVimNav } from "@/hooks/use-vim-nav";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
-import { useMenuPlacement } from "@/hooks/use-menu-placement";
+import { ActionsMenu } from "./actions-menu";
 import { CardForm } from "./card-form";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { MoveDeckDialog } from "./move-deck-dialog";
 import { DecksImportExport } from "./decks-import-export";
 import { ImportResultModal } from "./import-result-modal";
+import { ModalDialog } from "./modal-dialog";
 
 // Whether a deck (or any of its subdecks, since studying a deck includes them)
 // has cards due. While due counts are still loading we report `true` so the
@@ -42,10 +38,7 @@ function deckCanStudy(
 ): boolean {
   if (!dueLoaded) return true;
   for (const [name, due] of Object.entries(dueCounts)) {
-    if (
-      (name === deck || name.startsWith(deck + "::")) &&
-      due.new + due.learn + due.review > 0
-    ) {
+    if (isCardInDeck(name, deck) && due.new + due.learn + due.review > 0) {
       return true;
     }
   }
@@ -73,9 +66,12 @@ export function AllDecksList({
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   // Mirror of `expanded` the keyboard callbacks can read without being rebuilt
-  // (and re-subscribing useVimNav) on every toggle.
+  // (and re-subscribing useVimNav) on every toggle. Updated in an effect —
+  // keyboard events only fire after the commit, so they never see it stale.
   const expandedRef = useRef(expanded);
-  expandedRef.current = expanded;
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
 
   const [showDialog, setShowDialog] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
@@ -152,9 +148,6 @@ export function AllDecksList({
   );
 
   useVimNav({ enabled: !hasDialog, onExpand: expandRow, onCollapse: collapseRow });
-  // CardForm (addCardDeck) locks scroll itself; lock for the inline Create Deck
-  // dialog so the deck list behind it can't scroll on wheel.
-  useScrollLock(showDialog);
 
   useEffect(() => {
     if (showDialog) {
@@ -165,10 +158,9 @@ export function AllDecksList({
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (hasDialog) {
-        if (e.key === "Escape") closeDialog();
-        return;
-      }
+      // Every dialog (create-deck included) handles its own Escape; just keep
+      // the search shortcut from firing underneath one.
+      if (hasDialog) return;
       const target = e.target as HTMLElement | null;
       const inField =
         target?.tagName === "INPUT" ||
@@ -240,7 +232,7 @@ export function AllDecksList({
   // may be undefined; pass it through and let the dialog count on demand rather
   // than warning about "0 notes".
   const deletingSubdeckCount = deletingDeck
-    ? decks.filter((d) => d.startsWith(deletingDeck + "::")).length
+    ? subdecksOf(decks, deletingDeck).length
     : 0;
   const deletingNoteTotal = deletingDeck ? noteCounts[deletingDeck] : undefined;
 
@@ -269,16 +261,7 @@ export function AllDecksList({
   async function handleExport(deck: string) {
     setExportError(null);
     try {
-      const noteIds = await ankiFetch<number[]>("findNotes", {
-        query: `deck:"${deck}"`,
-      });
-      const notes =
-        noteIds.length === 0
-          ? []
-          : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
-      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
-      const payload = buildExport(deck, notes, undefined, cardDecksByNoteId);
-      await downloadDeckJson(payload, deck);
+      await exportDeckToJson(deck);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed.");
     }
@@ -368,51 +351,43 @@ export function AllDecksList({
       )}
 
       {showDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeDialog();
-          }}
-        >
-          <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
-            <h3 className="mb-4 text-lg font-semibold">Create New Deck</h3>
-            <form onSubmit={handleCreateDeck}>
-              <input
-                ref={inputRef}
-                type="text"
-                value={newDeckName}
-                onChange={(e) => setNewDeckName(e.target.value)}
-                spellCheck={false}
-                placeholder="Deck name…"
-                className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              />
-              {deckNameExists ? (
-                <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">
-                  A deck named “{trimmedNewName}” already exists.
-                </p>
-              ) : error ? (
-                <p className="mt-2 text-sm text-red-500">{error}</p>
-              ) : null}
-              <div className="mt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeDialog}
-                  disabled={creating}
-                  className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating || !trimmedNewName || deckNameExists}
-                  className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
-                >
-                  {creating ? "Creating…" : "Create Deck"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ModalDialog title="Create New Deck" busy={creating} onClose={closeDialog}>
+          <form onSubmit={handleCreateDeck}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={newDeckName}
+              onChange={(e) => setNewDeckName(e.target.value)}
+              spellCheck={false}
+              placeholder="Deck name…"
+              className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            />
+            {deckNameExists ? (
+              <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">
+                A deck named “{trimmedNewName}” already exists.
+              </p>
+            ) : error ? (
+              <p className="mt-2 text-sm text-red-500">{error}</p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDialog}
+                disabled={creating}
+                className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={creating || !trimmedNewName || deckNameExists}
+                className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
+              >
+                {creating ? "Creating…" : "Create Deck"}
+              </button>
+            </div>
+          </form>
+        </ModalDialog>
       )}
 
       {addCardDeck && (
@@ -630,117 +605,36 @@ function DeckRowMenu({
   onDelete: () => void;
 }) {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // Render in a portal (escaping the table's overflow-hidden clip) at flip-aware
-  // fixed coordinates, so a menu near the bottom of the list opens upward
-  // instead of being cut off.
-  const style = useMenuPlacement(open, btnRef, menuRef);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
-      setOpen(false);
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("mousedown", handleClick);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
-
   const encoded = encodeURIComponent(deck);
 
   return (
-    <>
-      <button
-        ref={btnRef}
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Deck actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="shrink-0 rounded-md p-1 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60"
-      >
-        <DotsThreeVertical size={22} weight="bold" />
-      </button>
-      {open &&
-        createPortal(
-          <div
-            ref={menuRef}
-            role="menu"
-            style={style}
-            className="z-50 flex w-max min-w-[160px] flex-col overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-lg"
-          >
-            <button
-              disabled={!canStudy}
-              onClick={() => {
-                setOpen(false);
-                navigate(`/decks/${encoded}/study`);
-              }}
-              title={canStudy ? undefined : "Nothing to study in this deck"}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:text-foreground/30 disabled:hover:bg-transparent"
-            >
-              Study
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onAddCard();
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Add a note
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onMove();
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Move
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                onExport();
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Export
-            </button>
-            <button
-              onClick={() => {
-                setOpen(false);
-                navigate(`/decks/${encoded}/settings`);
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5"
-            >
-              Settings
-            </button>
-            <button
-              disabled={!canDelete}
-              onClick={() => {
-                setOpen(false);
-                onDelete();
-              }}
-              title={
-                canDelete ? undefined : "The Default deck has no notes to remove"
-              }
-              className="w-full px-3 py-1.5 text-left text-sm text-red-500 transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:text-red-500/30 disabled:hover:bg-transparent"
-            >
-              Delete deck
-            </button>
-          </div>,
-          document.body,
-        )}
-    </>
+    <ActionsMenu
+      label="Deck actions"
+      menuClassName="min-w-[160px]"
+      items={[
+        {
+          label: "Study",
+          disabled: !canStudy,
+          title: canStudy ? undefined : "Nothing to study in this deck",
+          onSelect: () => navigate(`/decks/${encoded}/study`),
+        },
+        { label: "Add a note", onSelect: onAddCard },
+        { label: "Move", onSelect: onMove },
+        { label: "Export", onSelect: onExport },
+        {
+          label: "Settings",
+          onSelect: () => navigate(`/decks/${encoded}/settings`),
+        },
+        {
+          label: "Delete deck",
+          danger: true,
+          disabled: !canDelete,
+          title: canDelete
+            ? undefined
+            : "The Default deck has no notes to remove",
+          onSelect: onDelete,
+        },
+      ]}
+    />
   );
 }

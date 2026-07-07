@@ -1,20 +1,12 @@
 import type { ExportedNote } from "./import-export";
-import { isClozeModelName } from "./note-fields";
+import { stripSoundTags } from "./audio";
+import { CLOZE_RE, clozeParts } from "./cloze";
+import { isClozeNote } from "./note-fields";
 
 /** The front and back HTML to show when previewing a note before import. */
 export interface CardFaces {
   front: string;
   back: string;
-}
-
-const CLOZE_RE = /\{\{c\d+::(.*?)\}\}/g;
-const SOUND_RE = /\[sound:[^\]]+\]/g;
-
-/** Split a cloze body `answer` or `answer::hint` into its parts. */
-function clozeParts(inner: string): { answer: string; hint?: string } {
-  const i = inner.lastIndexOf("::");
-  if (i === -1) return { answer: inner };
-  return { answer: inner.slice(0, i), hint: inner.slice(i + 2) };
 }
 
 /** Replace every cloze deletion with a blank (or its hint) — the question side.
@@ -38,11 +30,7 @@ export function revealCloze(html: string): string {
  * raw field would otherwise show them as literal text. Audio preview is out of
  * scope here, so drop them. */
 function stripSounds(html: string): string {
-  return html.replace(SOUND_RE, "").trim();
-}
-
-function isCloze(note: Pick<ExportedNote, "modelName" | "fields">): boolean {
-  return isClozeModelName(note.modelName) || "Text" in note.fields;
+  return stripSoundTags(html).trim();
 }
 
 /**
@@ -58,7 +46,7 @@ function isCloze(note: Pick<ExportedNote, "modelName" | "fields">): boolean {
  */
 export function exportedNoteFaces(note: ExportedNote): CardFaces {
   const f = note.fields;
-  if (isCloze(note)) {
+  if (isClozeNote(note)) {
     const text = f.Text ?? "";
     const extra = stripSounds(f["Back Extra"] ?? "");
     const back = revealCloze(text) + (extra ? `<hr>${extra}` : "");

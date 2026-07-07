@@ -10,9 +10,11 @@ import {
   deckParent,
   formatDeckPath,
   isCardInDeck,
+  isDescendantDeck,
   joinDeck,
   planDeckRename,
   renameDeck,
+  subdecksOf,
 } from "./deck";
 
 describe("deck path helpers", () => {
@@ -145,6 +147,49 @@ describe("isCardInDeck", () => {
 
   it("rejects a cousin subdeck under a different parent", () => {
     expect(isCardInDeck("French::Verbs", "Spanish")).toBe(false);
+  });
+});
+
+describe("isDescendantDeck", () => {
+  it("matches subdecks at any depth", () => {
+    expect(isDescendantDeck("Spanish::Verbs", "Spanish")).toBe(true);
+    expect(isDescendantDeck("Spanish::Verbs::Irregular", "Spanish")).toBe(true);
+  });
+
+  it("rejects the deck itself (strict descendants only)", () => {
+    expect(isDescendantDeck("Spanish", "Spanish")).toBe(false);
+  });
+
+  it("rejects a sibling whose name shares a prefix but is not a subdeck", () => {
+    expect(isDescendantDeck("Spanish 2", "Spanish")).toBe(false);
+    expect(isDescendantDeck("SpanishAdvanced", "Spanish")).toBe(false);
+  });
+
+  it("rejects the parent of the ancestor", () => {
+    expect(isDescendantDeck("Spanish", "Spanish::Verbs")).toBe(false);
+  });
+});
+
+describe("subdecksOf", () => {
+  const all = [
+    "Spanish",
+    "Spanish::Verbs",
+    "Spanish::Verbs::Irregular",
+    "Spanish 2",
+    "French",
+    "French::Verbs",
+  ];
+
+  it("returns every deck strictly below the given one, in input order", () => {
+    expect(subdecksOf(all, "Spanish")).toEqual([
+      "Spanish::Verbs",
+      "Spanish::Verbs::Irregular",
+    ]);
+  });
+
+  it("excludes the deck itself and prefix-named siblings", () => {
+    expect(subdecksOf(all, "French")).toEqual(["French::Verbs"]);
+    expect(subdecksOf(all, "Spanish 2")).toEqual([]);
   });
 });
 

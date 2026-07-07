@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ankiFetch } from "@/lib/anki-fetch";
+import { Spinner } from "@/components/spinner";
 import { SyncContext, type SyncStatus } from "@/lib/sync-context";
 
 const isTauri =
@@ -136,7 +137,7 @@ function SyncIndicator({
       title="Syncing…"
       className="fixed bottom-3 right-3 z-50 flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-foreground/50 shadow-sm backdrop-blur"
     >
-      <span className="h-3 w-3 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground/60" />
+      <Spinner size="xs" tone="muted" />
       Syncing…
     </div>
   );

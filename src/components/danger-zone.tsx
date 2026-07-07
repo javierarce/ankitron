@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { canDeleteDeck } from "@/lib/deck";
+import { canDeleteDeck, subdecksOf } from "@/lib/deck";
+import { useDeckNames } from "@/hooks/use-deck-names";
 
 interface DangerZoneProps {
   deckName: string;
@@ -13,35 +14,28 @@ export function DangerZone({ deckName }: DangerZoneProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   // Counts power the same "removes N notes" warning the decks list shows — note
   // counts, to match it. Loaded up front so the dialog is accurate the moment it
-  // opens; default to 0 until then.
+  // opens; default to 0 until then (the warning still conveys the deletion is
+  // final).
   const [noteCount, setNoteCount] = useState(0);
-  const [subdeckCount, setSubdeckCount] = useState(0);
-  // Until the counts load we don't know if an empty Default deck should disable
-  // deletion, so keep the button enabled rather than flickering it off.
+  // Until the note count loads we don't know if an empty Default deck should
+  // disable deletion, so keep the button enabled rather than flickering it off.
   const [countsLoaded, setCountsLoaded] = useState(false);
+  const allDecks = useDeckNames();
+  const subdeckCount = allDecks ? subdecksOf(allDecks, deckName).length : 0;
 
   useEffect(() => {
     let cancelled = false;
-    async function loadCounts() {
-      try {
-        // `deck:` matches descendants, so this note count already spans subdecks —
-        // matching how the decks list counts and warns. Subdecks are the deck's
-        // own "::"-prefixed entries.
-        const [noteIds, allDecks] = await Promise.all([
-          ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` }),
-          ankiFetch<string[]>("deckNames"),
-        ]);
+    // `deck:` matches descendants, so this note count already spans subdecks —
+    // matching how the decks list counts and warns.
+    ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` })
+      .then((noteIds) => {
         if (cancelled) return;
         setNoteCount(noteIds.length);
-        setSubdeckCount(
-          allDecks.filter((d) => d.startsWith(deckName + "::")).length,
-        );
         setCountsLoaded(true);
-      } catch {
-        // Leave the counts at 0; the warning still conveys the deletion is final.
-      }
-    }
-    loadCounts();
+      })
+      .catch(() => {
+        // Leave the count at 0; the warning still conveys the deletion is final.
+      });
     return () => {
       cancelled = true;
     };

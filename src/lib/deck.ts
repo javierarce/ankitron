@@ -5,7 +5,19 @@
  * like "Spanish"'s own parent, or a similarly-named deck such as "Spanish 2".
  */
 export function isCardInDeck(cardDeck: string, studyDeck: string): boolean {
-  return cardDeck === studyDeck || cardDeck.startsWith(studyDeck + "::");
+  return cardDeck === studyDeck || isDescendantDeck(cardDeck, studyDeck);
+}
+
+/** True when `deck` sits strictly below `ancestor` in the hierarchy — a
+ * subdeck at any depth, never the deck itself. */
+export function isDescendantDeck(deck: string, ancestor: string): boolean {
+  return deck.startsWith(ancestor + "::");
+}
+
+/** The decks in `allDeckNames` nested under `deck` (at any depth), in the
+ * order given. */
+export function subdecksOf(allDeckNames: string[], deck: string): string[] {
+  return allDeckNames.filter((d) => isDescendantDeck(d, deck));
 }
 
 /** The deck's own name — the segment after the last "::" (or the whole name). */

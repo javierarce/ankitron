@@ -14,6 +14,8 @@
 //    the highlighted output sit behind the editable textarea in the overlay
 //    editor without the caret drifting out of alignment.
 
+import { CLOZE_MULTILINE_SOURCE } from "./cloze";
+
 // Elements whose textual content is not HTML (or whose internal whitespace is
 // significant). Their contents are copied through formatting verbatim.
 const RAW_ELEMENTS = new Set(["pre", "script", "style", "textarea"]);
@@ -177,7 +179,10 @@ function span(cls: string, text: string): string {
 
 // Anki-specific markers worth calling out inside text: cloze deletions and the
 // [sound:…] / [anki:…] media tags.
-const MARKER_RE = /\{\{c\d+::[\s\S]*?\}\}|\[(?:sound|anki):[^\]]*\]/g;
+const MARKER_RE = new RegExp(
+  `${CLOZE_MULTILINE_SOURCE}|\\[(?:sound|anki):[^\\]]*\\]`,
+  "g",
+);
 
 function highlightText(text: string): string {
   let out = "";

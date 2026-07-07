@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { useAllTags } from "@/hooks/use-all-tags";
 import { TagInput } from "./tag-input";
+import { ModalDialog } from "./modal-dialog";
 
 /**
  * A single reversible tag operation: `action` is the inverse op needed to undo
@@ -42,7 +42,6 @@ interface BulkTagDialogProps {
 type TagState = "add" | "remove" | "keep";
 
 export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) {
-  useScrollLock();
   // New tags typed into the field, to be added to every selected note.
   const [tags, setTags] = useState<string[]>([]);
   // Text typed into the tag field but not yet turned into a chip. Tracked so
@@ -70,14 +69,6 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
     const u = usage.get(t) ?? 0;
     return u > 0 && u < count;
   });
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !busy) onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, onClose]);
 
   // Click cycles a tag's state. A fully-applied tag toggles keep⇄remove; a
   // partially-applied one cycles keep→add→remove→keep so you can add it to the
@@ -166,100 +157,85 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
   const title = `Edit Tags · ${noun}`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onClose();
+    <ModalDialog
+      title={title}
+      titleClassName="mb-3"
+      busy={busy}
+      onClose={onClose}
+      footer={{
+        confirmLabel: "Apply",
+        busyLabel: "Applying…",
+        confirmDisabled: adds.size === 0 && removes.size === 0,
+        onConfirm: handleApply,
       }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
-        <h3 className="mb-3 text-lg font-semibold">{title}</h3>
+      <TagInput
+        tags={tags}
+        onChange={setTags}
+        onInputChange={setPending}
+        suggestions={allTags}
+        autoFocus
+        onSubmit={() => {
+          if (!disabled) handleApply();
+        }}
+      />
+      <p className="mt-2 text-xs text-foreground/50">
+        Type to add new tags. Separate with commas.
+      </p>
 
-        <TagInput
-          tags={tags}
-          onChange={setTags}
-          onInputChange={setPending}
-          suggestions={allTags}
-          autoFocus
-          onSubmit={() => {
-            if (!disabled) handleApply();
-          }}
-        />
-        <p className="mt-2 text-xs text-foreground/50">
-          Type to add new tags. Separate with commas.
-        </p>
-
-        {inUse.length > 0 && (
-          <div className="mt-4">
-            <ul className="max-h-64 overflow-auto rounded-lg border border-border">
-              {inUse.map((tag) => {
-                const used = usage.get(tag) ?? 0;
-                const isPartial = used > 0 && used < count;
-                const state = tagStates.get(tag) ?? "keep";
-                const checked = state === "add" || (state === "keep" && !isPartial);
-                const indeterminate = state === "keep" && isPartial;
-                // Preview how many notes will carry the tag once applied.
-                const projected =
-                  state === "remove" ? 0 : state === "add" ? count : used;
-                return (
-                  <li key={tag}>
-                    <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-foreground/5">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        ref={(el) => {
-                          if (el) el.indeterminate = indeterminate;
-                        }}
-                        onChange={() => cycleTag(tag, isPartial)}
-                        disabled={busy}
-                        className="size-4 accent-foreground"
-                      />
-                      <span
-                        className={`flex-1 ${
-                          state === "remove"
-                            ? "text-red-500 line-through"
-                            : state === "add"
-                              ? "text-green-600 dark:text-green-500"
-                              : ""
-                        }`}
-                      >
-                        {tag}
-                      </span>
-                      <span className="text-xs tabular-nums text-foreground/40">
-                        {projected} of {count}
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="mt-2 text-xs text-foreground/50">
-              {hasPartial
-                ? "Uncheck to remove a tag, or check a half-filled one to add it to every note."
-                : "Uncheck the tags you want to remove."}
-            </p>
-          </div>
-        )}
-
-        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="rounded-lg px-4 py-2 text-sm text-foreground/60 transition-colors hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleApply}
-            disabled={disabled}
-            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
-          >
-            {busy ? "Applying…" : "Apply"}
-          </button>
+      {inUse.length > 0 && (
+        <div className="mt-4">
+          <ul className="max-h-64 overflow-auto rounded-lg border border-border">
+            {inUse.map((tag) => {
+              const used = usage.get(tag) ?? 0;
+              const isPartial = used > 0 && used < count;
+              const state = tagStates.get(tag) ?? "keep";
+              const checked = state === "add" || (state === "keep" && !isPartial);
+              const indeterminate = state === "keep" && isPartial;
+              // Preview how many notes will carry the tag once applied.
+              const projected =
+                state === "remove" ? 0 : state === "add" ? count : used;
+              return (
+                <li key={tag}>
+                  <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-foreground/5">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      ref={(el) => {
+                        if (el) el.indeterminate = indeterminate;
+                      }}
+                      onChange={() => cycleTag(tag, isPartial)}
+                      disabled={busy}
+                      className="size-4 accent-foreground"
+                    />
+                    <span
+                      className={`flex-1 ${
+                        state === "remove"
+                          ? "text-red-500 line-through"
+                          : state === "add"
+                            ? "text-green-600 dark:text-green-500"
+                            : ""
+                      }`}
+                    >
+                      {tag}
+                    </span>
+                    <span className="text-xs tabular-nums text-foreground/40">
+                      {projected} of {count}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-xs text-foreground/50">
+            {hasPartial
+              ? "Uncheck to remove a tag, or check a half-filled one to add it to every note."
+              : "Uncheck the tags you want to remove."}
+          </p>
         </div>
-      </div>
-    </div>
+      )}
+
+      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+    </ModalDialog>
   );
 }

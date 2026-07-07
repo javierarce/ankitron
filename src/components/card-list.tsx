@@ -5,8 +5,6 @@ import {
   type MouseEvent as ReactMouseEvent,
   type DragEvent as ReactDragEvent,
 } from "react";
-import { createPortal } from "react-dom";
-import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { Check } from "@phosphor-icons/react/dist/ssr/Check";
 import { Checks } from "@phosphor-icons/react/dist/ssr/Checks";
 import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
@@ -24,7 +22,7 @@ import {
   hasOperators,
   type SuggestionSources,
 } from "@/lib/search-query";
-import { useMenuPlacement } from "@/hooks/use-menu-placement";
+import { ActionsMenu, Kbd } from "./actions-menu";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
 import { BulkTagDialog, type TagChange } from "./bulk-tag-dialog";
@@ -40,12 +38,24 @@ import {
   type EditSequence,
   type SequenceStep,
 } from "@/lib/edit-sequence";
-import { stripSoundTags } from "@/lib/audio";
+import { stripCloze } from "@/lib/cloze";
+import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
+import { moveNotesToDeck } from "@/lib/notes";
 import { deckLeaf, formatDeckPath, isCardInDeck } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
+import { useToast } from "@/lib/toast-context";
+
+// The toast copy for a failed mutation. A real AnkiConnect failure is thrown
+// as an Error whose message is AnkiConnect's own explanation (anki-fetch.ts
+// throws `new Error(data.error)`) — surface it. Anything else (the Tauri
+// proxy rejects with a plain string like "AnkiConnect request failed: …" when
+// Anki itself is unreachable) is technical noise, so fall back to fixed copy.
+function failureMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
 
 /**
  * A segment's label, split into a dimmed parent path and the highlighted leaf,
@@ -78,47 +88,47 @@ function EmptyState({ heading, hint }: { heading: string; hint: string }) {
   );
 }
 
-function decodeHtml(html: string): string {
-  if (typeof document === "undefined") {
-    return html
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&nbsp;/g, " ");
-  }
-  const txt = document.createElement("textarea");
-  txt.innerHTML = html;
-  return txt.value;
-}
-
-function stripHtml(html: string): string {
-  return decodeHtml(stripSoundTags(html).replace(/<[^>]*>/g, "")).trim();
-}
-
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max) + "\u2026";
-}
-
-function stripCloze(text: string): string {
-  return text.replace(/\{\{c\d+::(.*?)\}\}/g, (_, inner: string) => {
-    const hintIdx = inner.lastIndexOf("::");
-    return hintIdx === -1 ? inner : inner.slice(0, hintIdx);
-  });
-}
-
 // A note's searchable text: its field values (HTML and cloze stripped) plus its
 // tags, lowercased and diacritic-folded, for the plain-text substring filter.
+//
+// stripHtml costs a DOM parse per field, and search re-filters on every
+// keystroke, so both this and the display text below are cached per note
+// object (weakly — an edit or refetch replaces the note objects, dropping
+// their stale entries with them). Without the cache a keystroke re-parsed
+// every field of every note in the deck.
+const haystackCache = new WeakMap<Note, string>();
 function noteHaystack(note: Note): string {
+  const cached = haystackCache.get(note);
+  if (cached !== undefined) return cached;
   const text = Object.values(note.fields)
     .map((field) => field?.value)
     .filter(Boolean)
     .map((v) => stripCloze(stripHtml(v as string)))
     .concat(note.tags)
     .join(" ");
-  return foldText(text);
+  const folded = foldText(text);
+  haystackCache.set(note, folded);
+  return folded;
+}
+
+// A note's two display lines for the list row, HTML-stripped and truncated.
+const displayTextCache = new WeakMap<
+  Note,
+  { primary: string; secondary: string | null }
+>();
+function noteDisplayText(note: Note): {
+  primary: string;
+  secondary: string | null;
+} {
+  const cached = displayTextCache.get(note);
+  if (cached !== undefined) return cached;
+  const { primary, secondary } = noteDisplayFields(note);
+  const text = {
+    primary: truncate(stripCloze(stripHtml(primary)), 80),
+    secondary: secondary ? truncate(stripCloze(stripHtml(secondary)), 80) : null,
+  };
+  displayTextCache.set(note, text);
+  return text;
 }
 
 /**
@@ -204,123 +214,6 @@ function sortNotes(notes: Note[], mode: SortMode): Note[] {
   }
 }
 
-// A muted keyboard hint shown next to an action's label, so the single-key
-// shortcuts (e/s/t) are discoverable from the controls that trigger them.
-function Kbd({ children }: { children: string }) {
-  return (
-    // The hint font is smaller than the label it sits beside; flex centering
-    // lands its tight line box a hair high, so nudge it down a pixel to line up
-    // optically with the text baseline.
-    <kbd className="relative top-px font-sans text-[11px] leading-none text-foreground/30">
-      {children}
-    </kbd>
-  );
-}
-
-function CardMenu({
-  onEdit,
-  isSuspended,
-  onToggleSuspend,
-  onMove,
-  onDelete,
-}: {
-  onEdit: () => void;
-  isSuspended: boolean;
-  onToggleSuspend: () => void;
-  onMove: () => void;
-  onDelete: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // Portal + flip-aware placement so a row near the bottom of the (scrollable)
-  // note list opens its menu upward instead of off-screen.
-  const style = useMenuPlacement(open, btnRef, menuRef);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
-      setOpen(false);
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("mousedown", handleClick);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Note actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="shrink-0 rounded-md p-1 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60"
-      >
-        <DotsThreeVertical size={22} weight="bold" />
-      </button>
-      {open &&
-        createPortal(
-          <div
-            ref={menuRef}
-            role="menu"
-            style={style}
-            className="z-50 flex w-max flex-col overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-lg"
-          >
-          <button
-            onClick={() => {
-              setOpen(false);
-              onEdit();
-            }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
-          >
-            <span>Edit</span>
-            <Kbd>E</Kbd>
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onToggleSuspend();
-            }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
-          >
-            <span>{isSuspended ? "Unsuspend" : "Suspend"}</span>
-            <Kbd>S</Kbd>
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onMove();
-            }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
-          >
-            <span>Move to deck&hellip;</span>
-            <Kbd>M</Kbd>
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-            className="w-full px-3 py-1.5 text-left text-sm text-red-500 hover:bg-foreground/5 transition-colors"
-          >
-            Delete
-          </button>
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
-
 interface CardListProps {
   deckName: string;
   notes: Note[];
@@ -336,9 +229,11 @@ interface CardListProps {
   /**
    * Called after a card is added, edited, or deleted so the parent can refetch
    * the list in place. Without it these actions fall back to a full page
-   * reload, which blanks the whole app.
+   * reload, which blanks the whole app. A same-deck single-note edit passes
+   * the updated note so the parent can patch it into its list instead of
+   * refetching the whole deck; no argument means "refetch everything".
    */
-  onChanged?: () => void;
+  onChanged?: (updatedNote?: Note) => void;
   /** Add-card form visibility, owned by the page so the button can live in its header. */
   showAddForm: boolean;
   onShowAddForm: (show: boolean) => void;
@@ -366,6 +261,7 @@ export function CardList({
   initialSegments,
   onSegmentsChange,
 }: CardListProps) {
+  const toast = useToast();
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [deletingNote, setDeletingNote] = useState<Note | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -485,8 +381,11 @@ export function CardList({
         await ankiFetch(op.action, { notes: op.noteIds, tags: op.tag });
       }
       refreshAfterChange();
-    } catch {
+    } catch (err) {
       // A failed undo just stays undone rather than retrying in a loop.
+      toast.error(
+        failureMessage(err, "Couldn't undo the tag change. Is Anki still running?"),
+      );
     }
   }
 
@@ -508,7 +407,8 @@ export function CardList({
 
   // Refresh the list in place after a write. Falls back to a full page reload
   // only if the parent didn't wire up an in-place refresh.
-  const refreshAfterChange = onChanged ?? (() => window.location.reload());
+  const refreshAfterChange: (updatedNote?: Note) => void =
+    onChanged ?? (() => window.location.reload());
 
   // Resync the list once the run finishes, and only if something was actually
   // written.
@@ -531,8 +431,11 @@ export function CardList({
       await ankiFetch("deleteNotes", { notes: [editSequenceCurrentId(editSeq)] });
       setSeqDeleteOpen(false);
       applyStep(editSequenceDeleted(editSeq));
-    } catch {
+    } catch (err) {
       setSeqDeleteOpen(false);
+      toast.error(
+        failureMessage(err, "Couldn't delete the note. Is Anki still running?"),
+      );
     } finally {
       setSeqDeleting(false);
     }
@@ -826,8 +729,15 @@ export function CardList({
             });
             onSuspendChange?.();
           })
-          .catch(() => {
-            // silently fail
+          .catch((err) => {
+            toast.error(
+              failureMessage(
+                err,
+                allSuspended
+                  ? "Couldn't unsuspend the notes. Is Anki still running?"
+                  : "Couldn't suspend the notes. Is Anki still running?",
+              ),
+            );
           });
         return;
       }
@@ -855,13 +765,13 @@ export function CardList({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasDialog, selectedIds, tagUndo, notes, suspended, onSuspendChange]);
+  }, [hasDialog, selectedIds, tagUndo, notes, suspended, onSuspendChange, toast]);
 
   // Scope to the active segments first; "All" (empty set) keeps every note. A
   // segment covers its whole subtree, so a chip for a parent deck (e.g.
   // "Deutsch") includes every note under it — matching the count on the chip
   // and what a study session for it would review. A note's deck falls back to
-  // the viewed deck if cardsInfo hasn't loaded its mapping yet.
+  // the viewed deck if getDecks hasn't loaded its mapping yet.
   const activeSegmentList = [...activeSegments];
   const segmentNotes =
     activeSegments.size === 0
@@ -909,8 +819,15 @@ export function CardList({
         return next;
       });
       onSuspendChange?.();
-    } catch {
-      // silently fail
+    } catch (err) {
+      toast.error(
+        failureMessage(
+          err,
+          isSuspended
+            ? "Couldn't unsuspend the note. Is Anki still running?"
+            : "Couldn't suspend the note. Is Anki still running?",
+        ),
+      );
     }
   }
 
@@ -923,8 +840,11 @@ export function CardList({
       // Close the editor too — it may have been the delete's entry point.
       setEditingNote(null);
       refreshAfterChange();
-    } catch {
+    } catch (err) {
       setDeletingNote(null);
+      toast.error(
+        failureMessage(err, "Couldn't delete the note. Is Anki still running?"),
+      );
     } finally {
       setDeleting(false);
     }
@@ -997,8 +917,15 @@ export function CardList({
         return next;
       });
       onSuspendChange?.();
-    } catch {
-      // silently fail
+    } catch (err) {
+      toast.error(
+        failureMessage(
+          err,
+          suspend
+            ? "Couldn't suspend the selected notes. Is Anki still running?"
+            : "Couldn't unsuspend the selected notes. Is Anki still running?",
+        ),
+      );
     }
   }
 
@@ -1012,8 +939,14 @@ export function CardList({
       setBulkDeleteOpen(false);
       clearSelection();
       refreshAfterChange();
-    } catch {
+    } catch (err) {
       setBulkDeleteOpen(false);
+      toast.error(
+        failureMessage(
+          err,
+          "Couldn't delete the selected notes. Is Anki still running?",
+        ),
+      );
     } finally {
       setBulkDeleting(false);
     }
@@ -1049,21 +982,11 @@ export function CardList({
 
   // Move the given notes into a target (sub)deck, updating the list in place
   // rather than reloading. Notes already in the target are skipped.
-  async function moveNotesToDeck(noteList: Note[], target: string) {
+  async function handleMoveToDeck(noteList: Note[], target: string) {
     const toMove = noteList.filter((n) => (decks[n.noteId] ?? deckName) !== target);
     if (toMove.length === 0) return;
-    let cardIds = toMove.flatMap((n) => n.cards ?? []);
-    if (cardIds.length === 0) {
-      cardIds = await ankiFetch<number[]>("findCards", {
-        query: toMove.map((n) => `nid:${n.noteId}`).join(" OR "),
-      });
-    }
-    if (cardIds.length === 0) return;
     try {
-      await ankiFetch("changeDeck", { cards: cardIds, deck: target });
-      // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an active
-      // reviewer doesn't keep serving the moved card.
-      await ankiFetch("reloadCollection").catch(() => {});
+      await moveNotesToDeck(toMove, target);
       setDecks((prev) => {
         const next = { ...prev };
         for (const n of toMove) next[n.noteId] = target;
@@ -1076,8 +999,16 @@ export function CardList({
         return next;
       });
       onCardsMoved?.();
-    } catch {
-      // Leave the list untouched if the move fails.
+    } catch (err) {
+      // Leave the list untouched if the move fails — just say so.
+      toast.error(
+        failureMessage(
+          err,
+          toMove.length === 1
+            ? "Couldn't move the note. Is Anki still running?"
+            : "Couldn't move the notes. Is Anki still running?",
+        ),
+      );
     }
   }
 
@@ -1142,7 +1073,7 @@ export function CardList({
     setDragOverDeck(null);
     if (ids.length === 0) return;
     const idSet = new Set(ids);
-    void moveNotesToDeck(
+    void handleMoveToDeck(
       notes.filter((n) => idSet.has(n.noteId)),
       target,
     );
@@ -1423,15 +1354,13 @@ export function CardList({
                 </button>
                 <div className={`flex-1 min-w-0 ${noteSuspended ? "opacity-50" : ""}`}>
                   {(() => {
-                    const { primary, secondary } = noteDisplayFields(note);
+                    const { primary, secondary } = noteDisplayText(note);
                     return (
                       <>
-                        <p className="text-sm font-medium">
-                          {truncate(stripCloze(stripHtml(primary)), 80)}
-                        </p>
+                        <p className="text-sm font-medium">{primary}</p>
                         {secondary && (
                           <p className="text-sm text-foreground/50 mt-0.5">
-                            {truncate(stripCloze(stripHtml(secondary)), 80)}
+                            {secondary}
                           </p>
                         )}
                       </>
@@ -1451,12 +1380,30 @@ export function CardList({
                   )}
                 </div>
                 <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <CardMenu
-                    onEdit={() => setEditingNote(note)}
-                    isSuspended={noteSuspended}
-                    onToggleSuspend={() => handleToggleSuspend(note)}
-                    onMove={() => setMovingNote(note)}
-                    onDelete={() => setDeletingNote(note)}
+                  <ActionsMenu
+                    label="Note actions"
+                    items={[
+                      {
+                        label: "Edit",
+                        kbd: "E",
+                        onSelect: () => setEditingNote(note),
+                      },
+                      {
+                        label: noteSuspended ? "Unsuspend" : "Suspend",
+                        kbd: "S",
+                        onSelect: () => handleToggleSuspend(note),
+                      },
+                      {
+                        label: "Move to deck…",
+                        kbd: "M",
+                        onSelect: () => setMovingNote(note),
+                      },
+                      {
+                        label: "Delete",
+                        danger: true,
+                        onSelect: () => setDeletingNote(note),
+                      },
+                    ]}
                   />
                 </div>
               </div>
@@ -1478,14 +1425,25 @@ export function CardList({
 
       {editingNote && (
         <CardForm
-          deckName={deckName}
+          // The form's deck baseline must be the note's own deck: seeding it
+          // with the viewed parent both misreports where a subdeck note lives
+          // and turns "move to the parent deck" into a silent no-op (the save
+          // compares against the baseline and sees no change).
+          deckName={homeDeck(editingNote)}
           note={editingNote}
           onDelete={() => setDeletingNote(editingNote)}
           blocked={!!deletingNote}
           onClose={() => setEditingNote(null)}
-          onSaved={() => {
+          onSaved={(updated, opts) => {
+            const editedId = editingNote.noteId;
             setEditingNote(null);
-            refreshAfterChange();
+            // A no-op save (paged through, untouched) wrote nothing — skip the
+            // refresh entirely. A same-note, same-deck edit can be patched in
+            // place by the parent; a move or note-type change (new note id)
+            // needs the full refetch to fix list membership and deck badges.
+            if (!updated) return;
+            const patchable = updated.noteId === editedId && !opts?.movedTo;
+            refreshAfterChange(patchable ? updated : undefined);
           }}
         />
       )}
@@ -1497,7 +1455,7 @@ export function CardList({
           return (
             <CardForm
               key={editSequenceCurrentId(editSeq)}
-              deckName={deckName}
+              deckName={homeDeck(note)}
               note={note}
               position={{ index: editSeq.index, total: editSeq.ids.length }}
               onPrev={() => setEditSeq(editSequencePrev(editSeq))}

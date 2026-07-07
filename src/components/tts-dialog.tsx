@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { ModalDialog } from "./modal-dialog";
 import {
   ElevenLabsVoice,
   generateSpeech,
@@ -27,7 +26,6 @@ function base64ToObjectUrl(base64: string): string {
 }
 
 export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
-  useScrollLock();
   const modelId = getModelId();
 
   // Seed the picker from the cache so it's usable immediately, then refresh.
@@ -82,14 +80,6 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !inserting) onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [inserting, onClose]);
 
   // Keep focus inside the dialog so keystrokes can't reach the editor/form
   // behind it. This re-runs as the dialog's state changes — notably when
@@ -168,130 +158,83 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
 
   const noVoices = voices.length === 0;
 
-  // Portal to <body> so the dialog isn't a DOM descendant of the card <form>.
-  // Otherwise its <select> is a form control and pressing Enter would trigger
-  // the browser's implicit form submission, saving and closing the card.
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !inserting) onClose();
-      }}
-      // React events still bubble through the component tree (even across a
-      // portal) to the form's onKeyDown (Cmd+Enter = save). Stop them here so
-      // the dialog's keystrokes stay in the dialog.
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        // Self-contained Tab trap. The portal lives outside the form's focus
-        // trap, so without this Tab/Shift+Tab could land on a control in the
-        // form behind the dialog. Mirrors the form's own trap (card-form.tsx).
-        if (e.key !== "Tab") return;
-        const panel = panelRef.current;
-        if (!panel) return;
-        const focusables = Array.from(
-          panel.querySelectorAll<HTMLElement>(
-            'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
-          )
-        ).filter((el) => el.offsetParent !== null);
-        if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        const active = document.activeElement;
-        if (e.shiftKey && (active === first || !panel.contains(active))) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && (active === last || !panel.contains(active))) {
-          e.preventDefault();
-          first.focus();
-        }
+  // The shell portals to <body> so the dialog isn't a DOM descendant of the
+  // card <form>. Otherwise its <select> is a form control and pressing Enter
+  // would trigger the browser's implicit form submission, saving and closing
+  // the card.
+  return (
+    <ModalDialog
+      title="Generate audio"
+      titleClassName="mb-1"
+      busy={inserting}
+      onClose={onClose}
+      panelRef={panelRef}
+      footer={{
+        confirmLabel: "Insert",
+        busyLabel: "Inserting…",
+        confirmDisabled: !audio,
+        onConfirm: handleInsert,
       }}
     >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg focus:outline-none"
-      >
-        <h3 className="mb-1 text-lg font-semibold">Generate audio</h3>
-        <p className="mb-4 line-clamp-3 text-sm text-foreground/50">
-          “{text}”
+      <p className="mb-4 line-clamp-3 text-sm text-foreground/50">
+        “{text}”
+      </p>
+
+      {noVoices ? (
+        <p className="mb-4 text-sm text-foreground/60">
+          No voices available. Add your ElevenLabs API key in Settings and
+          fetch your voices.
         </p>
+      ) : (
+        <>
+          <label className="mb-1 block text-xs text-foreground/50">
+            Voice
+          </label>
+          <select
+            ref={selectRef}
+            value={voiceId}
+            onChange={(e) => selectVoice(e.target.value)}
+            disabled={generating || inserting}
+            autoFocus
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+          >
+            {voices.map((v) => (
+              <option key={v.voiceId} value={v.voiceId}>
+                {v.name}
+              </option>
+            ))}
+          </select>
 
-        {noVoices ? (
-          <p className="mb-4 text-sm text-foreground/60">
-            No voices available. Add your ElevenLabs API key in Settings and
-            fetch your voices.
-          </p>
-        ) : (
-          <>
-            <label className="mb-1 block text-xs text-foreground/50">
-              Voice
-            </label>
-            <select
-              ref={selectRef}
-              value={voiceId}
-              onChange={(e) => selectVoice(e.target.value)}
-              disabled={generating || inserting}
-              autoFocus
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-foreground/40 focus:outline-none disabled:opacity-60"
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={generating || inserting || !voiceId}
+              className="rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
             >
-              {voices.map((v) => (
-                <option key={v.voiceId} value={v.voiceId}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-
-            <div className="mt-3 flex items-center gap-2">
+              {generating
+                ? "Generating…"
+                : audio
+                  ? "Regenerate"
+                  : "Generate"}
+            </button>
+            {audio && (
               <button
                 type="button"
-                onClick={handleGenerate}
-                disabled={generating || inserting || !voiceId}
+                onClick={handlePlay}
+                disabled={inserting}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
               >
-                {generating
-                  ? "Generating…"
-                  : audio
-                    ? "Regenerate"
-                    : "Generate"}
+                ▶ Play
               </button>
-              {audio && (
-                <button
-                  type="button"
-                  onClick={handlePlay}
-                  disabled={inserting}
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
-                >
-                  ▶ Play
-                </button>
-              )}
-              {/* Hidden element drives playback; the Play button calls into it. */}
-              {audio && <audio ref={audioRef} src={audio.url} />}
-            </div>
-          </>
-        )}
+            )}
+            {/* Hidden element drives playback; the Play button calls into it. */}
+            {audio && <audio ref={audioRef} src={audio.url} />}
+          </div>
+        </>
+      )}
 
-        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={inserting}
-            className="rounded-lg px-4 py-2 text-sm text-foreground/60 transition-colors hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleInsert}
-            disabled={!audio || inserting}
-            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
-          >
-            {inserting ? "Inserting…" : "Insert"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+    </ModalDialog>
   );
 }

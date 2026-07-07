@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DotsThreeVertical } from "@phosphor-icons/react/dist/ssr/DotsThreeVertical";
 import { Ease } from "@/lib/types";
 import {
   onPlayingFileChange,
@@ -13,6 +12,7 @@ import {
   groupRuns,
 } from "@/lib/typed-answer-diff";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
+import { ActionsMenu } from "./actions-menu";
 import { HtmlContent } from "./card-html";
 
 interface StudyCardProps {
@@ -62,30 +62,6 @@ function splitAnkiAnswer(html: string): { front: string; back: string } {
   };
 }
 
-// A row in the actions menu: a label on the left, its keyboard hint on the right.
-function MenuItem({
-  label,
-  shortcut,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  shortcut: string;
-  onClick: () => void;
-  disabled: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-foreground/70 transition-colors hover:bg-foreground/5 disabled:opacity-40 disabled:hover:bg-transparent"
-    >
-      <span>{label}</span>
-      <kbd className="font-sans text-xs text-foreground/30">{shortcut}</kbd>
-    </button>
-  );
-}
-
 // The per-card actions menu shown on the study card (top-right, on hover). It
 // hosts review-time actions like editing and suspending the note, and is the
 // place to add more (bury, flag, …) over time.
@@ -98,72 +74,32 @@ function StudyCardMenu({
   onSuspend: () => void;
   disabled: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("mousedown", handleClick);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
-
   return (
     // Align the icon with the first line of card text: the content has py-6
     // (24px) top padding and the button adds p-1.5 (6px), so offsetting the top
     // by 18px lands the glyph on that first line rather than floating above it.
-    <div ref={menuRef} className="absolute top-[1.125rem] right-3 z-10">
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-        aria-label="Card actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className={`rounded-md p-1.5 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60 ${
-          open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}
-      >
-        <DotsThreeVertical size={20} weight="bold" />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          onClick={(e) => e.stopPropagation()}
-          className="absolute right-0 top-full mt-1 min-w-[180px] rounded-lg border border-border bg-background py-1 shadow-lg"
-        >
-          <MenuItem
-            label="Edit Note"
-            shortcut="E"
-            disabled={disabled}
-            onClick={() => {
-              setOpen(false);
-              onEdit();
-            }}
-          />
-          <MenuItem
-            label="Suspend Note"
-            shortcut="S"
-            disabled={disabled}
-            onClick={() => {
-              setOpen(false);
-              onSuspend();
-            }}
-          />
-        </div>
-      )}
+    //
+    // stopPropagation keeps clicks on the trigger — and on the portalled menu
+    // items, whose React events bubble back through this wrapper — from
+    // reaching the card body's reveal-on-click handler.
+    <div
+      className="absolute top-[1.125rem] right-3 z-10"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <ActionsMenu
+        label="Card actions"
+        menuClassName="min-w-[180px]"
+        iconSize={20}
+        triggerClassName={(open) =>
+          `rounded-md p-1.5 text-foreground/30 transition-all hover:bg-foreground/5 hover:text-foreground/60 ${
+            open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`
+        }
+        items={[
+          { label: "Edit Note", kbd: "E", disabled, onSelect: onEdit },
+          { label: "Suspend Note", kbd: "S", disabled, onSelect: onSuspend },
+        ]}
+      />
     </div>
   );
 }

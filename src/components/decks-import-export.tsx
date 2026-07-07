@@ -1,15 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { ankiFetch } from "@/lib/anki-fetch";
-import { Note } from "@/lib/types";
-import {
-  buildExport,
-  downloadDeckJson,
-  fetchCardDecksByNoteId,
-} from "@/lib/import-export";
+import { useRef, useState } from "react";
+import { exportDeckToJson } from "@/lib/import-export";
 import { useDeckImport } from "@/hooks/use-deck-import";
 import { DeckPicker } from "./deck-picker";
 import { ImportResultModal } from "./import-result-modal";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { ModalDialog } from "./modal-dialog";
 
 interface DecksImportExportProps {
   decks: string[];
@@ -92,32 +86,14 @@ function ExportPickerDialog({
   onDone: () => void;
   onError: (msg: string) => void;
 }) {
-  useScrollLock();
   const [selected, setSelected] = useState<string>(decks[0] ?? "");
   const [working, setWorking] = useState(false);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !working) onCancel();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [working, onCancel]);
 
   async function handleExport() {
     if (!selected) return;
     setWorking(true);
     try {
-      const noteIds = await ankiFetch<number[]>("findNotes", {
-        query: `deck:"${selected}"`,
-      });
-      const notes =
-        noteIds.length === 0
-          ? []
-          : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
-      const cardDecksByNoteId = await fetchCardDecksByNoteId(notes, ankiFetch);
-      const payload = buildExport(selected, notes, undefined, cardDecksByNoteId);
-      await downloadDeckJson(payload, selected);
+      await exportDeckToJson(selected);
       onDone();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Export failed.");
@@ -127,45 +103,29 @@ function ExportPickerDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !working) onCancel();
+    <ModalDialog
+      title="Export deck"
+      titleClassName="mb-1"
+      busy={working}
+      onClose={onCancel}
+      footer={{
+        confirmLabel: "Export",
+        busyLabel: "Exporting…",
+        confirmDisabled: !selected,
+        onConfirm: handleExport,
       }}
     >
-      <div
-        className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg"
-      >
-        <h3 className="mb-1 text-lg font-semibold">Export deck</h3>
-        <p className="mb-4 text-sm text-foreground/50">
-          Choose a deck to download as a JSON file.
-        </p>
+      <p className="mb-4 text-sm text-foreground/50">
+        Choose a deck to download as a JSON file.
+      </p>
 
-        <DeckPicker
-          decks={decks}
-          value={selected || null}
-          onChange={setSelected}
-          disabled={working}
-          autoFocus
-        />
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            disabled={working}
-            className="rounded-lg px-4 py-2 text-sm text-foreground/60 transition-colors hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={working || !selected}
-            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
-          >
-            {working ? "Exporting…" : "Export"}
-          </button>
-        </div>
-      </div>
-    </div>
+      <DeckPicker
+        decks={decks}
+        value={selected || null}
+        onChange={setSelected}
+        disabled={working}
+        autoFocus
+      />
+    </ModalDialog>
   );
 }

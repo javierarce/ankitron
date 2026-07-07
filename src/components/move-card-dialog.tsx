@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Note } from "@/lib/types";
 import { ankiFetch } from "@/lib/anki-fetch";
 import { formatDeckPath } from "@/lib/deck";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { moveNotesToDeck } from "@/lib/notes";
+import { useDeckNames } from "@/hooks/use-deck-names";
 import { DeckPicker } from "./deck-picker";
+import { ModalDialog } from "./modal-dialog";
 
 interface MoveCardDialogProps {
   notes: Note[];
@@ -18,8 +20,7 @@ interface MoveCardDialogProps {
 }
 
 export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCardDialogProps) {
-  useScrollLock();
-  const [decks, setDecks] = useState<string[] | null>(null);
+  const decks = useDeckNames();
   // No preselected target: with a visible tree, an explicit choice beats
   // silently defaulting to whichever deck happens to sort first.
   const [target, setTarget] = useState<{ deck: string; isNew: boolean } | null>(
@@ -30,55 +31,15 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
 
   const count = notes.length;
 
-  useEffect(() => {
-    let cancelled = false;
-    ankiFetch<string[]>("deckNames")
-      .then((names) => {
-        if (!cancelled) setDecks(names);
-      })
-      .catch(() => {
-        if (!cancelled) setDecks([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !moving) onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [moving, onClose]);
-
-  const disabled = moving || target === null;
-
   async function handleMove() {
     if (target === null) return;
     setMoving(true);
     setError(null);
     try {
-      let cardIds = notes.flatMap((n) => n.cards ?? []);
-      if (cardIds.length === 0) {
-        cardIds = await ankiFetch<number[]>("findCards", {
-          query: notes.map((n) => `nid:${n.noteId}`).join(" OR "),
-        });
-      }
-      if (cardIds.length === 0) {
-        throw new Error(
-          count === 1
-            ? "Could not find the note to move."
-            : "Could not find the notes to move."
-        );
-      }
       if (target.isNew) {
         await ankiFetch("createDeck", { deck: target.deck });
       }
-      await ankiFetch("changeDeck", { cards: cardIds, deck: target.deck });
-      // changeDeck writes raw SQL; rebuild Anki's scheduler queues so an
-      // active reviewer doesn't keep serving the moved card.
-      await ankiFetch("reloadCollection").catch(() => {});
+      await moveNotesToDeck(notes, target.deck);
       if (onMoved) {
         onMoved();
       } else {
@@ -92,59 +53,43 @@ export function MoveCardDialog({ notes, currentDeck, onClose, onMoved }: MoveCar
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !moving) onClose();
+    <ModalDialog
+      title={count === 1 ? "Move Note" : `Move ${count} Notes`}
+      titleClassName="mb-1"
+      busy={moving}
+      onClose={onClose}
+      footer={{
+        confirmLabel: "Move",
+        busyLabel: "Moving…",
+        confirmDisabled: target === null,
+        onConfirm: handleMove,
       }}
     >
-      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
-        <h3 className="mb-1 text-lg font-semibold">
-          {count === 1 ? "Move Note" : `Move ${count} Notes`}
-        </h3>
-        <p className="mb-4 text-sm text-foreground/50">
-          From{" "}
-          <strong className="text-foreground/70">
-            {formatDeckPath(currentDeck)}
-          </strong>
-        </p>
+      <p className="mb-4 text-sm text-foreground/50">
+        From{" "}
+        <strong className="text-foreground/70">
+          {formatDeckPath(currentDeck)}
+        </strong>
+      </p>
 
-        <label className="mb-1 block text-xs text-foreground/50">Move to</label>
-        <DeckPicker
-          decks={decks}
-          value={target?.deck ?? null}
-          onChange={(deck, isNew) => setTarget({ deck, isNew })}
-          disable={(deck) =>
-            deck === currentDeck
-              ? count === 1
-                ? "The note is already in this deck"
-                : "The notes are already in this deck"
-              : null
-          }
-          allowCreate
-          disabled={moving}
-          autoFocus
-        />
+      <label className="mb-1 block text-xs text-foreground/50">Move to</label>
+      <DeckPicker
+        decks={decks}
+        value={target?.deck ?? null}
+        onChange={(deck, isNew) => setTarget({ deck, isNew })}
+        disable={(deck) =>
+          deck === currentDeck
+            ? count === 1
+              ? "The note is already in this deck"
+              : "The notes are already in this deck"
+            : null
+        }
+        allowCreate
+        disabled={moving}
+        autoFocus
+      />
 
-        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={moving}
-            className="rounded-lg px-4 py-2 text-sm text-foreground/60 transition-colors hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleMove}
-            disabled={disabled}
-            className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-50"
-          >
-            {moving ? "Moving…" : "Move"}
-          </button>
-        </div>
-      </div>
-    </div>
+      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+    </ModalDialog>
   );
 }

@@ -10,6 +10,7 @@ import { StudyPage } from "./pages/study";
 import { SettingsPage } from "./pages/settings";
 import { ThemeProvider } from "./lib/theme";
 import { UpdateProvider } from "./components/update-provider";
+import { ToastProvider } from "./components/toast-provider";
 import "./app/globals.css";
 
 // The marketing demo is served as static files from a subpath (/demo/). The app
@@ -37,11 +38,13 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <UpdateProvider>
-        {isDemo ? (
-          <HashRouter>{routes}</HashRouter>
-        ) : (
-          <BrowserRouter basename={import.meta.env.BASE_URL}>{routes}</BrowserRouter>
-        )}
+        <ToastProvider>
+          {isDemo ? (
+            <HashRouter>{routes}</HashRouter>
+          ) : (
+            <BrowserRouter basename={import.meta.env.BASE_URL}>{routes}</BrowserRouter>
+          )}
+        </ToastProvider>
       </UpdateProvider>
     </ThemeProvider>
   </StrictMode>,

@@ -16,6 +16,7 @@
 // ./decks — see ./fixtures, which loads and validates them. This module is just
 // the simulator logic.
 
+import { isCardInDeck } from "../deck";
 import {
   addDemoNote,
   DECKS,
@@ -40,11 +41,8 @@ const deckId = (name: string) => DECKS.find((d) => d.name === name)?.id ?? 0;
 // Helpers over the model
 // ---------------------------------------------------------------------------
 
-const inSubtree = (deck: string, root: string) =>
-  deck === root || deck.startsWith(root + "::");
-
 const notesInSubtree = (root: string) =>
-  NOTES.filter((n) => inSubtree(n.deckName, root));
+  NOTES.filter((n) => isCardInDeck(n.deckName, root));
 
 const findNote = (noteId: number) => NOTES.find((n) => n.noteId === noteId);
 
@@ -143,6 +141,7 @@ const MUTATING = new Set([
   "suspend",
   "addNote",
   "updateNoteFields",
+  "updateNote",
   "deleteNotes",
   "addTags",
   "removeTags",
@@ -230,6 +229,25 @@ async function handleAction(
     case "cardsInfo": {
       const ids = (params.cards as number[]) ?? [];
       return ids.map(cardInfo).filter(Boolean);
+    }
+
+    case "getDecks": {
+      // cardIds grouped by the deck that holds them: { deckName: [cardId, …] }.
+      const ids = (params.cards as number[]) ?? [];
+      const out: Record<string, number[]> = {};
+      for (const cardId of ids) {
+        const n = findNote(noteIdOfCard(cardId));
+        if (n) (out[n.deckName] ??= []).push(cardId);
+      }
+      return out;
+    }
+
+    case "areSuspended": {
+      // One flag per input card, in order; null for cards that don't exist.
+      const ids = (params.cards as number[]) ?? [];
+      return ids.map(
+        (cardId) => findNote(noteIdOfCard(cardId))?.suspended ?? null,
+      );
     }
 
     case "getTags":
@@ -320,7 +338,7 @@ async function handleAction(
       );
       // If a session is open on a deck that contains the new card, let it join
       // the queue so "Add note" mid-study behaves like the real app.
-      if (review.deck && inSubtree(n.deckName, review.deck)) {
+      if (review.deck && isCardInDeck(n.deckName, review.deck)) {
         review.queue.push(cardIdOf(n.noteId));
       }
       return n.noteId;
@@ -333,6 +351,20 @@ async function handleAction(
         const fields = (p.fields as Record<string, string>) ?? {};
         if (fields.Front != null) n.front = fields.Front;
         if (fields.Back != null) n.back = fields.Back;
+      }
+      return null;
+    }
+
+    case "updateNote": {
+      // Combines updateNoteFields with a wholesale tag replacement, matching
+      // AnkiConnect: fields and/or tags, whichever the payload carries.
+      const p = (params.note as Record<string, unknown>) ?? {};
+      const n = findNote(p.id as number);
+      if (n) {
+        const fields = (p.fields as Record<string, string>) ?? {};
+        if (fields.Front != null) n.front = fields.Front;
+        if (fields.Back != null) n.back = fields.Back;
+        if (Array.isArray(p.tags)) n.tags = [...new Set(p.tags as string[])];
       }
       return null;
     }
@@ -400,7 +432,7 @@ async function handleAction(
       for (const name of decks) {
         if (cardsToo) {
           for (let i = NOTES.length - 1; i >= 0; i--) {
-            if (inSubtree(NOTES[i].deckName, name)) NOTES.splice(i, 1);
+            if (isCardInDeck(NOTES[i].deckName, name)) NOTES.splice(i, 1);
           }
         }
         removeDeckSubtree(name);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AllDecksList } from "@/components/all-decks-list";
+import { CenteredSpinner } from "@/components/spinner";
 import { useSync } from "@/lib/sync-context";
 import {
   ankiFetch,
@@ -98,11 +99,7 @@ export function DecksPage() {
   }, [syncedAt]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[calc(100dvh-10rem)] items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-      </div>
-    );
+    return <CenteredSpinner />;
   }
 
   if (hasError) {

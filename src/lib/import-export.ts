@@ -1,4 +1,5 @@
 import { Note } from "./types";
+import { ankiFetch } from "./anki-fetch";
 import { CLOZE_TYPED_MODEL } from "./cloze-typed-model";
 
 export interface ExportedNote {
@@ -467,4 +468,29 @@ export async function downloadDeckJson(
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   return true;
+}
+
+/**
+ * The full "export a deck" pipeline shared by every Export button: fetch the
+ * deck's notes (unless the caller already holds them), resolve each card's
+ * home deck, build the payload, and hand it to downloadDeckJson. Errors
+ * propagate so each caller can surface them in its own UI.
+ */
+export async function exportDeckToJson(
+  deckName: string,
+  notes?: Note[],
+): Promise<void> {
+  let deckNotes = notes;
+  if (!deckNotes) {
+    const noteIds = await ankiFetch<number[]>("findNotes", {
+      query: `deck:"${deckName}"`,
+    });
+    deckNotes =
+      noteIds.length === 0
+        ? []
+        : await ankiFetch<Note[]>("notesInfo", { notes: noteIds });
+  }
+  const cardDecksByNoteId = await fetchCardDecksByNoteId(deckNotes, ankiFetch);
+  const payload = buildExport(deckName, deckNotes, undefined, cardDecksByNoteId);
+  await downloadDeckJson(payload, deckName);
 }

@@ -1,3 +1,5 @@
+import { Spinner } from "./spinner";
+
 /**
  * Full-screen, centered loading spinner. Used for the app's startup sequence —
  * both while waiting for Anki to be reachable and while the first page fetches
@@ -10,7 +12,7 @@ export function FullScreenSpinner({ label }: { label?: string }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
       <div className="text-center">
-        <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+        <Spinner />
         {label && <p className="mt-4 text-sm text-foreground/50">{label}</p>}
       </div>
     </div>
