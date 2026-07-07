@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Note } from "@/lib/types";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { addTagsToNotes, removeTagsFromNotes } from "@/lib/notes";
 import { useAllTags } from "@/hooks/use-all-tags";
 import { TagInput } from "./tag-input";
 import { ModalDialog } from "./modal-dialog";
@@ -117,13 +117,10 @@ export function BulkTagDialog({ notes, onClose, onTagged }: BulkTagDialogProps) 
       // has, so both are no-ops where they don't apply — no client-side dedup
       // needed.
       if (addList.length > 0) {
-        await ankiFetch("addTags", { notes: noteIds, tags: addList.join(" ") });
+        await addTagsToNotes(noteIds, addList);
       }
       if (removeList.length > 0) {
-        await ankiFetch("removeTags", {
-          notes: noteIds,
-          tags: removeList.join(" "),
-        });
+        await removeTagsFromNotes(noteIds, removeList);
       }
       // Record exactly which notes each tag actually applied to, with the
       // inverse action, so a later undo reverses only the real changes.

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
-import { ankiFetch } from "@/lib/anki-fetch";
 import { canDeleteDeck, subdecksOf } from "@/lib/deck";
+import { findNoteIds } from "@/lib/notes";
 import { useDeckNames } from "@/hooks/use-deck-names";
 
 interface DangerZoneProps {
@@ -27,7 +27,7 @@ export function DangerZone({ deckName }: DangerZoneProps) {
     let cancelled = false;
     // `deck:` matches descendants, so this note count already spans subdecks —
     // matching how the decks list counts and warns.
-    ankiFetch<number[]>("findNotes", { query: `deck:"${deckName}"` })
+    findNoteIds(`deck:"${deckName}"`)
       .then((noteIds) => {
         if (cancelled) return;
         setNoteCount(noteIds.length);

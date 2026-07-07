@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { createDeck } from "@/lib/decks";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { CardForm } from "./card-form";
 
@@ -103,7 +103,7 @@ function CreateDeckDialog({
     setCreating(true);
     setError(null);
     try {
-      await ankiFetch("createDeck", { deck: trimmed });
+      await createDeck(trimmed);
       navigate(`/decks/${encodeURIComponent(trimmed)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create deck");

@@ -1,6 +1,12 @@
 import { useState } from "react";
+// importDeck takes the transport as an injected dependency (so its tests can
+// run it against the demo mock); this raw import only feeds that parameter —
+// it is not a protocol call, hence the targeted exemption from the UI-layer
+// ban on the raw transport.
+// eslint-disable-next-line no-restricted-imports
 import { ankiFetch } from "@/lib/anki-fetch";
 import { ensureClozeTypedModel } from "@/lib/cloze-typed-model";
+import { createDeck } from "@/lib/decks";
 import {
   importDeck,
   isExportedDeck,
@@ -54,7 +60,7 @@ export function useDeckImport() {
     setImporting(true);
     try {
       if (isNew) {
-        await ankiFetch("createDeck", { deck: target });
+        await createDeck(target);
       }
       const addOnly = target !== pending.deckName;
       const r = await importDeck(

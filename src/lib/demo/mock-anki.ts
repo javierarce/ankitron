@@ -139,6 +139,7 @@ const MUTATING = new Set([
   "guiAnswerCard",
   "guiUndo",
   "suspend",
+  "unsuspend",
   "addNote",
   "updateNoteFields",
   "updateNote",
@@ -317,6 +318,17 @@ async function handleAction(
           review.queue.splice(qi, 1);
           if (qi < review.idx) review.idx -= 1;
         }
+      }
+      return true;
+    }
+
+    case "unsuspend": {
+      // The card becomes due again but doesn't rejoin an in-flight queue —
+      // like real Anki, it only shows up after the next guiDeckReview rebuild.
+      const cards = (params.cards as number[]) ?? [];
+      for (const cardId of cards) {
+        const n = findNote(noteIdOfCard(cardId));
+        if (n) n.suspended = false;
       }
       return true;
     }

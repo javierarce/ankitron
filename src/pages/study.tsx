@@ -1,27 +1,30 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { Ease, Note, NoteField } from "@/lib/types";
+import { CurrentCard, Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Spinner } from "@/components/spinner";
-import { ankiFetch } from "@/lib/anki-fetch";
+import { reloadCollection, syncCollection } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
+import { fetchCardsInfo, setSuspended } from "@/lib/cards";
 import { coveringDecks, isCardInDeck } from "@/lib/deck";
+import { fetchDeckStats } from "@/lib/decks";
+import {
+  answerCard,
+  fetchCurrentCard,
+  resolveNoteForCard,
+  showAnswer,
+  startCardTimer,
+  startDeckReview,
+  undoReview,
+} from "@/lib/review";
 import { canUndo } from "@/lib/study";
 
 // Duration of the card fade transitions (must match the CSS transition below).
 const FADE_MS = 180;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-interface CurrentCard {
-  cardId: number;
-  question: string;
-  answer: string;
-  deckName: string;
-  fields: Record<string, NoteField>;
-}
 
 export function StudyPage() {
   const params = useParams();
@@ -111,17 +114,17 @@ export function StudyPage() {
         // The first deck is already in review (entered by startReview/the prior
         // card); enter each subsequent deck as we reach it.
         if (i !== deckIdxRef.current) {
-          await ankiFetch("guiDeckReview", { name: deck });
+          await startDeckReview(deck);
         }
-        let result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+        let result = await fetchCurrentCard();
         // A foreign card here usually means the reviewer queue is stale —
         // changeDeck writes raw SQL, so moving the current card to another deck
         // leaves it queued. Rebuild the queues and re-enter review once before
         // moving on from this deck.
         if (result?.deckName && !isCardInDeck(result.deckName, deck)) {
-          await ankiFetch("reloadCollection").catch(() => {});
-          await ankiFetch("guiDeckReview", { name: deck });
-          result = await ankiFetch<CurrentCard | null>("guiCurrentCard");
+          await reloadCollection();
+          await startDeckReview(deck);
+          result = await fetchCurrentCard();
         }
         // Anki's "current card" is collection-wide; only show one that belongs
         // to this deck (or its breadcrumb would mismatch the card). Anything
@@ -130,7 +133,7 @@ export function StudyPage() {
           deckIdxRef.current = i;
           setCard(result);
           setIsRevealed(false);
-          await ankiFetch("guiStartCardTimer");
+          await startCardTimer();
           return;
         }
       }
@@ -148,14 +151,12 @@ export function StudyPage() {
       setError(null);
       deckIdxRef.current = 0;
       try {
-        await ankiFetch("guiDeckReview", { name: studyDecks[0] });
+        await startDeckReview(studyDecks[0]);
         try {
           // Sum across every deck in the session. The covering decks are
           // disjoint subtrees and getDeckStats counts are subtree-inclusive, so
           // adding them up gives the queue size without double-counting.
-          const stats = await ankiFetch<
-            Record<string, { new_count: number; learn_count: number; review_count: number }>
-          >("getDeckStats", { decks: studyDecks });
+          const stats = await fetchDeckStats(studyDecks);
           const total = Object.values(stats).reduce(
             (sum, s) =>
               sum +
@@ -186,7 +187,7 @@ export function StudyPage() {
     // — Anki's undo is global, so it would otherwise reach into another deck.
     if (!canUndo({ completed, reviewed })) return;
     try {
-      await ankiFetch("guiUndo");
+      await undoReview();
     } catch {
       return;
     }
@@ -199,7 +200,7 @@ export function StudyPage() {
     // served again. (Undo steps back within the deck being reviewed; it doesn't
     // cross back into an earlier deck of a multi-deck session.)
     try {
-      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
+      await startDeckReview(studyDecks[deckIdxRef.current]);
     } catch {
       // ignore — loadCurrentCard will surface any real failure
     }
@@ -209,13 +210,9 @@ export function StudyPage() {
   const handleEdit = useCallback(async () => {
     if (!card) return;
     try {
-      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
-      if (!cardsResult.length) return;
-      const noteId = cardsResult[0].noteId ?? cardsResult[0].note;
-      if (!noteId) return;
-      const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
-      if (notes.length > 0) {
-        setEditingNote(notes[0]);
+      const note = await resolveNoteForCard(card.cardId);
+      if (note) {
+        setEditingNote(note);
       }
     } catch {
       // silently fail
@@ -276,7 +273,7 @@ export function StudyPage() {
     setSyncStatus("syncing");
     (async () => {
       try {
-        await ankiFetch("sync");
+        await syncCollection();
         if (!cancelled) {
           setSyncStatus("ok");
         }
@@ -296,7 +293,7 @@ export function StudyPage() {
     setCardVisible(false);
     await delay(FADE_MS);
     try {
-      await ankiFetch("guiShowAnswer");
+      await showAnswer();
     } catch {
       // Showing the answer in Anki is best-effort; reveal locally regardless.
     }
@@ -340,9 +337,7 @@ export function StudyPage() {
     let refreshed: CurrentCard | null = null;
     if (editedCardId != null) {
       try {
-        const info = await ankiFetch<CurrentCard[]>("cardsInfo", {
-          cards: [editedCardId],
-        });
+        const info = await fetchCardsInfo([editedCardId]);
         const ci = info[0];
         // Stay in place only while the card still belongs to this deck. A
         // note-type change deletes and replaces it (cardsInfo comes back empty)
@@ -374,7 +369,7 @@ export function StudyPage() {
       // do nothing.
       if (wasRevealed) {
         try {
-          await ankiFetch("guiShowAnswer");
+          await showAnswer();
         } catch {
           // Re-revealing in Anki is best-effort; reveal locally regardless.
         }
@@ -384,14 +379,14 @@ export function StudyPage() {
       // The card left this deck (moved or its note type changed). Rebuild the
       // queue and serve whatever's next.
       try {
-        await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
+        await startDeckReview(studyDecks[deckIdxRef.current]);
       } catch {
         // ignore
       }
       await loadCurrentCard();
       if (wasRevealed) {
         try {
-          await ankiFetch("guiShowAnswer");
+          await showAnswer();
         } catch {
           // Re-revealing in Anki is best-effort; reveal locally regardless.
         }
@@ -405,7 +400,7 @@ export function StudyPage() {
     setShowAddForm(false);
     // Re-enter review so the freshly added card can join this session's queue.
     try {
-      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
+      await startDeckReview(studyDecks[deckIdxRef.current]);
     } catch {
       // ignore
     }
@@ -426,21 +421,16 @@ export function StudyPage() {
       // multi-card note (e.g. the forward side of a Basic-and-reversed note)
       // would leave the list unable to represent the partial state.
       //
-      // guiCurrentCard doesn't return a note id, so resolve it from the card
-      // (as handleEdit does) and suspend all of that note's cards. Fall back to
+      // guiCurrentCard doesn't return a note id, so resolve the note from the
+      // card (as handleEdit does) and suspend all of its cards. Fall back to
       // just this card if resolution fails.
-      let cardIds = [card.cardId];
-      const cardsResult = await ankiFetch<Record<string, unknown>[]>("cardsInfo", { cards: [card.cardId] });
-      const noteId = cardsResult[0]?.noteId ?? cardsResult[0]?.note;
-      if (noteId) {
-        const notes = await ankiFetch<Note[]>("notesInfo", { notes: [noteId] });
-        if (notes[0]?.cards?.length) cardIds = notes[0].cards;
-      }
-      await ankiFetch("suspend", { cards: cardIds });
+      const note = await resolveNoteForCard(card.cardId);
+      const cardIds = note?.cards?.length ? note.cards : [card.cardId];
+      await setSuspended(cardIds, true);
       // The offscreen reviewer's queue still holds the just-suspended card(s);
       // re-enter review to rebuild it (queue -1 cards drop out), then serve the
       // next. Suspending isn't a review, so the reviewed count is left untouched.
-      await ankiFetch("guiDeckReview", { name: studyDecks[deckIdxRef.current] });
+      await startDeckReview(studyDecks[deckIdxRef.current]);
       await loadCurrentCard();
     } catch {
       setError("Failed to suspend note. Try again.");
@@ -459,7 +449,7 @@ export function StudyPage() {
     setCardVisible(false);
     await delay(FADE_MS);
     try {
-      const success = await ankiFetch<boolean>("guiAnswerCard", { ease });
+      const success = await answerCard(ease);
       if (success) {
         setReviewed((r) => r + 1);
         await loadCurrentCard();

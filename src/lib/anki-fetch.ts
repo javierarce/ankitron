@@ -1,4 +1,4 @@
-import { AnkiResponse, DueCounts, StudyStats } from "./types";
+import { AnkiResponse, DeckStats, DueCounts, StudyStats } from "./types";
 
 /** True when running inside Tauri's webview. */
 const isTauri =
@@ -47,15 +47,34 @@ export async function ankiFetch<T = unknown>(
 }
 
 /**
+ * Trigger a sync with AnkiWeb. Throws on failure (no AnkiWeb account
+ * configured, network down); callers own how visibly to surface that — the
+ * launch sync shows a corner pill, the Settings button shows inline text.
+ */
+export async function syncCollection(): Promise<void> {
+  await ankiFetch("sync");
+}
+
+/**
+ * Ask Anki to reload the collection, rebuilding its scheduler queues. Needed
+ * after writes that bypass the scheduler with raw SQL (changeDeck) so an
+ * active reviewer doesn't keep serving a moved card. Best-effort: failures
+ * are swallowed, since the queues catch up on the next natural rebuild.
+ */
+export async function reloadCollection(): Promise<void> {
+  await ankiFetch("reloadCollection").catch(() => {});
+}
+
+/**
  * Fetch due counts for a single deck. AnkiConnect keys getDeckStats by
  * deck ID and returns only the leaf name, so fetching per-deck avoids
  * ambiguity when mapping results back to full deck paths.
  */
 export async function fetchDueCount(deckName: string): Promise<DueCounts> {
   try {
-    const stats = await ankiFetch<
-      Record<string, { new_count: number; learn_count: number; review_count: number }>
-    >("getDeckStats", { decks: [deckName] });
+    const stats = await ankiFetch<Record<string, DeckStats>>("getDeckStats", {
+      decks: [deckName],
+    });
     const s = Object.values(stats)[0];
     return {
       new: s?.new_count ?? 0,
@@ -186,17 +205,9 @@ export async function fetchAllDueCounts(
 
   try {
     const [stats, namesAndIds] = await Promise.all([
-      ankiFetch<
-        Record<
-          string,
-          {
-            deck_id: number;
-            new_count: number;
-            learn_count: number;
-            review_count: number;
-          }
-        >
-      >("getDeckStats", { decks: deckNames }),
+      ankiFetch<Record<string, DeckStats>>("getDeckStats", {
+        decks: deckNames,
+      }),
       ankiFetch<Record<string, number>>("deckNamesAndIds"),
     ]);
 
