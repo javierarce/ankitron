@@ -111,6 +111,14 @@ fn graceful_kill(pid: u32) {
         .status();
 }
 
+/// Whether the Anki desktop app is installed where we can launch it. Lets the
+/// startup check tell "Anki isn't installed" apart from "Anki is installed but
+/// AnkiConnect (the add-on we talk to) isn't" — two failures that both look
+/// like a dead port 8765 but need very different guidance.
+pub fn is_anki_installed() -> bool {
+    find_anki_executable().is_some()
+}
+
 /// Check if AnkiConnect is responding on port 8765.
 pub async fn is_ankiconnect_up() -> bool {
     let client = reqwest::Client::builder()
@@ -161,10 +169,28 @@ fn find_anki_executable() -> Option<String> {
         if venv.exists() {
             return Some(venv.to_string_lossy().into_owned());
         }
-        // Fallback: try `anki` on PATH
-        return Some("anki".to_string());
+        // Fallback: resolve `anki` on PATH. This must reflect a *real* install:
+        // a bare Some("anki") would make is_anki_installed() always true on
+        // Linux, so a user with no Anki would skip the "install Anki" screen and
+        // be shown the "install the add-on" one instead.
+        return resolve_on_path("anki");
     }
 
+    None
+}
+
+/// Find an executable by name on `$PATH`, returning its full path if one exists.
+/// Used on Linux, where Anki has no fixed install location outside the managed
+/// venv, so a real install is detected by its presence on PATH.
+#[cfg(target_os = "linux")]
+fn resolve_on_path(name: &str) -> Option<String> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate.to_string_lossy().into_owned());
+        }
+    }
     None
 }
 

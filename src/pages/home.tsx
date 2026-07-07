@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { AnkiConnectionError } from "@/components/anki-connection-error";
 import { DeckList } from "@/components/deck-list";
 import { EmptyCollection } from "@/components/empty-collection";
 import { FullScreenSpinner } from "@/components/full-screen-spinner";
-import { CenteredSpinner, Spinner } from "@/components/spinner";
+import { CenteredSpinner } from "@/components/spinner";
 import { StudySummary } from "@/components/study-summary";
 import { useSync } from "@/lib/sync-context";
 import {
@@ -12,9 +13,6 @@ import {
 } from "@/lib/anki-fetch";
 import { fetchDeckNames } from "@/lib/decks";
 import type { DueCounts, StudyStats } from "@/lib/types";
-
-const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 // The first home load of a session happens during app startup, right after the
 // layout's "Starting Anki…" spinner — so it reuses that same full-screen
@@ -124,7 +122,8 @@ export function HomePage() {
     );
   }
 
-  if (hasError) return <AnkiNotConnected />;
+  // A fetch failed after startup — most often the user quit Anki mid-session.
+  if (hasError) return <AnkiConnectionError reason="unreachable" />;
   if (collectionEmpty) {
     // Add the first card to Anki's stock "Default" deck when it's present,
     // falling back to whatever deck exists so this never targets a missing one.
@@ -144,74 +143,5 @@ export function HomePage() {
       <DeckList decks={decks} dueCounts={dueCounts} />
       <StudySummary stats={studyStats} />
     </>
-  );
-}
-
-function AnkiNotConnected() {
-  const [retrying, setRetrying] = useState(false);
-
-  async function retry() {
-    setRetrying(true);
-    // Anki may have been closed after startup — ask the backend to (re)launch
-    // it headless, then reload the app now that it should be reachable.
-    if (isTauri) {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("ensure_anki");
-      } catch (err) {
-        console.error("Could not start Anki:", err);
-      }
-    }
-    window.location.reload();
-  }
-
-  // Full-screen overlay so the header (nav, sync) is covered and inert while
-  // disconnected, and the message stays centered.
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background px-6 text-center">
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-8 w-8 text-red-500"
-          aria-hidden="true"
-        >
-          <path d="M12 2v10" />
-          <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
-        </svg>
-      </div>
-      <h2 className="text-xl font-semibold">Anki isn&apos;t connected</h2>
-      <p className="mt-2 text-sm text-foreground/60">
-        Ankitron can&apos;t reach Anki right now.
-      </p>
-      <button
-        onClick={retry}
-        disabled={retrying}
-        className="mt-8 inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-60"
-      >
-        {retrying ? (
-          <Spinner size="sm" tone="inverted" />
-        ) : (
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-            aria-hidden="true"
-          >
-            <path d="M21 12a9 9 0 1 1-3-6.7" />
-            <path d="M21 4v5h-5" />
-          </svg>
-        )}
-        {retrying ? "Reconnecting…" : "Try again"}
-      </button>
-    </div>
   );
 }

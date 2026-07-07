@@ -4,25 +4,39 @@
 mod anki;
 mod elevenlabs;
 
-use anki::{ensure_anki_running, is_ankiconnect_up, stop_spawned_anki, AnkiState};
+use anki::{ensure_anki_running, is_anki_installed, is_ankiconnect_up, stop_spawned_anki, AnkiState};
 use elevenlabs::{elevenlabs_tts, elevenlabs_voices, set_elevenlabs_api_key};
 use std::sync::Arc;
 
 /// Wait until AnkiConnect is responding (called by the frontend on startup).
 /// Polls the HTTP endpoint directly — no dependency on background task state.
+///
+/// Returns a reason string so the frontend can show the right guidance instead
+/// of one generic error:
+///   "connected" — AnkiConnect answered on port 8765.
+///   "no-anki"   — the Anki app isn't installed, so there's nothing to wait for.
+///   "no-addon"  — Anki is installed (and being launched) but the port never
+///                 opened, so the AnkiConnect add-on is almost certainly missing.
 #[tauri::command]
-async fn wait_for_anki() -> Result<bool, String> {
+async fn wait_for_anki() -> Result<String, String> {
     if is_ankiconnect_up().await {
-        return Ok(true);
+        return Ok("connected".into());
+    }
+    // No Anki executable means the background launcher can never bring the port
+    // up — skip the wait and tell the user to install Anki right away.
+    if !is_anki_installed() {
+        return Ok("no-anki".into());
     }
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(20);
     loop {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         if is_ankiconnect_up().await {
-            return Ok(true);
+            return Ok("connected".into());
         }
         if tokio::time::Instant::now() >= deadline {
-            return Ok(false);
+            // Anki is present but nothing ever answered on 8765: the AnkiConnect
+            // add-on isn't installed (or is disabled/misconfigured).
+            return Ok("no-addon".into());
         }
     }
 }

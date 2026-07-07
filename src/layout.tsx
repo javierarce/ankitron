@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { AboutDialog } from "@/components/about-dialog";
+import {
+  AnkiConnectionError,
+  type AnkiConnectionReason,
+} from "@/components/anki-connection-error";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -16,8 +20,15 @@ import { useDeckImport } from "@/hooks/use-deck-import";
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+// Startup connection state. Outside Tauri (browser dev / demo build) there's no
+// Anki to wait for, so we begin "connected"; under Tauri we start "pending" and
+// let `wait_for_anki` resolve it to connected or a specific failure reason.
+type AnkiStartup = "pending" | "connected" | AnkiConnectionReason;
+
 export function Layout() {
-  const [ankiReady, setAnkiReady] = useState(!isTauri);
+  const [ankiStartup, setAnkiStartup] = useState<AnkiStartup>(
+    isTauri ? "pending" : "connected",
+  );
   // App-wide deck import: dropping a JSON file anywhere in the window (header
   // included) opens the import flow. The window listener below already stops the
   // browser from navigating to a dropped file; this turns the drop into an
@@ -54,10 +65,11 @@ export function Layout() {
     // Wait for Anki to be reachable before rendering pages (they fetch on
     // mount). The launch sync itself runs in the background via SyncProvider so
     // the app opens instantly instead of waiting on an AnkiWeb round-trip.
+    // `wait_for_anki` reports *why* it failed ("no-anki" / "no-addon") so we can
+    // show the right fix instead of letting the page spin, then error, generic.
     import("@tauri-apps/api/core").then(({ invoke }) => {
-      invoke("wait_for_anki").then((ok) => {
-        if (!ok) console.warn("Anki did not start in time");
-        setAnkiReady(true);
+      invoke<string>("wait_for_anki").then((status) => {
+        setAnkiStartup(normalizeStartup(status));
       });
     });
   }, []);
@@ -74,10 +86,22 @@ export function Layout() {
     });
   }
 
-  if (!ankiReady) {
+  if (ankiStartup === "pending") {
     return (
       <>
         <FullScreenSpinner label="Starting Anki…" />
+        <UpdatePrompt />
+        <AboutDialog />
+      </>
+    );
+  }
+
+  if (ankiStartup !== "connected") {
+    // Anki isn't installed, or the AnkiConnect add-on is missing. Block here
+    // with the specific fix rather than mounting pages that would just spin.
+    return (
+      <>
+        <AnkiConnectionError reason={ankiStartup} />
         <UpdatePrompt />
         <AboutDialog />
       </>
@@ -125,4 +149,18 @@ export function Layout() {
       </FileDropZone>
     </SyncProvider>
   );
+}
+
+/** Map `wait_for_anki`'s reason string onto our startup states, treating any
+ *  unexpected value as a generic "unreachable" so a backend change can never
+ *  wedge the app on the spinner. */
+function normalizeStartup(status: string): AnkiStartup {
+  switch (status) {
+    case "connected":
+    case "no-anki":
+    case "no-addon":
+      return status;
+    default:
+      return "unreachable";
+  }
 }
