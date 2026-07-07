@@ -150,13 +150,20 @@ function formatValue(prefix: string, name: string, value: string): string {
 }
 
 /**
- * Every value already used for `qualifier` anywhere in the query, lowercased,
- * so the menu can omit values you've already applied — re-offering `tag:A` when
- * the query already has it (or while you've just typed it) is a no-op.
+ * Every value already used for `qualifier` in the query, lowercased, so the menu
+ * can omit values you've already applied — re-offering `tag:A` when the query
+ * already has it is a no-op. Pass `exclude` (the token being edited) to keep the
+ * value you're *currently* typing out of the set, so the exact match still shows
+ * in its own menu and can be selected first.
  */
-export function appliedValues(query: string, qualifier: string): Set<string> {
+export function appliedValues(
+  query: string,
+  qualifier: string,
+  exclude?: Token,
+): Set<string> {
   const out = new Set<string>();
   for (const t of tokenize(query)) {
+    if (exclude && t.start === exclude.start && t.end === exclude.end) continue;
     const { body } = splitPrefix(t.text);
     const colon = body.indexOf(":");
     if (colon <= 0) continue;
@@ -172,7 +179,8 @@ export function appliedValues(query: string, qualifier: string): Set<string> {
  * free-form/unknown qualifier value — i.e. there's nothing concrete to offer.
  *
  * `query` (the full input) lets value suggestions skip anything already applied
- * for the same qualifier elsewhere in the query, and the value just typed.
+ * for the same qualifier elsewhere in the query — but not the value being typed
+ * in the active token, so its exact match stays offered.
  */
 export function suggestionsFor(
   token: Token,
@@ -205,9 +213,9 @@ export function suggestionsFor(
 
   const typed = foldText(unquote(body.slice(colon + 1)));
   // Offer a value if it matches what's typed (diacritic-insensitively) and
-  // isn't already in the query (applied elsewhere, or exactly what's been typed
-  // so far).
-  const applied = appliedValues(query, name);
+  // isn't already applied elsewhere in the query. The active token is excluded,
+  // so the value you're mid-typing keeps showing its exact match.
+  const applied = appliedValues(query, name, token);
   const usable = (value: string) =>
     foldText(value).includes(typed) && !applied.has(value.toLowerCase());
 
