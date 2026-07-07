@@ -17,6 +17,7 @@
 // the simulator logic.
 
 import { isCardInDeck } from "../deck";
+import { notesMatchingSearch } from "./match-query";
 import {
   addDemoNote,
   DECKS,
@@ -208,16 +209,20 @@ async function handleAction(
     }
 
     case "findNotes": {
-      // Every note in the subtree, suspended or not — the deck detail list shows
-      // suspended notes too (it marks them rather than hiding them).
-      const deck = deckFromQuery(params.query as string);
-      return notesInSubtree(deck).map((n) => n.noteId);
+      // Evaluate the query so operator searches (tag:, is:, note:, negation, …)
+      // actually filter. A plain `deck:"X"` still returns the whole subtree,
+      // suspended notes included — the deck detail list marks them, not hides
+      // them — because deck: alone doesn't constrain state.
+      return notesMatchingSearch(NOTES, params.query as string).map(
+        (n) => n.noteId,
+      );
     }
 
     case "findCards": {
-      // Honour the `-deck:"X::*"` exclusion a rename uses to grab only a deck's
-      // OWN cards; without it, moving a deck with subdecks flattens them.
-      return notesMatchingQuery(params.query as string).map((n) =>
+      // Same evaluator: it honours the `-deck:"X::*"` exclusion a rename uses to
+      // grab only a deck's OWN cards, without which moving a deck with subdecks
+      // would flatten them.
+      return notesMatchingSearch(NOTES, params.query as string).map((n) =>
         cardIdOf(n.noteId),
       );
     }
@@ -466,28 +471,4 @@ async function handleAction(
       console.warn(`[demo] unhandled AnkiConnect action: ${action}`, params);
       return null;
   }
-}
-
-// `findNotes`/`findCards` queries look like: deck:"Spanish::Verbs"
-function deckFromQuery(query: string | undefined): string {
-  const m = /deck:"([^"]+)"/.exec(query ?? "");
-  return m ? m[1] : "";
-}
-
-// Resolve the notes a findCards query selects. Handles the two shapes the app
-// builds: `deck:"X"` (X and its subtree) and an optional `-deck:"X::*"` exclusion
-// that drops the subdecks, leaving only X's own cards (what a deck move needs to
-// relocate each level without flattening the hierarchy).
-function notesMatchingQuery(query: string | undefined): DemoNote[] {
-  const q = query ?? "";
-  const root = deckFromQuery(q);
-  // `-deck:"..."` terms; a trailing `::*` means "any strict subdeck of".
-  const excluded = [...q.matchAll(/-deck:"([^"]+)"/g)].map((m) => m[1]);
-  return notesInSubtree(root).filter((n) =>
-    !excluded.some((term) =>
-      term.endsWith("::*")
-        ? n.deckName.startsWith(term.slice(0, -3) + "::")
-        : n.deckName === term,
-    ),
-  );
 }
