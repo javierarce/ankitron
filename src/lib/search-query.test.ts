@@ -120,9 +120,26 @@ describe("suggestionsFor — values", () => {
     expect(s.map((x) => x.display)).toContain("tag:marked");
   });
 
-  it("omits the value once it has been fully typed", () => {
+  it("keeps offering the value you are actively typing, even fully typed", () => {
     const token = { start: 0, end: 10, text: "tag:animal" };
-    expect(suggestionsFor(token, sources, "tag:animal")).toEqual([]);
+    const s = suggestionsFor(token, sources, "tag:animal");
+    expect(s.map((x) => x.display)).toEqual(["tag:animal"]);
+  });
+
+  it("keeps the exact match when a longer value shares the typed prefix", () => {
+    const src = {
+      ...sources,
+      tags: ["cloud", "cloudy", "cloudfront"],
+      hasUntagged: false,
+    };
+    const token = { start: 0, end: 9, text: "tag:cloud" };
+    const s = suggestionsFor(token, src, "tag:cloud");
+    // "cloud" must stay in — and lead — so Enter selects it, not "cloudy".
+    expect(s.map((x) => x.display)).toEqual([
+      "tag:cloud",
+      "tag:cloudy",
+      "tag:cloudfront",
+    ]);
   });
 
   it("omits an is: state already in the query", () => {
