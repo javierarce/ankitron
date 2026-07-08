@@ -20,6 +20,7 @@ import { ArrowsClockwise } from "@phosphor-icons/react/dist/ssr/ArrowsClockwise"
 import { GraduationCap } from "@phosphor-icons/react/dist/ssr/GraduationCap";
 import { Pause } from "@phosphor-icons/react/dist/ssr/Pause";
 import { Eye } from "@phosphor-icons/react/dist/ssr/Eye";
+import { Flag } from "@phosphor-icons/react/dist/ssr/Flag";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass";
 import {
   activeTokenAt,
@@ -58,6 +59,7 @@ const ICONS: Record<string, typeof MagnifyingGlass> = {
   deck: FolderSimple,
   tag: Tag,
   is: CircleHalf,
+  flag: Flag,
   note: Cards,
   added: CalendarPlus,
   edited: PencilSimple,
@@ -270,8 +272,9 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
                   >
                     <Icon
                       size={16}
-                      weight="regular"
-                      className="shrink-0 text-foreground/50"
+                      weight={s.color ? "fill" : "regular"}
+                      className={`shrink-0 ${s.color ? "" : "text-foreground/50"}`}
+                      style={s.color ? { color: s.color } : undefined}
                     />
                     <span className="truncate">{s.display}</span>
                     {s.detail && (

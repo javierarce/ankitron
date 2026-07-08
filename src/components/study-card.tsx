@@ -12,7 +12,9 @@ import {
   groupRuns,
 } from "@/lib/typed-answer-diff";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
+import { flagColor } from "@/lib/flags";
 import { ActionsMenu } from "./actions-menu";
+import { FlagPicker } from "./flag-picker";
 import { HtmlContent } from "./card-html";
 
 interface StudyCardProps {
@@ -26,6 +28,10 @@ interface StudyCardProps {
   answering: boolean;
   /** Ordered [sound:…] filenames from the note's raw fields. */
   sounds: string[];
+  /** The card's current flag (0 = none), shown as the top colour bar. */
+  flag?: number;
+  /** Apply a flag to the card (0 clears it). */
+  onSetFlag?: (flag: number) => void;
 }
 
 const TYPE_CLOZE_RE = /\[\[type:cloze:[^\]]+\]\]/g;
@@ -62,6 +68,22 @@ function splitAnkiAnswer(html: string): { front: string; back: string } {
   };
 }
 
+// The flag indicator: a 4px rounded pill down the left edge of the card's
+// front, inset 8px from the top, bottom, and left. Absolutely positioned inside
+// a `relative` section so it never affects text layout, and always rendered
+// (transparent when unflagged) so toggling a flag can't remount the sibling
+// text node and drop an in-progress selection. On a revealed card the front is
+// just the question section, so the pill only spans that.
+function FlagPill({ flag }: { flag: number }) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute bottom-2 left-2 top-2 w-1 rounded-full"
+      style={{ background: flagColor(flag) ?? "transparent" }}
+    />
+  );
+}
+
 // The per-card actions menu shown on the study card (top-right, on hover). It
 // hosts review-time actions like editing and suspending the note, and is the
 // place to add more (bury, flag, …) over time.
@@ -69,10 +91,14 @@ function StudyCardMenu({
   onEdit,
   onSuspend,
   disabled,
+  flag = 0,
+  onSetFlag,
 }: {
   onEdit: () => void;
   onSuspend: () => void;
   disabled: boolean;
+  flag?: number;
+  onSetFlag?: (flag: number) => void;
 }) {
   return (
     // Align the icon with the first line of card text: the content has py-6
@@ -98,6 +124,17 @@ function StudyCardMenu({
         items={[
           { label: "Edit Note", kbd: "E", disabled, onSelect: onEdit },
           { label: "Suspend Note", kbd: "S", disabled, onSelect: onSuspend },
+          {
+            render: (close) => (
+              <FlagPicker
+                value={flag}
+                onSelect={(f) => {
+                  onSetFlag?.(f);
+                  close();
+                }}
+              />
+            ),
+          },
         ]}
       />
     </div>
@@ -114,6 +151,8 @@ export function StudyCard({
   onSuspend,
   answering,
   sounds,
+  flag = 0,
+  onSetFlag,
 }: StudyCardProps) {
   const typed = useMemo(() => hasTypeCloze(question), [question]);
   // Swap the [anki:play:…] placeholders for inline play buttons; everything
@@ -316,17 +355,20 @@ export function StudyCard({
         {/* Actions slot — always present so the content div below it keeps a
            stable position in the children array (otherwise React's
            reconciliation can destroy the selected text node). The menu is the
-           home for per-card actions during review (edit, suspend, …). */}
+           home for per-card actions during review (edit, suspend, flag, …). */}
         <div key="actions-slot">
           <StudyCardMenu
             onEdit={onEdit}
             onSuspend={onSuspend}
             disabled={answering}
+            flag={flag}
+            onSetFlag={onSetFlag}
           />
         </div>
 
         {!isRevealed ? (
-          <div key="content" className="pl-8 pr-12 py-6">
+          <div key="content" className="relative pl-8 pr-12 py-6">
+            <FlagPill flag={flag} />
             {typed ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
                 <HtmlContent html={questionBefore} />
@@ -356,7 +398,8 @@ export function StudyCard({
         ) : (
           <div key="content">
             {/* Section 1 — question (gray background) */}
-            <div className="rounded-t-xl bg-foreground/[0.03] pl-8 pr-12 py-6">
+            <div className="relative rounded-t-xl bg-foreground/[0.03] pl-8 pr-12 py-6">
+              <FlagPill flag={flag} />
               <HtmlContent
                 html={
                   typed

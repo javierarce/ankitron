@@ -32,6 +32,8 @@ interface CardListShortcutsOptions {
   onMoveNotes: (ids: number[]) => void;
   /** Toggle-suspend the notes' cards; returns false when they have none. */
   onSuspendNotes: (ids: number[]) => boolean;
+  /** Set (0 clears) a flag on the notes' cards. */
+  onFlagNotes: (ids: number[], flag: number) => void;
 }
 
 export function useCardListShortcuts({
@@ -51,6 +53,7 @@ export function useCardListShortcuts({
   onTagNotes,
   onMoveNotes,
   onSuspendNotes,
+  onFlagNotes,
 }: CardListShortcutsOptions) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -90,6 +93,16 @@ export function useCardListShortcuts({
         if (rows.length > 0) {
           e.preventDefault();
           replaceSelection(rows.map((el) => Number(el.dataset.noteId)));
+        }
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && /^[0-7]$/.test(e.key)) {
+        // Cmd/Ctrl+1…7 flags the selection (or the focused row); Cmd/Ctrl+0
+        // clears it. Matches the study screen's flag shortcuts.
+        const ids = targetNoteIds();
+        if (ids.length > 0) {
+          e.preventDefault();
+          onFlagNotes(ids, Number(e.key));
         }
         return;
       }
@@ -203,5 +216,6 @@ export function useCardListShortcuts({
     onTagNotes,
     onMoveNotes,
     onSuspendNotes,
+    onFlagNotes,
   ]);
 }

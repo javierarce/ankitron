@@ -10,7 +10,9 @@ import {
 } from "react";
 import { Check } from "@phosphor-icons/react/dist/ssr/Check";
 import type { Note } from "@/lib/types";
+import { flagColor } from "@/lib/flags";
 import { ActionsMenu } from "./actions-menu";
+import { FlagPicker } from "./flag-picker";
 import { stripCloze } from "@/lib/cloze";
 import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
@@ -43,11 +45,15 @@ interface NoteRowProps {
   note: Note;
   selected: boolean;
   suspended: boolean;
+  /** The note's flag (0 = none), shown as the coloured left border. */
+  flag: number;
   draggable: boolean;
   /** Open the note in the editor. */
   onOpen: (note: Note) => void;
   onCheckboxClick: (e: ReactMouseEvent, note: Note) => void;
   onToggleSuspend: (note: Note) => void;
+  /** Set the note's flag (0 clears it). */
+  onSetFlag: (note: Note, flag: number) => void;
   /** Open the move-to-deck dialog for the note. */
   onMove: (note: Note) => void;
   /** Open the delete confirmation for the note. */
@@ -60,10 +66,12 @@ export const NoteRow = memo(function NoteRow({
   note,
   selected,
   suspended,
+  flag,
   draggable,
   onOpen,
   onCheckboxClick,
   onToggleSuspend,
+  onSetFlag,
   onMove,
   onDelete,
   onDragStart,
@@ -92,6 +100,16 @@ export const NoteRow = memo(function NoteRow({
           : "border-border hover:bg-foreground/[0.02]"
       } ${suspended && !selected ? "bg-foreground/[0.03]" : ""}`}
     >
+      {/* Flag indicator — a 4px rounded pill down the row's left edge, inset 4px
+         from the top, bottom, and left. Sits in the px-4 gutter, clear of the
+         checkbox. */}
+      {flag > 0 && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute bottom-1 left-1 top-1 w-1 rounded-full"
+          style={{ background: flagColor(flag) ?? undefined }}
+        />
+      )}
       <button
         onClick={(e) => onCheckboxClick(e, note)}
         aria-label={selected ? "Deselect note" : "Select note"}
@@ -156,6 +174,17 @@ export const NoteRow = memo(function NoteRow({
               label: "Delete",
               danger: true,
               onSelect: () => onDelete(note),
+            },
+            {
+              render: (close) => (
+                <FlagPicker
+                  value={flag}
+                  onSelect={(f) => {
+                    onSetFlag(note, f);
+                    close();
+                  }}
+                />
+              ),
             },
           ]}
         />

@@ -10,6 +10,7 @@ import { syncCollection } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
 import { coveringDecks, isCardInDeck } from "@/lib/deck";
 import { fetchDeckStats } from "@/lib/decks";
+import { fetchCardFlags, setNoteFlag } from "@/lib/flags";
 import {
   answerCard,
   resolveNoteForCard,
@@ -60,6 +61,12 @@ export function StudyPage() {
   const sessionRef = useRef<ReviewSession | null>(null);
 
   const [card, setCard] = useState<CurrentCard | null>(null);
+  // The flag, tagged with the card it belongs to, so a just-served card never
+  // flashes the previous card's flag while its own is being read. The bar and
+  // menu use the derived `flag` below, which is 0 until this card's read lands.
+  const [flagFor, setFlagFor] = useState<{ id: number; flag: number } | null>(
+    null,
+  );
   const [isRevealed, setIsRevealed] = useState(false);
   const [answering, setAnswering] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -113,9 +120,23 @@ export function StudyPage() {
   // Render a session result: the next card, the completion screen, or — when
   // the walk hit a transport failure mid-session — the error state, so a
   // flaky AnkiConnect never masquerades as "Session complete!".
-  const applyResult = useCallback((result: NextCardResult) => {
+  const applyResult = useCallback(async (result: NextCardResult) => {
     if (result.kind === "card") {
-      setCard(result.card);
+      const served = result.card;
+      // Read the flag before showing the card, so its bar is present on the
+      // first paint of the new card rather than popping in a beat later.
+      // guiCurrentCard doesn't carry the flag, so this is a separate read; it
+      // runs while the card is still hidden mid-transition, overlapping the
+      // fade. The two state writes below batch into one render (React 18), so
+      // the card and its bar appear together.
+      let servedFlag = 0;
+      try {
+        servedFlag = (await fetchCardFlags([served.cardId])).get(served.cardId) ?? 0;
+      } catch {
+        // A flag read failing is non-fatal — show the card without a bar.
+      }
+      setFlagFor({ id: served.cardId, flag: servedFlag });
+      setCard(served);
       setIsRevealed(false);
     } else if (result.kind === "completed") {
       setCompleted(true);
@@ -151,7 +172,7 @@ export function StudyPage() {
         } catch {
           // progress bar will simply not show — non-fatal
         }
-        applyResult(await nextCard(session));
+        await applyResult(await nextCard(session));
       } catch {
         setError(
           "Could not start review. Make sure Anki is running and the deck has due cards."
@@ -183,8 +204,37 @@ export function StudyPage() {
     // collection is back in its pre-answer state, so the undone card is
     // served again. (Undo steps back within the deck being reviewed; it doesn't
     // cross back into an earlier deck of a multi-deck session.)
-    applyResult(await reenterAndLoad(session));
+    await applyResult(await reenterAndLoad(session));
   }, [completed, reviewed, applyResult]);
+
+  // The current card's flag, or 0 if flagFor belongs to a card already
+  // replaced. Derived so switching cards can't show a stale flag. The read
+  // itself happens in applyResult, before the card is shown, so the bar is
+  // present on the card's first paint rather than fading in late.
+  const cardId = card?.cardId;
+  const flag = cardId != null && flagFor?.id === cardId ? flagFor.flag : 0;
+
+  // Flag (or clear) the current card. Applied to the whole note's cards, like
+  // suspension, so the deck list — which shows a note's flag from its first
+  // card — stays in sync. Optimistic: the bar updates immediately and reverts
+  // if the write fails.
+  const handleSetFlag = useCallback(
+    async (next: number) => {
+      if (!card) return;
+      const prev = flag;
+      if (prev === next) return;
+      setFlagFor({ id: card.cardId, flag: next });
+      try {
+        const note = await resolveNoteForCard(card.cardId);
+        const cardIds = note?.cards?.length ? note.cards : [card.cardId];
+        await setNoteFlag(cardIds, next);
+      } catch {
+        setFlagFor({ id: card.cardId, flag: prev });
+        setError("Failed to update the flag. Try again.");
+      }
+    },
+    [card, flag],
+  );
 
   const handleEdit = useCallback(async () => {
     if (!card) return;
@@ -227,10 +277,10 @@ export function StudyPage() {
           `/decks/${encodeURIComponent(deckName)}`,
           segParams.length ? { segments: segParams } : undefined,
         );
-      } else if ((e.metaKey || e.ctrlKey) && e.key === "1") {
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         requestExit("/");
-      } else if ((e.metaKey || e.ctrlKey) && e.key === "2") {
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
         e.preventDefault();
         requestExit("/decks");
       } else if (e.key === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -239,11 +289,17 @@ export function StudyPage() {
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         handleUndo();
+      } else if ((e.metaKey || e.ctrlKey) && /^[0-7]$/.test(e.key)) {
+        // Cmd/Ctrl+1…7 sets the matching flag, Anki-style; pressing the current
+        // flag's number again clears it. Cmd/Ctrl+0 always clears.
+        e.preventDefault();
+        const n = Number(e.key);
+        handleSetFlag(flag === n ? 0 : n);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm, pendingExit, deckName, segParams, requestExit, handleEdit, handleUndo]);
+  }, [editingNote, showAddForm, pendingExit, deckName, segParams, requestExit, handleEdit, handleUndo, handleSetFlag, flag]);
 
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
@@ -333,7 +389,7 @@ export function StudyPage() {
     } else if (session) {
       // The card left this deck (moved or its note type changed). Rebuild the
       // queue and serve whatever's next.
-      applyResult(await reenterAndLoad(session));
+      await applyResult(await reenterAndLoad(session));
       if (wasRevealed) {
         try {
           await showAnswer();
@@ -351,7 +407,7 @@ export function StudyPage() {
     const session = sessionRef.current;
     if (!session) return;
     // Re-enter review so the freshly added card can join this session's queue.
-    applyResult(await reenterAndLoad(session));
+    await applyResult(await reenterAndLoad(session));
   }
 
   async function handleSuspend() {
@@ -366,7 +422,7 @@ export function StudyPage() {
       // Suspend the whole note (not just this card — see the session module
       // for why), rebuild the queue, and serve the next card. Suspending isn't
       // a review, so the reviewed count is left untouched.
-      applyResult(await suspendCurrentAndAdvance(session, card));
+      await applyResult(await suspendCurrentAndAdvance(session, card));
     } catch {
       setError("Failed to suspend note. Try again.");
     } finally {
@@ -379,6 +435,10 @@ export function StudyPage() {
   async function handleAnswer(ease: Ease) {
     const session = sessionRef.current;
     if (!session || transitioningRef.current) return;
+    // The card (and its flag) at the moment of grading, captured before the
+    // queue advances so the flag re-assert below targets the right card.
+    const answeredId = card?.cardId;
+    const answeredFlag = flag;
     transitioningRef.current = true;
     setAnswering(true);
     // Fade the answered card out, load the next card while hidden, then fade in.
@@ -388,7 +448,16 @@ export function StudyPage() {
       const success = await answerCard(ease);
       if (success) {
         setReviewed((r) => r + 1);
-        applyResult(await nextCard(session));
+        await applyResult(await nextCard(session));
+        // Re-assert the graded card's flag — LAST, after the queue has advanced
+        // off it. Anki's offscreen reviewer caches the card it served and can
+        // re-save it (from that pre-flag copy) as it grades and moves on, wiping
+        // a flag set here or in the deck list back to 0. Writing it after the
+        // advance wins that race, so a flag survives being studied. Fire-and-
+        // forget: nothing downstream waits on it.
+        if (answeredId != null && answeredFlag > 0) {
+          void setNoteFlag([answeredId], answeredFlag).catch(() => {});
+        }
       }
     } catch {
       setError("Failed to record answer. Try again.");
@@ -482,6 +551,8 @@ export function StudyPage() {
             onSuspend={handleSuspend}
             answering={answering}
             sounds={sounds}
+            flag={flag}
+            onSetFlag={handleSetFlag}
           />
         </div>
       )}

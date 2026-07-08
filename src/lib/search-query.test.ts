@@ -94,6 +94,28 @@ describe("suggestionsFor — values", () => {
     expect(s.map((x) => x.display)).toEqual(["is:suspended"]);
   });
 
+  it("offers the flag colours, each tinted, plus flag:0", () => {
+    const s = suggestionsFor({ start: 0, end: 5, text: "flag:" }, sources);
+    expect(s.map((x) => x.display)).toEqual([
+      "flag:1",
+      "flag:2",
+      "flag:3",
+      "flag:4",
+      "flag:5",
+      "flag:6",
+      "flag:7",
+      "flag:0",
+    ]);
+    // Colour rows carry a tint; "No flag" (flag:0) does not.
+    expect(s[0].color).toBeTruthy();
+    expect(s[7].color).toBeUndefined();
+  });
+
+  it("matches a flag by its colour name", () => {
+    const s = suggestionsFor({ start: 0, end: 9, text: "flag:gree" }, sources);
+    expect(s.map((x) => x.display)).toEqual(["flag:3"]);
+  });
+
   it("includes tag:none alongside real tags", () => {
     const s = suggestionsFor({ start: 0, end: 4, text: "tag:" }, sources);
     expect(s.map((x) => x.display)).toEqual(["tag:none", "tag:animal", "tag:marked"]);
