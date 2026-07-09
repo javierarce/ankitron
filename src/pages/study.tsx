@@ -11,6 +11,7 @@ import { extractSoundFilenames } from "@/lib/audio";
 import { coveringDecks, isCardInDeck } from "@/lib/deck";
 import { fetchDeckStats } from "@/lib/decks";
 import { fetchCardFlags, setNoteFlag } from "@/lib/flags";
+import { useToast } from "@/lib/toast-context";
 import {
   answerCard,
   resolveNoteForCard,
@@ -37,6 +38,7 @@ export function StudyPage() {
   const params = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const toast = useToast();
   const deckName = decodeURIComponent(params.deckName as string);
 
   // The selected segments this session is scoped to, from the "seg" query
@@ -91,6 +93,9 @@ export function StudyPage() {
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
+  // Whether the flag was changed during the current card's review, so grading
+  // knows to re-assert it (set or cleared) over the reviewer's stale card copy.
+  const flagTouchedRef = useRef(false);
 
   // The rendered HTML only carries [anki:play:…] placeholders; the filenames
   // behind them live in the raw fields (see resolveCardAudio).
@@ -136,6 +141,9 @@ export function StudyPage() {
         // A flag read failing is non-fatal — show the card without a bar.
       }
       setFlagFor({ id: served.cardId, flag: servedFlag });
+      // A freshly served card starts untouched — its flag matches what the
+      // reviewer just cached, so grading needn't re-assert unless the user edits it.
+      flagTouchedRef.current = false;
       setCard(served);
       setIsRevealed(false);
     } else if (result.kind === "completed") {
@@ -217,12 +225,18 @@ export function StudyPage() {
   // Flag (or clear) the current card. Applied to the whole note's cards, like
   // suspension, so the deck list — which shows a note's flag from its first
   // card — stays in sync. Optimistic: the bar updates immediately and reverts
-  // if the write fails.
+  // if the write fails. A failure only toasts (like the deck list) rather than
+  // erroring the page — flagging is an optional annotation and mustn't tear
+  // down the review card the way a failed grade/suspend does.
   const handleSetFlag = useCallback(
     async (next: number) => {
       if (!card) return;
       const prev = flag;
       if (prev === next) return;
+      // Mark that the flag was changed for this card, so the answer handler
+      // knows to re-assert it against the offscreen reviewer's stale copy —
+      // including a clear (0), which the > 0 re-assert below would otherwise miss.
+      flagTouchedRef.current = true;
       setFlagFor({ id: card.cardId, flag: next });
       try {
         const note = await resolveNoteForCard(card.cardId);
@@ -230,10 +244,10 @@ export function StudyPage() {
         await setNoteFlag(cardIds, next);
       } catch {
         setFlagFor({ id: card.cardId, flag: prev });
-        setError("Failed to update the flag. Try again.");
+        toast.error("Couldn't update the flag. Is Anki still running?");
       }
     },
-    [card, flag],
+    [card, flag, toast],
   );
 
   const handleEdit = useCallback(async () => {
@@ -437,8 +451,11 @@ export function StudyPage() {
     if (!session || transitioningRef.current) return;
     // The card (and its flag) at the moment of grading, captured before the
     // queue advances so the flag re-assert below targets the right card.
+    // `flagTouched` gates the re-assert: only a flag the user changed this card
+    // can be clobbered, and we must re-assert a clear (0) as well as a set.
     const answeredId = card?.cardId;
     const answeredFlag = flag;
+    const flagTouched = flagTouchedRef.current;
     transitioningRef.current = true;
     setAnswering(true);
     // Fade the answered card out, load the next card while hidden, then fade in.
@@ -451,11 +468,13 @@ export function StudyPage() {
         await applyResult(await nextCard(session));
         // Re-assert the graded card's flag — LAST, after the queue has advanced
         // off it. Anki's offscreen reviewer caches the card it served and can
-        // re-save it (from that pre-flag copy) as it grades and moves on, wiping
-        // a flag set here or in the deck list back to 0. Writing it after the
-        // advance wins that race, so a flag survives being studied. Fire-and-
+        // re-save it (from that cached copy) as it grades and moves on, undoing
+        // a flag the user changed mid-review back to its served value. Writing it
+        // after the advance wins that race, so the change survives being studied.
+        // Gated on `flagTouched` (only a change made this card can be clobbered)
+        // and re-asserts whatever it now is — a color or a clear (0). Fire-and-
         // forget: nothing downstream waits on it.
-        if (answeredId != null && answeredFlag > 0) {
+        if (answeredId != null && flagTouched) {
           void setNoteFlag([answeredId], answeredFlag).catch(() => {});
         }
       }
