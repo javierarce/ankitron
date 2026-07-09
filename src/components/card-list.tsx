@@ -56,6 +56,8 @@ interface CardListProps {
   deckName: string;
   notes: Note[];
   suspendedCardIds?: number[];
+  /** Each note's current flag (0 = none), keyed by note id. */
+  noteFlags?: Record<number, number>;
   /** Each note's home deck. Lets the list scope to one subdeck via the segments. */
   noteDecks?: Record<number, string>;
   /** Decks nested under this one, sorted as a tree. Drives the segmented control. */
@@ -89,6 +91,7 @@ export function CardList({
   deckName,
   notes,
   suspendedCardIds,
+  noteFlags,
   noteDecks,
   subdecks,
   onSuspendChange,
@@ -219,6 +222,10 @@ export function CardList({
   const {
     isNoteSuspended,
     handleToggleSuspend,
+    noteFlag,
+    handleSetFlag,
+    flagNotes,
+    handleBulkFlag,
     suspendNotes,
     handleBulkSuspend,
     deletingNote,
@@ -234,6 +241,7 @@ export function CardList({
     notes,
     selectedNotes,
     suspendedCardIds,
+    noteFlags,
     homeDeck,
     onSuspendChange,
     onMoved: handleNotesMoved,
@@ -308,6 +316,7 @@ export function CardList({
     onTagNotes,
     onMoveNotes,
     onSuspendNotes: suspendNotes,
+    onFlagNotes: flagNotes,
   });
 
   const selectionActive = selectedNotes.length > 0;
@@ -394,6 +403,7 @@ export function CardList({
             )
           }
           onBulkSuspend={handleBulkSuspend}
+          onBulkFlag={handleBulkFlag}
           onBulkMove={() => setBulkMoving(true)}
           onBulkTag={() => setBulkTagging(true)}
           onBulkDelete={() => setBulkDeleteOpen(true)}
@@ -420,10 +430,12 @@ export function CardList({
               note={note}
               selected={selectedIds.has(note.noteId)}
               suspended={isNoteSuspended(note)}
+              flag={noteFlag(note)}
               draggable={hasSegments}
               onOpen={setEditingNote}
               onCheckboxClick={handleCheckboxClick}
               onToggleSuspend={handleToggleSuspend}
+              onSetFlag={handleSetFlag}
               onMove={setMovingNote}
               onDelete={setDeletingNote}
               onDragStart={handleRowDragStart}

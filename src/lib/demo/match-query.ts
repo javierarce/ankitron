@@ -223,6 +223,10 @@ function leafMatches(note: DemoNote, term: string): boolean {
         return isMatches(note, value.toLowerCase());
       case "note":
         return matchesValue(note.modelName, value);
+      case "flag":
+        // `flag:0` matches the unflagged; `flag:1`–`7` match that flag. A
+        // non-numeric value can't match any card's flag.
+        return note.flag === Number(value);
     }
     // An unhandled qualifier — a field search (`front:hello`) or an operator we
     // can't evaluate (`prop:`, `added:`, …). Approximate with a text match on the

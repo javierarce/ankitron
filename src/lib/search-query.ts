@@ -9,6 +9,7 @@
  */
 
 import { foldText } from "./fold-text";
+import { FLAGS } from "./flags";
 
 /** A qualifier offered in the dropdown, e.g. `deck:` or `is:`. */
 export interface Qualifier {
@@ -21,20 +22,20 @@ export interface Qualifier {
    * "none" qualifiers (added, prop, …) still route to the backend and still
    * highlight, but we have no concrete value list to offer.
    */
-  valueKind: "deck" | "tag" | "is" | "note" | "none";
+  valueKind: "deck" | "tag" | "is" | "note" | "flag" | "none";
 }
 
 /**
  * The qualifiers we surface, in menu order. Field searches (`front:` …) and the
  * advanced operators (`re:`, `nid:` …) still work because the whole query is
  * handed to Anki — they're just omitted from autocomplete to keep the menu
- * focused on what's broadly useful. `flag:` is intentionally absent until the
- * app grows a flag feature.
+ * focused on what's broadly useful.
  */
 export const QUALIFIERS: Qualifier[] = [
   { name: "deck", description: "Notes in a deck", valueKind: "deck" },
   { name: "tag", description: "Notes with a tag", valueKind: "tag" },
   { name: "is", description: "Card state", valueKind: "is" },
+  { name: "flag", description: "Flagged cards", valueKind: "flag" },
   { name: "note", description: "Note type", valueKind: "note" },
   { name: "added", description: "Added in the last N days", valueKind: "none" },
   { name: "edited", description: "Edited in the last N days", valueKind: "none" },
@@ -50,6 +51,24 @@ export const IS_VALUES: { value: string; description: string }[] = [
   { value: "learn", description: "Being learned" },
   { value: "suspended", description: "Suspended cards" },
   { value: "buried", description: "Buried cards" },
+];
+
+/**
+ * Fixed value set for `flag:` — the seven colours (each carrying its colour so
+ * the menu can tint its row) plus `flag:0` for the unflagged. Sourced from the
+ * shared FLAGS list so the names and colours stay in one place.
+ */
+export const FLAG_VALUES: {
+  value: string;
+  description: string;
+  color?: string;
+}[] = [
+  ...FLAGS.map((f) => ({
+    value: String(f.value),
+    description: f.name,
+    color: f.color,
+  })),
+  { value: "0", description: "No flag" },
 ];
 
 /** Live data the dropdown draws on for value completions. */
@@ -75,6 +94,8 @@ export interface Suggestion {
   detail?: string;
   /** Full token text to substitute for the active token (prefix + quoting). */
   apply: string;
+  /** A colour to tint the row's icon with, e.g. a flag's colour. */
+  color?: string;
   /**
    * True when this only completes the qualifier keyword (e.g. `deck:`), so the
    * caller should keep the menu open to offer values next. False for a terminal
@@ -227,6 +248,25 @@ export function suggestionsFor(
         iconKey: v.value,
         detail: v.description,
         apply: `${prefix}is:${v.value}`,
+        continues: false,
+      }));
+  }
+
+  if (qualifier.valueKind === "flag") {
+    // Match on the number (`flag:3`) or the colour name (`flag:gr` → Green),
+    // skipping any flag already in the query.
+    return FLAG_VALUES.filter(
+      (v) =>
+        !applied.has(v.value) &&
+        (v.value.includes(typed) || foldText(v.description).includes(typed)),
+    )
+      .slice(0, limit)
+      .map((v) => ({
+        display: `flag:${v.value}`,
+        iconKey: "flag",
+        detail: v.description,
+        color: v.color,
+        apply: `${prefix}flag:${v.value}`,
         continues: false,
       }));
   }

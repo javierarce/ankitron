@@ -4,6 +4,7 @@ import { CardList } from "@/components/card-list";
 import { CenteredSpinner } from "@/components/spinner";
 import { fetchAllDueCounts } from "@/lib/anki-fetch";
 import { areSuspended, fetchCardDecks } from "@/lib/cards";
+import { fetchCardFlags } from "@/lib/flags";
 import {
   compareDeckPaths,
   coveringDecks,
@@ -37,14 +38,16 @@ async function fetchDeckData(deckName: string) {
   const allCardIds = notes.flatMap((n) => n.cards ?? []);
   let suspendedCardIds: number[] = [];
   const noteDecks: Record<number, string> = {};
+  const noteFlags: Record<number, number> = {};
   if (allCardIds.length > 0) {
-    // We only need each card's deck (to scope the list to a subdeck) and
-    // whether it's suspended. getDecks + areSuspended return exactly that;
-    // cardsInfo would also make Anki render every card's question/answer HTML
-    // server-side, which dominates deck-open time on large decks.
-    const [cardsByDeck, suspendedFlags] = await Promise.all([
+    // We only need each card's deck (to scope the list to a subdeck), whether
+    // it's suspended, and its flag. getDecks + areSuspended + the flag searches
+    // return exactly that; cardsInfo would also make Anki render every card's
+    // question/answer HTML server-side, which dominates deck-open time.
+    const [cardsByDeck, suspendedFlags, flagByCard] = await Promise.all([
       fetchCardDecks(allCardIds),
       areSuspended(allCardIds),
+      fetchCardFlags(allCardIds),
     ]);
     suspendedCardIds = allCardIds.filter((_, i) => suspendedFlags[i] === true);
     const deckByCard = new Map<number, string>();
@@ -55,10 +58,17 @@ async function fetchDeckData(deckName: string) {
       const firstCard = (note.cards ?? []).find((id) => deckByCard.has(id));
       const deck = firstCard != null ? deckByCard.get(firstCard) : undefined;
       if (deck) noteDecks[note.noteId] = deck;
+      // A note shows the flag of its first flagged card — for the usual
+      // single-card note that's just its flag; for a multi-card note it
+      // surfaces any flag rather than blank when only a later card carries one.
+      const flagged = (note.cards ?? [])
+        .map((id) => flagByCard.get(id) ?? 0)
+        .find((f) => f > 0);
+      if (flagged) noteFlags[note.noteId] = flagged;
     }
   }
 
-  return { subdecks, notes, suspendedCardIds, noteDecks, exists };
+  return { subdecks, notes, suspendedCardIds, noteDecks, noteFlags, exists };
 }
 
 export function DeckDetailPage() {
@@ -77,6 +87,8 @@ export function DeckDetailPage() {
   // scope to a single subdeck. A note's cards normally share a deck; we key off
   // the first one.
   const [noteDecks, setNoteDecks] = useState<Record<number, string>>({});
+  // Each note's flag (0 = none), from its first flagged card.
+  const [noteFlags, setNoteFlags] = useState<Record<number, number>>({});
   // Every deck nested under this one ("Spanish::Verbs", …), sorted as a tree.
   const [subdecks, setSubdecks] = useState<string[]>([]);
   const [due, setDue] = useState<DueCounts>({ new: 0, learn: 0, review: 0 });
@@ -117,6 +129,7 @@ export function DeckDetailPage() {
       setNotes(data.notes);
       setSuspendedCardIds(data.suspendedCardIds);
       setNoteDecks(data.noteDecks);
+      setNoteFlags(data.noteFlags);
     },
     [],
   );
@@ -249,6 +262,7 @@ export function DeckDetailPage() {
           deckName={deckName}
           notes={notes}
           suspendedCardIds={suspendedCardIds}
+          noteFlags={noteFlags}
           noteDecks={noteDecks}
           subdecks={subdecks}
           onSuspendChange={refreshDue}

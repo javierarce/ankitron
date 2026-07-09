@@ -9,8 +9,10 @@ import { Play } from "@phosphor-icons/react/dist/ssr/Play";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
 import { Tag } from "@phosphor-icons/react/dist/ssr/Tag";
+import { Flag } from "@phosphor-icons/react/dist/ssr/Flag";
 import { X } from "@phosphor-icons/react/dist/ssr/X";
-import { Kbd } from "./actions-menu";
+import { ActionsMenu, Kbd } from "./actions-menu";
+import { FLAGS } from "@/lib/flags";
 import { SORT_OPTIONS, type SortMode } from "@/hooks/use-note-search";
 
 interface CardListToolbarProps {
@@ -30,6 +32,8 @@ interface CardListToolbarProps {
   /** Open the sequential editor over the selection. */
   onEditSelection: () => void;
   onBulkSuspend: (suspend: boolean) => void;
+  /** Apply a flag (0 clears it) to every selected note. */
+  onBulkFlag: (flag: number) => void;
   onBulkMove: () => void;
   onBulkTag: () => void;
   onBulkDelete: () => void;
@@ -48,6 +52,7 @@ export function CardListToolbar({
   allSelectedSuspended,
   onEditSelection,
   onBulkSuspend,
+  onBulkFlag,
   onBulkMove,
   onBulkTag,
   onBulkDelete,
@@ -127,6 +132,44 @@ export function CardListToolbar({
               )}
               <Kbd>S</Kbd>
             </button>
+            <ActionsMenu
+              label="Flag selected notes"
+              triggerContent={
+                <>
+                  <Flag size={16} weight="bold" />
+                  Flag
+                </>
+              }
+              triggerClassName={(open) =>
+                `flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors ${
+                  open ? "bg-foreground/5" : ""
+                }`
+              }
+              menuClassName="min-w-[150px]"
+              items={[
+                ...FLAGS.map((f) => ({
+                  label: (
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ background: f.color }}
+                      />
+                      {f.name}
+                    </span>
+                  ),
+                  onSelect: () => onBulkFlag(f.value),
+                })),
+                {
+                  label: (
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full border border-foreground/30" />
+                      No flag
+                    </span>
+                  ),
+                  onSelect: () => onBulkFlag(0),
+                },
+              ]}
+            />
             <button
               onClick={onBulkMove}
               className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-foreground/5 transition-colors"

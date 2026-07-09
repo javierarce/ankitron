@@ -17,7 +17,7 @@ export function Kbd({ children }: { children: string }) {
 }
 
 export interface ActionsMenuItem {
-  label: ReactNode;
+  label?: ReactNode;
   /** Keyboard hint rendered right-aligned next to the label. */
   kbd?: string;
   /** Destructive items (Delete) render red. */
@@ -25,7 +25,13 @@ export interface ActionsMenuItem {
   disabled?: boolean;
   /** Tooltip — e.g. the reason a disabled item can't be used. */
   title?: string;
-  onSelect: () => void;
+  onSelect?: () => void;
+  /**
+   * Render arbitrary content in place of a plain button (e.g. the flag colour
+   * grid). Gets `close` so the content can dismiss the menu after acting —
+   * a custom item owns its own click handling, so `onSelect` is ignored.
+   */
+  render?: (close: () => void) => ReactNode;
 }
 
 const TRIGGER_CLASS =
@@ -62,6 +68,7 @@ export function ActionsMenu({
   menuClassName,
   triggerClassName,
   iconSize = 22,
+  triggerContent,
 }: {
   /** Accessible name for the trigger ("Note actions", "Deck actions", …). */
   label: string;
@@ -71,6 +78,8 @@ export function ActionsMenu({
   /** Replaces the default trigger styling; the function form sees open state. */
   triggerClassName?: string | ((open: boolean) => string);
   iconSize?: number;
+  /** Replaces the default kebab glyph inside the trigger (e.g. a labelled button). */
+  triggerContent?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -109,7 +118,7 @@ export function ActionsMenu({
             : (triggerClassName ?? TRIGGER_CLASS)
         }
       >
-        <DotsThreeVertical size={iconSize} weight="bold" />
+        {triggerContent ?? <DotsThreeVertical size={iconSize} weight="bold" />}
       </button>
       {open &&
         createPortal(
@@ -121,27 +130,33 @@ export function ActionsMenu({
               menuClassName ? ` ${menuClassName}` : ""
             }`}
           >
-            {items.map((item, i) => (
-              <button
-                key={i}
-                disabled={item.disabled}
-                title={item.title}
-                onClick={() => {
-                  setOpen(false);
-                  item.onSelect();
-                }}
-                className={itemClassName(item)}
-              >
-                {item.kbd !== undefined ? (
-                  <>
-                    <span>{item.label}</span>
-                    <Kbd>{item.kbd}</Kbd>
-                  </>
-                ) : (
-                  item.label
-                )}
-              </button>
-            ))}
+            {items.map((item, i) =>
+              item.render ? (
+                <div key={i} role="none">
+                  {item.render(() => setOpen(false))}
+                </div>
+              ) : (
+                <button
+                  key={i}
+                  disabled={item.disabled}
+                  title={item.title}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onSelect?.();
+                  }}
+                  className={itemClassName(item)}
+                >
+                  {item.kbd !== undefined ? (
+                    <>
+                      <span>{item.label}</span>
+                      <Kbd>{item.kbd}</Kbd>
+                    </>
+                  ) : (
+                    item.label
+                  )}
+                </button>
+              ),
+            )}
           </div>,
           document.body,
         )}

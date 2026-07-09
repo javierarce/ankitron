@@ -23,6 +23,8 @@ export interface DemoNote {
   tags: string[];
   state: DemoState;
   suspended: boolean;
+  /** Card flag, 0 (none) to 7, mirroring Anki's per-card flag. */
+  flag: number;
 }
 
 // The deck-file note shape, plus our demo-only `state`. `deck` overrides the
@@ -96,6 +98,7 @@ for (const [file, mod] of Object.entries(deckFiles).sort(([a], [b]) =>
       tags: raw.tags ?? [],
       state: raw.state ?? "new",
       suspended: false,
+      flag: 0,
     });
   }
 }
@@ -158,6 +161,7 @@ export function addDemoNote(
     tags,
     state,
     suspended: false,
+    flag: 0,
   };
   notes.push(n);
   return n;

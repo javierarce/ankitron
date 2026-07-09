@@ -13,6 +13,7 @@ function note(over: Partial<DemoNote>): DemoNote {
     tags: [],
     state: "new",
     suspended: false,
+    flag: 0,
     ...over,
   };
 }
@@ -85,6 +86,23 @@ describe("notesMatchingSearch", () => {
 
   it("matches tag:none against untagged notes", () => {
     expect(ids("tag:none")).toEqual([4]);
+  });
+
+  it("filters by flag number, with flag:0 for the unflagged", () => {
+    const flagged = [
+      note({ noteId: 1, flag: 0 }),
+      note({ noteId: 2, flag: 3 }),
+      note({ noteId: 3, flag: 3 }),
+      note({ noteId: 4, flag: 1 }),
+    ];
+    const flagIds = (q: string) =>
+      notesMatchingSearch(flagged, q)
+        .map((n) => n.noteId)
+        .sort((a, b) => a - b);
+    expect(flagIds("flag:3")).toEqual([2, 3]);
+    expect(flagIds("flag:1")).toEqual([4]);
+    expect(flagIds("flag:0")).toEqual([1]);
+    expect(flagIds("flag:5")).toEqual([]);
   });
 
   it("matches plain text and wildcards against fields, diacritic-folded", () => {

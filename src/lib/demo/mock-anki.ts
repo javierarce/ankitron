@@ -141,6 +141,7 @@ const MUTATING = new Set([
   "guiUndo",
   "suspend",
   "unsuspend",
+  "setSpecificValueOfCard",
   "addNote",
   "updateNoteFields",
   "updateNote",
@@ -336,6 +337,19 @@ async function handleAction(
         if (n) n.suspended = false;
       }
       return true;
+    }
+
+    case "setSpecificValueOfCard": {
+      // The app uses this only to write a card's `flags` column (see lib/flags).
+      // One boolean per key, like AnkiConnect; the demo is note-level so the
+      // flag lands on the note behind the card.
+      const n = findNote(noteIdOfCard(params.card as number));
+      const keys = (params.keys as string[]) ?? [];
+      const newValues = (params.newValues as string[]) ?? [];
+      keys.forEach((key, i) => {
+        if (n && key === "flags") n.flag = Number(newValues[i]) || 0;
+      });
+      return keys.map(() => true);
     }
 
     case "sync":

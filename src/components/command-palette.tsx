@@ -81,18 +81,20 @@ export function CommandPalette() {
         if (isScrollLocked()) return;
         e.preventDefault();
         navigate("/settings");
-      } else if (mod && (e.key === "1" || e.key === "2")) {
-        // Quick-nav to Study (1) / Decks (2). Skip while editing a card (any
-        // dialog holds the scroll lock) or mid-study, where these would
-        // interrupt what the user is doing.
-        // pathname + hash so this holds under both history and hash routing
-        // (the demo build uses HashRouter, where the route lives in the hash).
+      } else if (mod && (e.key.toLowerCase() === "s" || e.key.toLowerCase() === "d")) {
+        // Quick-nav to Study (S) / Decks (D). pathname + hash so this holds
+        // under both history and hash routing (the demo build uses HashRouter,
+        // where the route lives in the hash).
         const route = window.location.pathname + window.location.hash;
-        if (isScrollLocked() || route.endsWith("/study")) {
-          return;
-        }
+        // Study owns these keys while reviewing — it confirms before leaving —
+        // so let its own handler take them there.
+        if (route.endsWith("/study")) return;
+        // Otherwise claim the combo (suppressing the browser's Save/Bookmark)
+        // and navigate — unless a dialog is up (an open card editor), where
+        // yanking the user away would lose their edits.
         e.preventDefault();
-        navigate(e.key === "1" ? "/" : "/decks");
+        if (isScrollLocked()) return;
+        navigate(e.key.toLowerCase() === "s" ? "/" : "/decks");
       }
     }
     window.addEventListener("keydown", handleKey);
