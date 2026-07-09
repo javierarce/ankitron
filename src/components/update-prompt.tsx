@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useUpdate } from "@/components/update-context";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { ReleaseNotes } from "@/lib/release-notes";
 
 type Phase = "available" | "installing" | "restarting" | "error";
 
@@ -153,8 +154,8 @@ export function UpdatePrompt() {
               {update.currentVersion}).
             </p>
             {update.body ? (
-              <div className="mb-4 max-h-48 overflow-auto overscroll-contain whitespace-pre-wrap rounded-lg border border-border bg-foreground/5 p-3 text-sm text-foreground/70">
-                {update.body}
+              <div className="mb-4 max-h-48 space-y-2 overflow-auto overscroll-contain rounded-lg border border-border bg-foreground/5 p-3 text-sm text-foreground/70">
+                <ReleaseNotes text={update.body} />
               </div>
             ) : null}
             <div className="flex justify-end gap-3">
