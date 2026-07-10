@@ -13,9 +13,10 @@ import type { Icon } from "@phosphor-icons/react";
 import { fetchDeckNames } from "@/lib/decks";
 import { formatDeckPath } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
-import { useScrollLock, isScrollLocked } from "@/hooks/use-scroll-lock";
+import { isScrollLocked } from "@/hooks/use-scroll-lock";
 import { useTheme } from "@/lib/theme-context";
 import { CardForm } from "./card-form";
+import { ModalDialog } from "./modal-dialog";
 
 type Mode = "search" | "pickDeckForCard";
 
@@ -49,10 +50,6 @@ export function CommandPalette() {
   const [addingToDeck, setAddingToDeck] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-
-  // CardForm renders its own backdrop and locks scroll itself; the palette only
-  // needs the lock while its own overlay is up.
-  useScrollLock(open);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -235,6 +232,9 @@ export function CommandPalette() {
       activate(selected);
     } else if (e.key === "Escape") {
       e.preventDefault();
+      // The palette owns Escape (it may just step back to search rather than
+      // close), so keep it from reaching ModalDialog's Escape-to-close handler.
+      e.stopPropagation();
       if (mode === "pickDeckForCard" && deckPickFromSearch) {
         setMode("search");
         setDeckPickFromSearch(false);
@@ -248,103 +248,100 @@ export function CommandPalette() {
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-[15vh]"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) close();
-          }}
+        <ModalDialog
+          onClose={close}
+          width="xl"
+          align="start"
+          unpadded
+          ariaLabel="Command palette"
         >
-          <div
-            className="mx-4 w-full max-w-xl overflow-hidden rounded-xl border border-border bg-background shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
-          >
-            <div className="flex items-center gap-2 border-b border-border px-4">
-              <MagnifyingGlass
-                size={16}
-                weight="regular"
-                className="shrink-0 text-foreground/40"
-              />
-              <input
-                ref={inputRef}
-                type="text"
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
-                autoComplete="off"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setSelected(0);
-                }}
-                onKeyDown={onKeyDown}
-                placeholder={
-                  mode === "search" ? "Search decks or actions\u2026" : "Pick a deck for the new note\u2026"
-                }
-                className="w-full bg-transparent py-3 text-sm placeholder:text-foreground/40 focus:outline-none"
-              />
-            </div>
-            <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
-              {items.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-foreground/50">No results</div>
-              ) : (
-                items.map((item, i) => {
-                  const isSelected = i === selected;
-                  const ActionIcon = item.kind === "action" ? item.icon : null;
-                  return (
-                    <button
-                      key={item.kind === "action" ? `action:${item.id}` : `deck:${item.deck}`}
-                      type="button"
-                      // Keep focus on the input so arrow keys always drive the
-                      // `selected` highlight. Tabbing onto a row would strand
-                      // focus here, where nothing handles the arrows.
-                      tabIndex={-1}
-                      data-index={i}
-                      onClick={() => activate(i)}
-                      onMouseMove={() => setSelected(i)}
-                      className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors ${
-                        isSelected ? "bg-foreground/5" : ""
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        {ActionIcon && (
-                          <ActionIcon size={14} weight="bold" className="text-foreground/60" />
-                        )}
-                        {item.kind === "action" ? (
-                          <span className="font-medium">{item.label}</span>
-                        ) : (
-                          <DeckRow name={item.deck} query={q} />
-                        )}
-                      </span>
-                      {isSelected && (
-                        <span className="text-xs text-foreground/40">
-                          {item.kind === "action"
-                            ? item.hint
-                            : mode === "pickDeckForCard"
-                              ? "add here"
-                              : "go"}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-            <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-foreground/40">
-              <span>
-                {mode === "pickDeckForCard" && deckPickFromSearch
-                  ? "Esc to go back"
-                  : "Esc to close"}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <ArrowUp size={12} weight="bold" />
-                <ArrowDown size={12} weight="bold" />
-                <span>navigate</span>
-                <span className="text-foreground/20">&middot;</span>
-                <ArrowElbowDownLeft size={12} weight="bold" />
-                <span>select</span>
-              </span>
-            </div>
+          <div className="flex items-center gap-2 border-b border-border px-4">
+            <MagnifyingGlass
+              size={16}
+              weight="regular"
+              className="shrink-0 text-foreground/40"
+            />
+            <input
+              ref={inputRef}
+              type="text"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSelected(0);
+              }}
+              onKeyDown={onKeyDown}
+              placeholder={
+                mode === "search" ? "Search decks or actions\u2026" : "Pick a deck for the new note\u2026"
+              }
+              className="w-full bg-transparent py-3 text-sm placeholder:text-foreground/40 focus:outline-none"
+            />
           </div>
-        </div>
+          <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
+            {items.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-foreground/50">No results</div>
+            ) : (
+              items.map((item, i) => {
+                const isSelected = i === selected;
+                const ActionIcon = item.kind === "action" ? item.icon : null;
+                return (
+                  <button
+                    key={item.kind === "action" ? `action:${item.id}` : `deck:${item.deck}`}
+                    type="button"
+                    // Keep focus on the input so arrow keys always drive the
+                    // `selected` highlight. Tabbing onto a row would strand
+                    // focus here, where nothing handles the arrows.
+                    tabIndex={-1}
+                    data-index={i}
+                    onClick={() => activate(i)}
+                    onMouseMove={() => setSelected(i)}
+                    className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors ${
+                      isSelected ? "bg-foreground/5" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {ActionIcon && (
+                        <ActionIcon size={14} weight="bold" className="text-foreground/60" />
+                      )}
+                      {item.kind === "action" ? (
+                        <span className="font-medium">{item.label}</span>
+                      ) : (
+                        <DeckRow name={item.deck} query={q} />
+                      )}
+                    </span>
+                    {isSelected && (
+                      <span className="text-xs text-foreground/40">
+                        {item.kind === "action"
+                          ? item.hint
+                          : mode === "pickDeckForCard"
+                            ? "add here"
+                            : "go"}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+          <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-foreground/40">
+            <span>
+              {mode === "pickDeckForCard" && deckPickFromSearch
+                ? "Esc to go back"
+                : "Esc to close"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <ArrowUp size={12} weight="bold" />
+              <ArrowDown size={12} weight="bold" />
+              <span>navigate</span>
+              <span className="text-foreground/20">&middot;</span>
+              <ArrowElbowDownLeft size={12} weight="bold" />
+              <span>select</span>
+            </span>
+          </div>
+        </ModalDialog>
       )}
 
       {addingToDeck && (

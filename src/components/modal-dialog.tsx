@@ -9,6 +9,7 @@ import { useScrollLock } from "@/hooks/use-scroll-lock";
 const WIDTH_CLASS = {
   sm: "max-w-sm",
   md: "max-w-md",
+  xl: "max-w-xl",
   "2xl": "max-w-2xl",
 } as const;
 
@@ -67,6 +68,17 @@ interface ModalDialogProps {
   blocked?: boolean;
   onClose: () => void;
   width?: keyof typeof WIDTH_CLASS;
+  /**
+   * Vertical placement of the panel: "center" (default) or "start", which
+   * pins it near the top (pt-[15vh]) — for palette-style dialogs.
+   */
+  align?: "center" | "start";
+  /**
+   * Drop the default p-6 and clip content to the rounded corners: for dialogs
+   * that render their own edge-to-edge chrome (e.g. the command palette's
+   * full-width search / list / footer sections).
+   */
+  unpadded?: boolean;
   /** Cap the panel at 90vh and scroll its content (the big editors). */
   scrollable?: boolean;
   footer?: ModalFooterConfig | ReactNode;
@@ -104,6 +116,8 @@ export function ModalDialog({
   blocked = false,
   onClose,
   width = "md",
+  align = "center",
+  unpadded = false,
   scrollable = false,
   footer,
   panelRef,
@@ -137,7 +151,9 @@ export function ModalDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className={`fixed inset-0 z-50 flex justify-center bg-black/50 ${
+        align === "start" ? "items-start pt-[15vh]" : "items-center"
+      }`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy && !blocked) onClose();
       }}
@@ -190,7 +206,9 @@ export function ModalDialog({
         aria-label={title === undefined ? ariaLabel : undefined}
         className={`mx-4 w-full ${WIDTH_CLASS[width]} ${
           scrollable ? "max-h-[90vh] overflow-y-auto " : ""
-        }rounded-xl border border-border bg-background p-6 shadow-lg focus:outline-none`}
+        }${
+          unpadded ? "overflow-hidden " : "p-6 "
+        }rounded-xl border border-border bg-background shadow-lg focus:outline-none`}
       >
         {title !== undefined && (
           <h3 id={titleId} className={`${titleClassName} text-lg font-semibold`}>
