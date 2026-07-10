@@ -249,7 +249,7 @@ export function CommandPalette() {
     <>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[15vh] backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-[15vh]"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) close();
           }}
