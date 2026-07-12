@@ -2,11 +2,11 @@
 // search/sort (use-note-search), multi-select (use-note-selection), note
 // mutations (use-bulk-actions), the tag-undo window (use-tag-undo), and the
 // keyboard dispatcher (use-card-list-shortcuts) — plus the memo'd NoteRow and
-// the SegmentBar. This component owns the view state that ties them together:
+// the SubdeckTree. This component owns the view state that ties them together:
 // the deck map, segment scoping, drag-and-drop, the edit-sequence run, and the
 // six modals.
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
@@ -24,7 +24,7 @@ import {
 import { stripCloze } from "@/lib/cloze";
 import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
-import { deckLeaf, isCardInDeck, segmentLabelParts } from "@/lib/deck";
+import { deckLeaf, isCardInDeck } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useDeckSegments } from "@/hooks/use-deck-segments";
 import { useNoteDrag } from "@/hooks/use-note-drag";
@@ -35,7 +35,7 @@ import { useTagUndo } from "@/hooks/use-tag-undo";
 import { useEditSequenceRun } from "@/hooks/use-edit-sequence-run";
 import { useCardListShortcuts } from "@/hooks/use-card-list-shortcuts";
 import { NoteRow } from "./card-list-note-row";
-import { SegmentBar } from "./card-list-segments";
+import { SubdeckTree } from "./subdeck-tree";
 import { CardListToolbar } from "./card-list-toolbar";
 
 /**
@@ -77,14 +77,6 @@ interface CardListProps {
   /** Add-card form visibility, owned by the page so the button can live in its header. */
   showAddForm: boolean;
   onShowAddForm: (show: boolean) => void;
-  /** Segments to pre-select on mount, e.g. when returning from a scoped study session. */
-  initialSegments?: string[];
-  /**
-   * Called with the currently selected segment deck names whenever they change,
-   * so the page header's Study button can scope a session to those subdecks.
-   * Empty = "All" selected.
-   */
-  onSegmentsChange?: (segments: string[]) => void;
 }
 
 export function CardList({
@@ -99,8 +91,6 @@ export function CardList({
   onChanged,
   showAddForm,
   onShowAddForm,
-  initialSegments,
-  onSegmentsChange,
 }: CardListProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [movingNote, setMovingNote] = useState<Note | null>(null);
@@ -137,9 +127,7 @@ export function CardList({
   const segmentDecks = subdecks ?? [];
 
   const { activeSegments, handleSegmentClick, clearSegments } = useDeckSegments({
-    initialSegments,
     segmentDecks,
-    onSegmentsChange,
   });
 
   // Reset back to "All" whenever we navigate to a different deck.
@@ -191,8 +179,6 @@ export function CardList({
     removeFromSelection,
     setAnchor,
     getSelectedIds,
-    selectAllVisible,
-    allVisibleSelected,
     targetNoteIds,
   } = useNoteSelection(filteredNotes);
 
@@ -283,6 +269,26 @@ export function CardList({
 
   useVimNav({ enabled: !hasDialog });
 
+  // Clicking anywhere off the cards clears the selection (like Esc). Note rows,
+  // the bulk toolbar and its portalled menus, open dialogs, the subdeck tree,
+  // and any interactive control are excluded — only "empty" clicks deselect.
+  useEffect(() => {
+    if (selectedIds.size === 0 || hasDialog) return;
+    function handlePointerDown(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest(
+          "[data-note-id],[data-bulk-toolbar],[data-subdeck-tree],[role='menu'],[role='dialog'],button,a,input,select,textarea,label",
+        )
+      ) {
+        return;
+      }
+      deselectAll();
+    }
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [selectedIds, hasDialog, deselectAll]);
+
   const onAddNote = useCallback(() => onShowAddForm(true), [onShowAddForm]);
   const onTagNotes = useCallback(
     (ids: number[]) => {
@@ -344,106 +350,108 @@ export function CardList({
   // Both fall through to the EmptyState, so suppress the search box and count.
   const listEmpty = segmentScopeEmpty || notes.length === 0;
   const onlySegment = activeSegments.size === 1 ? [...activeSegments][0] : null;
+  // Just the leaf, not the whole "::" path — a deeply nested subdeck's full path
+  // makes the heading unwieldy, and the subdeck tree already shows the context.
   const emptySegmentLabel = onlySegment
-    ? (() => {
-        const { prefix, leaf } = segmentLabelParts(onlySegment, deckName);
-        return (prefix ?? "") + leaf;
-      })()
+    ? deckLeaf(onlySegment)
     : "the selected decks";
 
   return (
     <div>
-      {hasSegments && (
-        <SegmentBar
-          deckName={deckName}
-          totalCount={notes.length}
-          segmentDecks={segmentDecks}
-          activeSegments={activeSegments}
-          countByDeck={countByDeck}
-          dragOverDeck={dragOverDeck}
-          onAllClick={clearSegments}
-          onSegmentClick={handleSegmentClick}
-          onDragOverDeck={setDragOverDeck}
-          onDragLeaveDeck={handleSegmentDragLeave}
-          onDropOnDeck={handleSegmentDrop}
-        />
-      )}
-
-      {!listEmpty && (
-        <div className="mb-4 flex items-center gap-3">
-          <SearchInput
-            ref={searchRef}
-            value={query}
-            onChange={setQuery}
-            sources={searchSources}
-            onContextChange={setContextQ}
-            placeholder="Search notes…"
-            className="flex-1"
+      <div className={hasSegments ? "flex items-start gap-6" : undefined}>
+        {hasSegments && (
+          <SubdeckTree
+            deckName={deckName}
+            totalCount={notes.length}
+            segmentDecks={segmentDecks}
+            activeSegments={activeSegments}
+            countByDeck={countByDeck}
+            dragOverDeck={dragOverDeck}
+            onAllClick={clearSegments}
+            onSegmentClick={handleSegmentClick}
+            onDragOverDeck={setDragOverDeck}
+            onDragLeaveDeck={handleSegmentDragLeave}
+            onDropOnDeck={handleSegmentDrop}
           />
-        </div>
-      )}
+        )}
 
-      {!listEmpty && (
-        <CardListToolbar
-          selectedCount={selectedNotes.length}
-          searching={effective !== ""}
-          filteredCount={filteredNotes.length}
-          scopedCount={segmentNotes.length}
-          allVisibleSelected={allVisibleSelected}
-          onSelectAllVisible={selectAllVisible}
-          onClearSelection={clearSelection}
-          sortMode={sortMode}
-          onSortChange={handleSortChange}
-          allSelectedSuspended={allSelectedSuspended}
-          onEditSelection={() =>
-            beginEdit(
-              filteredNotes
-                .filter((n) => selectedIds.has(n.noteId))
-                .map((n) => n.noteId),
-            )
-          }
-          onBulkSuspend={handleBulkSuspend}
-          onBulkFlag={handleBulkFlag}
-          onBulkMove={() => setBulkMoving(true)}
-          onBulkTag={() => setBulkTagging(true)}
-          onBulkDelete={() => setBulkDeleteOpen(true)}
-        />
-      )}
+        <div className="min-w-0 flex-1">
+          {!listEmpty && (
+            <div className="mb-4 flex items-center gap-3">
+              <SearchInput
+                ref={searchRef}
+                value={query}
+                onChange={setQuery}
+                sources={searchSources}
+                onContextChange={setContextQ}
+                placeholder="Search notes…"
+                className="flex-1"
+              />
+            </div>
+          )}
 
-      {segmentScopeEmpty ? (
-        <EmptyState
-          heading={`No notes in ${emptySegmentLabel}`}
-          hint="Drag notes from another deck onto it to move them here."
-        />
-      ) : notes.length === 0 ? (
-        <EmptyState
-          heading={`No notes in ${deckLeaf(deckName)}`}
-          hint="Add your first note to get started."
-        />
-      ) : filteredNotes.length === 0 ? (
-        <p className="text-foreground/50">No notes match &ldquo;{query}&rdquo;.</p>
-      ) : (
-        <div className="space-y-2">
-          {filteredNotes.map((note) => (
-            <NoteRow
-              key={note.noteId}
-              note={note}
-              selected={selectedIds.has(note.noteId)}
-              suspended={isNoteSuspended(note)}
-              flag={noteFlag(note)}
-              draggable={hasSegments}
-              onOpen={setEditingNote}
-              onCheckboxClick={handleCheckboxClick}
-              onToggleSuspend={handleToggleSuspend}
-              onSetFlag={handleSetFlag}
-              onMove={setMovingNote}
-              onDelete={setDeletingNote}
-              onDragStart={handleRowDragStart}
-              onDragEnd={handleRowDragEnd}
+          {!listEmpty && (
+            <CardListToolbar
+              selectedCount={selectedNotes.length}
+              searching={effective !== ""}
+              filteredCount={filteredNotes.length}
+              scopedCount={segmentNotes.length}
+              sortMode={sortMode}
+              onSortChange={handleSortChange}
+              allSelectedSuspended={allSelectedSuspended}
+              onEditSelection={() =>
+                beginEdit(
+                  filteredNotes
+                    .filter((n) => selectedIds.has(n.noteId))
+                    .map((n) => n.noteId),
+                )
+              }
+              onBulkSuspend={handleBulkSuspend}
+              onBulkFlag={handleBulkFlag}
+              onBulkMove={() => setBulkMoving(true)}
+              onBulkTag={() => setBulkTagging(true)}
+              onBulkDelete={() => setBulkDeleteOpen(true)}
             />
-          ))}
+          )}
+
+          {segmentScopeEmpty ? (
+            <EmptyState
+              heading={`No notes in ${emptySegmentLabel}`}
+              hint="Drag notes from another deck onto it to move them here."
+            />
+          ) : notes.length === 0 ? (
+            <EmptyState
+              heading={`No notes in ${deckLeaf(deckName)}`}
+              hint="Add your first note to get started."
+            />
+          ) : filteredNotes.length === 0 ? (
+            <p className="text-foreground/50">
+              No notes match &ldquo;{query}&rdquo;.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {filteredNotes.map((note) => (
+                <NoteRow
+                  key={note.noteId}
+                  note={note}
+                  selected={selectedIds.has(note.noteId)}
+                  suspended={isNoteSuspended(note)}
+                  flag={noteFlag(note)}
+                  draggable={hasSegments}
+                  onOpen={setEditingNote}
+                  onCheckboxClick={handleCheckboxClick}
+                  onToggleSuspend={handleToggleSuspend}
+                  onSetFlag={handleSetFlag}
+                  onMove={setMovingNote}
+                  onDelete={setDeletingNote}
+                  onDragStart={handleRowDragStart}
+                  onDragEnd={handleRowDragEnd}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {showAddForm && (
         <CardForm

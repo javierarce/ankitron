@@ -177,6 +177,32 @@ export function buildDeckTree(decks: string[]): DeckNode[] {
   return roots;
 }
 
+/**
+ * Build the subtree rooted exactly at `root`, from its descendant deck names.
+ * Unlike buildDeckTree, the returned node's fullName is `root` itself (never a
+ * synthesised ancestor), so a nested deck like "Languages::Spanish" yields a
+ * tree rooted at "Languages::Spanish" rather than at "Languages". `subdecks`
+ * must all sit under `root` (as subdecksOf guarantees); children are sorted so
+ * parents precede children and siblings are alphabetical.
+ */
+export function buildSubdeckTree(root: string, subdecks: string[]): DeckNode {
+  const node: DeckNode = { name: deckLeaf(root), fullName: root, children: [] };
+  const byFull = new Map<string, DeckNode>([[root, node]]);
+  const rootDepth = root.split("::").length;
+  for (const deck of [...subdecks].sort(compareDeckPaths)) {
+    const parts = deck.split("::");
+    for (let i = rootDepth; i < parts.length; i++) {
+      const fullName = parts.slice(0, i + 1).join("::");
+      if (!byFull.has(fullName)) {
+        const child: DeckNode = { name: parts[i], fullName, children: [] };
+        byFull.set(fullName, child);
+        byFull.get(parts.slice(0, i).join("::"))!.children.push(child);
+      }
+    }
+  }
+  return node;
+}
+
 /** A single deck's old → new name as part of a rename. */
 export interface DeckRename {
   from: string;

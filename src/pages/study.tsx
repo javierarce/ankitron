@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { CurrentCard, Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
@@ -8,7 +8,6 @@ import { Tooltip } from "@/components/tooltip";
 import { Spinner } from "@/components/spinner";
 import { syncCollection } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
-import { coveringDecks, isCardInDeck } from "@/lib/deck";
 import { fetchDeckStats } from "@/lib/decks";
 import { fetchCardFlags, setNoteFlag } from "@/lib/flags";
 import { useToast } from "@/lib/toast-context";
@@ -37,26 +36,13 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function StudyPage() {
   const params = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const toast = useToast();
   const deckName = decodeURIComponent(params.deckName as string);
 
-  // The selected segments this session is scoped to, from the "seg" query
-  // params. Carried back to the deck page on exit so the selection survives a
-  // round-trip into study.
-  const segParams = useMemo(
-    () => searchParams.getAll("seg").filter((d) => isCardInDeck(d, deckName)),
-    [searchParams, deckName],
-  );
-
-  // The decks this session reviews, in order. The selected segments are reduced
-  // to disjoint subtrees so none is studied twice; with none, the whole deck is
-  // studied. Anki reviews one deck at a time, so we step through them,
-  // re-entering review as each empties.
-  const studyDecks = useMemo(() => {
-    const cover = coveringDecks(segParams);
-    return cover.length > 0 ? cover : [deckName];
-  }, [segParams, deckName]);
+  // The decks this session reviews. Anki reviews one deck at a time, and a deck
+  // pulls in its whole subtree, so studying the opened deck covers its subdecks.
+  // A memo'd single-element array so the start effect's identity stays stable.
+  const studyDecks = useMemo(() => [deckName], [deckName]);
   // The session state machine (deck cursor, queue walking, recovery) lives in
   // lib/review-session; the component only holds it and renders its results.
   // A ref so the async handlers always see the session the start effect built.
@@ -79,12 +65,8 @@ export function StudyPage() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   // A pending "leave study" navigation while its confirm dialog is up (null =
-  // no dialog). Shared by Cmd+←, Cmd+1, and Cmd+2. `state` carries router state
-  // along — e.g. the selected segments back to the deck page.
-  const [pendingExit, setPendingExit] = useState<{
-    to: string;
-    state?: unknown;
-  } | null>(null);
+  // no dialog). Shared by Cmd+←, Cmd+1, and Cmd+2.
+  const [pendingExit, setPendingExit] = useState<{ to: string } | null>(null);
   // Starts hidden so the first card fades in (see the rAF effect below) the same
   // way later cards do; the reveal/answer handlers drive it from then on.
   const [cardVisible, setCardVisible] = useState(false);
@@ -263,14 +245,14 @@ export function StudyPage() {
   }, [card]);
 
   const requestExit = useCallback(
-    (to: string, state?: unknown) => {
+    (to: string) => {
       // Leaving mid-session loses no review data — answers persist the moment
       // they're graded — but it abandons the queue and any revealed-not-graded
       // card. Confirm only once there's progress worth protecting.
       if (reviewed > 0 || isRevealed) {
-        setPendingExit({ to, state });
+        setPendingExit({ to });
       } else {
-        navigate(to, state ? { state } : undefined);
+        navigate(to);
       }
     },
     [reviewed, isRevealed, navigate],
@@ -286,11 +268,7 @@ export function StudyPage() {
         setShowAddForm(true);
       } else if ((e.metaKey || e.ctrlKey) && e.key === "ArrowLeft") {
         e.preventDefault();
-        // Carry the selected segments back so the deck page restores them.
-        requestExit(
-          `/decks/${encodeURIComponent(deckName)}`,
-          segParams.length ? { segments: segParams } : undefined,
-        );
+        requestExit(`/decks/${encodeURIComponent(deckName)}`);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         requestExit("/");
@@ -313,7 +291,7 @@ export function StudyPage() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingNote, showAddForm, pendingExit, deckName, segParams, requestExit, handleEdit, handleUndo, handleSetFlag, flag]);
+  }, [editingNote, showAddForm, pendingExit, deckName, requestExit, handleEdit, handleUndo, handleSetFlag, flag]);
 
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
@@ -598,12 +576,7 @@ export function StudyPage() {
           title="Exit study session?"
           message="Cards you've graded are already saved. The rest of the queue will restart the next time you study this deck."
           confirmLabel="Exit"
-          onConfirm={() =>
-            navigate(
-              pendingExit.to,
-              pendingExit.state ? { state: pendingExit.state } : undefined,
-            )
-          }
+          onConfirm={() => navigate(pendingExit.to)}
           onCancel={() => setPendingExit(null)}
         />
       )}

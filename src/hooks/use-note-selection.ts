@@ -118,18 +118,6 @@ export function useNoteSelection(filteredNotes: Note[]) {
   /** The current selection, read at event time (e.g. drag start). */
   const getSelectedIds = useCallback(() => selectedIdsRef.current, []);
 
-  const selectAllVisible = useCallback(() => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const note of filteredNotes) next.add(note.noteId);
-      return next;
-    });
-  }, [filteredNotes]);
-
-  const allVisibleSelected =
-    filteredNotes.length > 0 &&
-    filteredNotes.every((note) => selectedIds.has(note.noteId));
-
   /**
    * The keyboard shortcuts' targets: the selection in display order (read from
    * the DOM so it tracks the rendered list), or — with nothing selected — the
@@ -155,8 +143,6 @@ export function useNoteSelection(filteredNotes: Note[]) {
     removeFromSelection,
     setAnchor,
     getSelectedIds,
-    selectAllVisible,
-    allVisibleSelected,
     targetNoteIds,
   };
 }

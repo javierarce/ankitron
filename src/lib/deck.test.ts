@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   buildDeckTree,
+  buildSubdeckTree,
   canDeleteDeck,
   compareDeckPaths,
   coveringDecks,
@@ -465,5 +466,34 @@ describe("buildDeckTree", () => {
     expect(tree.map((n) => n.fullName)).toEqual(["Spanish", "Spanish 2"]);
     expect(tree[0].children.map((n) => n.fullName)).toEqual(["Spanish::Verbs"]);
     expect(tree[1].children).toEqual([]);
+  });
+});
+
+describe("buildSubdeckTree", () => {
+  it("roots the tree at the deck itself, not a synthesised ancestor", () => {
+    const root = buildSubdeckTree("Languages::Spanish", [
+      "Languages::Spanish::Verbs",
+      "Languages::Spanish::Verbs::Irregular",
+    ]);
+    expect(root.fullName).toBe("Languages::Spanish");
+    expect(root.name).toBe("Spanish");
+    expect(root.children.map((n) => n.fullName)).toEqual([
+      "Languages::Spanish::Verbs",
+    ]);
+    expect(root.children[0].children.map((n) => n.fullName)).toEqual([
+      "Languages::Spanish::Verbs::Irregular",
+    ]);
+  });
+
+  it("orders siblings as a tree and uses leaf names", () => {
+    const root = buildSubdeckTree("A", ["A::Zebra", "A::Bird", "A::Bird::Egg"]);
+    expect(root.children.map((n) => n.name)).toEqual(["Bird", "Zebra"]);
+    expect(root.children[0].children[0].name).toBe("Egg");
+  });
+
+  it("returns a bare root when there are no subdecks", () => {
+    const root = buildSubdeckTree("Spanish", []);
+    expect(root.fullName).toBe("Spanish");
+    expect(root.children).toEqual([]);
   });
 });
