@@ -33,6 +33,30 @@ export function stripSoundTags(text: string): string {
   return text.replace(SOUND_TAG_RE, "").replace(AV_PLACEHOLDER_RE, "");
 }
 
+/**
+ * Ordered collection-media `<img>` filenames across a note's raw fields, in
+ * Anki's field order. Only bare filenames Anki stores in its media folder are
+ * returned — `<img>`s with a scheme the browser can load on its own (http/data/
+ * blob/…) are skipped (see {@link mediaFilenameFromSrc}). Used to show a media
+ * indicator in list rows without rendering the whole field's HTML.
+ */
+export function extractImageFilenames(
+  fields: Record<string, NoteField>
+): string[] {
+  if (typeof document === "undefined") return [];
+  const ordered = Object.values(fields).sort((a, b) => a.order - b.order);
+  const files: string[] = [];
+  const tpl = document.createElement("template");
+  for (const field of ordered) {
+    tpl.innerHTML = field.value;
+    tpl.content.querySelectorAll("img").forEach((img) => {
+      const filename = mediaFilenameFromSrc(img.getAttribute("src") ?? "");
+      if (filename) files.push(filename);
+    });
+  }
+  return files;
+}
+
 export interface CardAudio {
   questionHtml: string;
   answerHtml: string;
@@ -221,6 +245,47 @@ export async function getMediaUrl(filename: string): Promise<string | null> {
   // been unreachable.
   if (url === null) urlCache.delete(filename);
   return url;
+}
+
+/** filename → whether Anki's collection has the file. `null` means we couldn't
+ * tell (Anki unreachable, or the action isn't supported), so callers don't
+ * render a false "missing" state. Only positive results are cached — a miss may
+ * become a hit once the file is added or Anki comes back. */
+const existsCache = new Map<string, Promise<boolean | null>>();
+
+/**
+ * Whether a collection-media file exists, via AnkiConnect `getMediaFilesNames`
+ * (a name lookup — far lighter than `retrieveMediaFile`, which returns the whole
+ * file). The filename is used as the glob pattern and the exact name is matched
+ * against the results, so a `[sound:foo.mp3]` whose file was deleted reads as
+ * missing. Returns null rather than false when the answer is uncertain (Anki
+ * down, or a filename with glob metacharacters that matched nothing).
+ */
+export async function mediaFileExists(
+  filename: string
+): Promise<boolean | null> {
+  let pending = existsCache.get(filename);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const names = await ankiFetch<string[]>("getMediaFilesNames", {
+          pattern: filename,
+        });
+        if (!Array.isArray(names)) return null;
+        if (names.includes(filename)) return true;
+        // A pattern with glob metacharacters can legitimately match nothing
+        // even when the file exists; don't claim "missing" on that ambiguity.
+        if (/[*?[\]]/.test(filename)) return null;
+        return false;
+      } catch {
+        return null;
+      }
+    })();
+    existsCache.set(filename, pending);
+  }
+  const result = await pending;
+  if (result !== true) existsCache.delete(filename);
+  return result;
 }
 
 let currentAudio: HTMLAudioElement | null = null;

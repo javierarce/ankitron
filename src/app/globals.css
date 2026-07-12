@@ -78,6 +78,16 @@ body {
   }
 }
 
+/* The deck list's audio chip while its clip is sounding — same accent tint and
+   pulse as .audio-tag.is-playing, so a playing card reads the same in the list
+   as it does in study. */
+.audio-chip.is-playing {
+  color: var(--accent, #2563eb);
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent);
+  animation: audio-tag-pulse 1.4s ease-in-out infinite;
+}
+
 /* Tauri integration: hidden-inset title bar on macOS. The header becomes
    the draggable region; interactive children opt out via .app-no-drag. */
 html.tauri .app-header {
