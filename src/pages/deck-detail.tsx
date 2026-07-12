@@ -225,8 +225,10 @@ export function DeckDetailPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">{deckLeaf(deckName)}</h1>
-        <div className="flex items-center gap-2">
+        <h1 className="min-w-0 truncate text-2xl font-bold" title={deckLeaf(deckName)}>
+          {deckLeaf(deckName)}
+        </h1>
+        <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
           <Link
             to={`/decks/${encodeURIComponent(deckName)}/settings`}
             className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"

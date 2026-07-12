@@ -44,18 +44,21 @@ export function Breadcrumb() {
   }
 
   return (
-    <nav className="flex items-center gap-1.5 text-sm">
+    <nav className="flex min-w-0 items-center gap-1.5 text-sm">
       {crumbs.map((crumb, i) => {
         const isLast = i === crumbs.length - 1;
         return (
-          <span key={crumb.href} className="flex items-center gap-1.5">
-            {i > 0 && <span className="text-foreground/30">/</span>}
+          <span key={crumb.href} className="flex min-w-0 items-center gap-1.5">
+            {i > 0 && <span className="shrink-0 text-foreground/30">/</span>}
             {isLast ? (
-              <span className="font-medium">{crumb.label}</span>
+              <span className="max-w-[16rem] truncate font-medium" title={crumb.label}>
+                {crumb.label}
+              </span>
             ) : (
               <Link
                 to={crumb.href}
-                className="text-foreground/50 hover:text-foreground transition-colors"
+                title={crumb.label}
+                className="max-w-[16rem] truncate text-foreground/50 hover:text-foreground transition-colors"
               >
                 {crumb.label}
               </Link>
