@@ -198,21 +198,49 @@ export function StudyPage() {
     // — Anki's undo is global, so it would otherwise reach into another deck.
     if (!canUndo({ completed, reviewed })) return;
     const session = sessionRef.current;
-    if (!session) return;
+    if (!session || transitioningRef.current) return;
+    transitioningRef.current = true;
+    // Disable the grade controls for the duration of the transition, matching
+    // handleAnswer/handleSuspend, so the buttons don't sit visually enabled
+    // while the transitioningRef guard is quietly no-op'ing their clicks.
+    setAnswering(true);
     try {
       await undoReview();
     } catch {
+      setAnswering(false);
+      transitioningRef.current = false;
       return;
     }
     setReviewed((r) => Math.max(0, r - 1));
     setSyncStatus("idle");
+    // Fade the current card out while the queue is rebuilt and the undone card
+    // is re-revealed, so the swap reads as a smooth transition rather than a snap.
+    setCardVisible(false);
+    await delay(FADE_MS);
     // The undo reverts the collection, but the (hidden) reviewer defers its
     // own refresh until focused — guiCurrentCard would keep returning the
     // already-advanced card. Re-enter review to rebuild the queue; the
     // collection is back in its pre-answer state, so the undone card is
     // served again. (Undo steps back within the deck being reviewed; it doesn't
     // cross back into an earlier deck of a multi-deck session.)
-    await applyResult(await reenterAndLoad(session));
+    const result = await reenterAndLoad(session);
+    // The undone card comes back on its question side. Undoing a grade means the
+    // user wants to change the vote they just cast, so put the answer straight
+    // back up: flip Anki's offscreen reviewer to the answer side (grading only
+    // lands once the answer is shown) and reveal locally, so they can re-vote
+    // directly instead of revealing the card again first.
+    if (result.kind === "card") {
+      try {
+        await showAnswer();
+      } catch {
+        // Re-revealing in Anki is best-effort; reveal locally regardless.
+      }
+    }
+    await applyResult(result);
+    if (result.kind === "card") setIsRevealed(true);
+    setAnswering(false);
+    setCardVisible(true);
+    transitioningRef.current = false;
   }, [completed, reviewed, applyResult]);
 
   // The current card's flag, or 0 if flagFor belongs to a card already
@@ -338,6 +366,10 @@ export function StudyPage() {
   async function handleReveal() {
     if (transitioningRef.current) return;
     transitioningRef.current = true;
+    // Keep the grade controls disabled through the transition (like the answer
+    // and suspend handlers) rather than leaving them visually enabled while the
+    // transitioningRef guard silently no-ops their clicks.
+    setAnswering(true);
     // Fade the question out, swap in the answer while hidden, then fade in.
     setCardVisible(false);
     await delay(FADE_MS);
@@ -347,6 +379,7 @@ export function StudyPage() {
       // Showing the answer in Anki is best-effort; reveal locally regardless.
     }
     setIsRevealed(true);
+    setAnswering(false);
     setCardVisible(true);
     transitioningRef.current = false;
   }
