@@ -81,8 +81,10 @@ export function DeckList({ decks, dueCounts }: DeckListProps) {
 function GroupHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-border bg-foreground/[0.02] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-foreground/50">
-      <span>{title}</span>
-      <span className="grid w-[6.5rem] grid-cols-3 text-center text-[10px] tracking-normal text-foreground/40">
+      <span className="min-w-0 truncate" title={title}>
+        {title}
+      </span>
+      <span className="grid w-[6.5rem] shrink-0 grid-cols-3 text-center text-[10px] tracking-normal text-foreground/40">
         <span>New</span>
         <span>Learn</span>
         <span>Due</span>
@@ -109,7 +111,9 @@ function SingleDecksCard({
             to={`/decks/${encodeURIComponent(deck)}/study`}
             className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
           >
-            <span className="font-medium">{deck}</span>
+            <span className="min-w-0 truncate font-medium" title={deck}>
+              {deck}
+            </span>
             <DueCountsBadges due={dueCounts[deck]} showTooltip={false} />
           </Link>
         ))}
@@ -136,7 +140,7 @@ function DueGroupCard({
           to={`/decks/${encodeURIComponent(root)}/study`}
           className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
         >
-          <span className="font-medium">All decks</span>
+          <span className="min-w-0 truncate font-medium">All decks</span>
           <DueCountsBadges due={dueCounts[root]} showTooltip={false} />
         </Link>
         {decks.map((deck) => {
@@ -153,14 +157,14 @@ function DueGroupCard({
               to={`/decks/${encodeURIComponent(deck)}/study`}
               className="flex items-center justify-between gap-3 px-4 py-3 bg-clip-padding transition-colors hover:bg-foreground/5"
             >
-              <span className="flex items-center gap-2 font-medium">
+              <span className="flex min-w-0 items-center gap-2 font-medium">
                 {/* A short rule marks the row as a subdeck, replacing the
                     left-indent so it reads clearly without Anki's "::" cue. */}
                 <span
                   className="h-px w-4 shrink-0 bg-foreground/20"
                   aria-hidden
                 />
-                <span>
+                <span className="truncate" title={deck.replaceAll("::", " / ")}>
                   {subPrefix && (
                     <span className="text-foreground/40">{subPrefix}</span>
                   )}
@@ -185,7 +189,7 @@ export function DueCountsBadges({
 }) {
   if (!due || totalOf(due) === 0) {
     return (
-      <CaretRight size={14} weight="bold" className="text-foreground/30" />
+      <CaretRight size={14} weight="bold" className="shrink-0 text-foreground/30" />
     );
   }
   return (
@@ -193,7 +197,7 @@ export function DueCountsBadges({
     // counts line up under the New/Learn/Due header labels (same width + grid),
     // and a row with "0" stays aligned with one containing "12". An outer border
     // wraps the pill; divide-x draws the hairlines between each number.
-    <span className="grid w-[6.5rem] grid-cols-3 divide-x divide-foreground/5 overflow-hidden rounded-full border border-border bg-foreground/[0.02] text-[11px] font-medium tabular-nums">
+    <span className="grid w-[6.5rem] shrink-0 grid-cols-3 divide-x divide-foreground/5 overflow-hidden rounded-full border border-border bg-foreground/[0.02] text-[11px] font-medium tabular-nums">
       <CountSegment value={due.new} label="New" showTooltip={showTooltip} />
       <CountSegment value={due.learn} label="Learning" showTooltip={showTooltip} />
       <CountSegment value={due.review} label="Due" showTooltip={showTooltip} />
