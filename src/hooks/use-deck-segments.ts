@@ -5,36 +5,21 @@
 
 import {
   useCallback,
-  useEffect,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 
 interface UseDeckSegmentsOptions {
-  /** Segments to pre-select on mount, e.g. when returning from a scoped study session. */
-  initialSegments?: string[];
   /** The chips, in row order — Shift+click ranges follow it. */
   segmentDecks: string[];
-  /** Reports the selected segment deck names whenever they change. Empty = "All". */
-  onSegmentsChange?: (segments: string[]) => void;
 }
 
-export function useDeckSegments({
-  initialSegments,
-  segmentDecks,
-  onSegmentsChange,
-}: UseDeckSegmentsOptions) {
+export function useDeckSegments({ segmentDecks }: UseDeckSegmentsOptions) {
   const [activeSegments, setActiveSegments] = useState<Set<string>>(
-    () => new Set(initialSegments),
+    () => new Set<string>(),
   );
   // The last segment clicked, used as the anchor for Shift+click ranges.
   const [lastSegment, setLastSegment] = useState<string | null>(null);
-
-  // Surface the active segment selection to the page so its Study button can
-  // scope a session to those subdecks.
-  useEffect(() => {
-    onSegmentsChange?.([...activeSegments]);
-  }, [activeSegments, onSegmentsChange]);
 
   function handleSegmentClick(deck: string, e: ReactMouseEvent) {
     const anchor = lastSegment;
