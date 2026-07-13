@@ -479,6 +479,24 @@ async function handleAction(
     case "retrieveMediaFile":
       return DEMO_MEDIA.get(params.filename as string) ?? false;
 
+    case "getMediaFilesNames": {
+      // AnkiConnect returns the collection-media filenames matching the glob
+      // `pattern` (defaulting to "*"). The demo's media lives in DEMO_MEDIA,
+      // filled as the user pastes images/audio, so glob-match its keys. The
+      // media indicators look a referenced file up by its exact name, so an
+      // added file reads as present and a stale reference reads as missing.
+      const pattern = (params.pattern as string) ?? "*";
+      const re = new RegExp(
+        "^" +
+          pattern
+            .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+            .replace(/\*/g, ".*")
+            .replace(/\?/g, ".") +
+          "$"
+      );
+      return [...DEMO_MEDIA.keys()].filter((name) => re.test(name));
+    }
+
     default:
       // Anything we didn't model returns an empty-ish value so the UI degrades
       // gracefully instead of throwing. Surfaced in the console for tuning.
