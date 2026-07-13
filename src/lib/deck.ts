@@ -145,6 +145,47 @@ export function coveringDecks(selected: string[]): string[] {
     .sort(compareDeckPaths);
 }
 
+/**
+ * The leaf-most decks with due cards: a deck is kept only when it has due cards
+ * and none of its subdecks do. Studying a deck reviews its whole subtree, so a
+ * parent listed alongside a due child would study those cards twice; keeping the
+ * child alone gives the minimal set of distinct study targets. `hasDue` reports
+ * whether a deck itself has cards due. Order follows the input.
+ */
+export function studyableDecks(
+  decks: string[],
+  hasDue: (deck: string) => boolean,
+): string[] {
+  return decks.filter((d) => {
+    if (!hasDue(d)) return false;
+    return !decks.some((other) => isDescendantDeck(other, d) && hasDue(other));
+  });
+}
+
+/**
+ * The deck to study next after finishing `finishedDeck`, chosen from the decks
+ * that still have cards due (`dueDecks`, e.g. from studyableDecks). Prefers a
+ * sibling — a deck sharing the same parent — so finishing one deck in a group
+ * flows into the next; falling back to the next due deck anywhere. "Next" means
+ * the following deck in tree order (compareDeckPaths), wrapping to the first
+ * when the finished deck sorted last. The finished deck and its subtree are
+ * excluded — their cards were just reviewed. Returns null when nothing is due.
+ */
+export function nextDeckToStudy(
+  finishedDeck: string,
+  dueDecks: string[],
+): string | null {
+  const candidates = dueDecks
+    .filter((d) => !isCardInDeck(d, finishedDeck))
+    .sort(compareDeckPaths);
+  if (candidates.length === 0) return null;
+
+  const parent = deckParent(finishedDeck);
+  const siblings = candidates.filter((d) => deckParent(d) === parent);
+  const pool = siblings.length > 0 ? siblings : candidates;
+  return pool.find((d) => compareDeckPaths(d, finishedDeck) > 0) ?? pool[0];
+}
+
 /** One node of the deck hierarchy: leaf name, full "::" path, and subdecks. */
 export interface DeckNode {
   name: string;

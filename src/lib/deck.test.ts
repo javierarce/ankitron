@@ -13,8 +13,10 @@ import {
   isCardInDeck,
   isDescendantDeck,
   joinDeck,
+  nextDeckToStudy,
   planDeckRename,
   renameDeck,
+  studyableDecks,
   subdecksOf,
 } from "./deck";
 
@@ -440,6 +442,82 @@ describe("coveringDecks", () => {
     expect(coveringDecks(["Spanish::Verbs", "Spanish::Verbs"])).toEqual([
       "Spanish::Verbs",
     ]);
+  });
+});
+
+describe("studyableDecks", () => {
+  it("keeps only decks that themselves have due cards", () => {
+    const due = new Set(["Spanish", "German"]);
+    expect(
+      studyableDecks(["Spanish", "German", "French"], (d) => due.has(d)),
+    ).toEqual(["Spanish", "German"]);
+  });
+
+  it("drops a parent when a subdeck also has due cards", () => {
+    const due = new Set(["Spanish", "Spanish::Verbs"]);
+    expect(
+      studyableDecks(["Spanish", "Spanish::Verbs"], (d) => due.has(d)),
+    ).toEqual(["Spanish::Verbs"]);
+  });
+
+  it("keeps a parent whose only due subdeck it isn't (siblings without due)", () => {
+    const due = new Set(["Spanish"]);
+    expect(
+      studyableDecks(["Spanish", "Spanish::Verbs"], (d) => due.has(d)),
+    ).toEqual(["Spanish"]);
+  });
+
+  it("preserves input order", () => {
+    const due = new Set(["B", "A"]);
+    expect(studyableDecks(["B", "A"], (d) => due.has(d))).toEqual(["B", "A"]);
+  });
+});
+
+describe("nextDeckToStudy", () => {
+  it("returns null when nothing else is due", () => {
+    expect(nextDeckToStudy("Spanish", [])).toBeNull();
+  });
+
+  it("excludes the finished deck and its subtree", () => {
+    expect(
+      nextDeckToStudy("Spanish", ["Spanish", "Spanish::Verbs"]),
+    ).toBeNull();
+  });
+
+  it("prefers the next sibling in tree order", () => {
+    expect(
+      nextDeckToStudy("Lang::French", [
+        "Lang::German",
+        "Lang::Spanish",
+        "Other",
+      ]),
+    ).toBe("Lang::German");
+  });
+
+  it("wraps to the first sibling when the finished deck sorted last", () => {
+    expect(
+      nextDeckToStudy("Lang::Spanish", ["Lang::French", "Lang::German"]),
+    ).toBe("Lang::French");
+  });
+
+  it("prefers a sibling even when an earlier-sorting deck is due elsewhere", () => {
+    expect(
+      nextDeckToStudy("Lang::Spanish", ["Aardvark", "Lang::German"]),
+    ).toBe("Lang::German");
+  });
+
+  it("falls back to the next due deck anywhere when no sibling is due", () => {
+    expect(
+      nextDeckToStudy("Lang::Spanish", ["Music", "Zebra"]),
+    ).toBe("Music");
+  });
+
+  it("wraps to the first due deck when none sort after the finished deck", () => {
+    expect(nextDeckToStudy("Zebra", ["Apple", "Music"])).toBe("Apple");
+  });
+
+  it("treats top-level decks as siblings of one another", () => {
+    expect(nextDeckToStudy("French", ["German", "Spanish"])).toBe("German");
   });
 });
 
