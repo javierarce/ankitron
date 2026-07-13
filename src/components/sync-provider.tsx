@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { syncCollection } from "@/lib/anki-fetch";
 import { Spinner } from "@/components/spinner";
 import { SyncContext, type SyncStatus } from "@/lib/sync-context";
@@ -31,6 +32,7 @@ function readSyncedBefore(): boolean {
  */
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>("idle");
+  const [error, setError] = useState("");
   const [syncedAt, setSyncedAt] = useState(0);
   const [pageLoads, setPageLoads] = useState(0);
   const [syncedBefore, setSyncedBefore] = useState(readSyncedBefore);
@@ -47,9 +49,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sync = useCallback(async () => {
-    if (!isTauri || inFlight.current) return;
+    if (inFlight.current) return;
     inFlight.current = true;
     setStatus("syncing");
+    setError("");
     try {
       await syncCollection();
       setSyncedAt((n) => n + 1);
@@ -64,8 +67,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setSyncedBefore(true);
     } catch (e) {
       // Sync failure is non-fatal — the app keeps working on local data. The
-      // indicator surfaces the failure so it isn't silently swallowed.
+      // indicator surfaces the failure so it isn't silently swallowed; the
+      // message is kept for the Settings row, which has room to show why.
       console.warn("Sync failed:", e);
+      setError(e instanceof Error ? e.message : String(e));
       setStatus("error");
     } finally {
       inFlight.current = false;
@@ -73,8 +78,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Kick off the launch sync once the provider mounts (it only mounts after
-  // Anki is reachable, see Layout).
+  // Anki is reachable, see Layout). Only auto-sync inside Tauri — in browser
+  // dev / the demo build there's no Anki to reach; a manual sync() (e.g. the
+  // Settings button) still runs everywhere.
   useEffect(() => {
+    if (!isTauri) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- sync() owns the status state machine; the "syncing" transition belongs with the request it starts
     sync();
   }, [sync]);
@@ -83,14 +91,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   return (
     <SyncContext.Provider
-      value={{ status, syncedAt, sync, pageLoading, registerPageLoad }}
+      value={{ status, error, syncedAt, sync, pageLoading, registerPageLoad }}
     >
       {children}
       <SyncIndicator
         status={status}
         pageLoading={pageLoading}
         syncedBefore={syncedBefore}
-        onRetry={sync}
       />
     </SyncContext.Provider>
   );
@@ -100,13 +107,13 @@ function SyncIndicator({
   status,
   pageLoading,
   syncedBefore,
-  onRetry,
 }: {
   status: SyncStatus;
   pageLoading: boolean;
   syncedBefore: boolean;
-  onRetry: () => void;
 }) {
+  const navigate = useNavigate();
+
   if (status === "idle") return null;
 
   // A page's own blocking spinner already says "loading" — don't stack the
@@ -122,8 +129,10 @@ function SyncIndicator({
   if (status === "error") {
     return (
       <button
-        onClick={onRetry}
-        title="Sync failed — click to retry"
+        // The pill has no room to explain the failure; send the user to
+        // Settings, which re-runs the sync and shows the reason inline.
+        onClick={() => navigate("/settings", { state: { syncOnArrive: true } })}
+        title="Sync failed — open Settings for details"
         className="app-no-drag fixed bottom-3 right-3 z-50 flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-red-500 shadow-sm backdrop-blur transition hover:bg-foreground/5"
       >
         <span className="h-2 w-2 rounded-full bg-red-500" />

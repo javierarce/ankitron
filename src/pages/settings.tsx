@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme, type Theme } from "@/lib/theme-context";
 import { useUpdate } from "@/components/update-context";
 import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
 import { isExperimentalEnabled, setExperimentalEnabled } from "@/lib/experimental";
-import { syncCollection } from "@/lib/anki-fetch";
+import { useSync } from "@/lib/sync-context";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 type CheckState = "idle" | "checking" | "uptodate" | "error";
-type SyncState = "idle" | "syncing" | "ok" | "error";
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -17,9 +17,13 @@ export function SettingsPage() {
   const [version, setVersion] = useState("");
   const [check, setCheck] = useState<CheckState>("idle");
   const [checkError, setCheckError] = useState("");
-  const [sync, setSync] = useState<SyncState>("idle");
-  const [syncError, setSyncError] = useState("");
   const [experimental, setExperimental] = useState(isExperimentalEnabled);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Drive sync through the provider so the whole app stays in one state: a
+  // manual sync here clears the corner "Sync failed" pill on success and bumps
+  // syncedAt so pages refetch — the same handler that owns the launch sync.
+  const { status: syncStatus, error: syncError, syncedAt, sync } = useSync();
 
   function toggleExperimental() {
     const next = !experimental;
@@ -34,18 +38,17 @@ export function SettingsPage() {
     );
   }, []);
 
-  async function syncNow() {
-    if (sync === "syncing") return;
-    setSync("syncing");
-    setSyncError("");
-    try {
-      await syncCollection();
-      setSync("ok");
-    } catch (e) {
-      setSyncError(e instanceof Error ? e.message : String(e));
-      setSync("error");
-    }
-  }
+  // The corner "Sync failed" pill can't say *why* sync failed, so tapping it
+  // brings the user here and asks us to run a sync — the failure (or success,
+  // if they've since fixed it) then shows inline in the Sync row below. Clear
+  // the navigation flag first so a refresh or back-navigation doesn't re-fire.
+  useEffect(() => {
+    const state = location.state as { syncOnArrive?: boolean } | null;
+    if (!state?.syncOnArrive) return;
+    navigate(".", { replace: true, state: null });
+    sync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the flag; sync is a stable provider callback and re-firing on it would loop the sync
+  }, [location.state]);
 
   async function checkForUpdates() {
     if (!isTauri || check === "checking") return;
@@ -97,16 +100,16 @@ export function SettingsPage() {
             <p className="text-sm font-medium">Sync</p>
             <p className="text-xs text-foreground/50">
               Ankitron syncs on launch and after studying.
-              {sync === "ok" && " — synced"}
-              {sync === "error" && ` — ${syncError}`}
+              {syncStatus === "idle" && syncedAt > 0 && " — synced"}
+              {syncStatus === "error" && ` — ${syncError}`}
             </p>
           </div>
           <button
-            onClick={syncNow}
-            disabled={sync === "syncing"}
+            onClick={sync}
+            disabled={syncStatus === "syncing"}
             className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
           >
-            {sync === "syncing" ? "Syncing…" : "Sync now"}
+            {syncStatus === "syncing" ? "Syncing…" : "Sync now"}
           </button>
         </div>
 

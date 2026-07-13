@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { render, screen, waitFor, act, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 // The provider only syncs inside Tauri (checked via __TAURI_INTERNALS__ at
 // module load). Mark the env as Tauri before the module is imported, and give
@@ -27,6 +28,31 @@ import { useSync } from "@/lib/sync-context";
 
 // A consumer that surfaces syncedAt and can register/release a page load on
 // demand, standing in for a page showing its blocking spinner.
+// Reports the current route so tests can assert where the pill navigates. The
+// pill's error path routes to /settings with a syncOnArrive flag in history state.
+function LocationProbe() {
+  const location = useLocation();
+  const flagged = (location.state as { syncOnArrive?: boolean } | null)
+    ?.syncOnArrive;
+  return (
+    <span data-testid="location">
+      {location.pathname}
+      {flagged ? ":syncOnArrive" : ""}
+    </span>
+  );
+}
+
+// The provider renders the corner pill, which navigates on click — so every
+// render needs a router in the tree.
+function renderWithRouter(ui: ReactNode) {
+  return render(
+    <MemoryRouter>
+      {ui}
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+}
+
 function Consumer({ pageLoadAtFirst = false }: { pageLoadAtFirst?: boolean }) {
   const { syncedAt, registerPageLoad } = useSync();
   const [loading, setLoading] = useState(pageLoadAtFirst);
@@ -72,7 +98,7 @@ afterEach(cleanup);
 
 describe("SyncProvider", () => {
   it("syncs on mount and shows the corner indicator until it resolves", async () => {
-    render(
+    renderWithRouter(
       <SyncProvider>
         <Consumer />
       </SyncProvider>,
@@ -93,10 +119,10 @@ describe("SyncProvider", () => {
     expect(screen.getByTestId("synced").textContent).toBe("1");
   });
 
-  it("surfaces a failed sync and retries when the pill is clicked", async () => {
+  it("surfaces a failed sync and opens Settings when the pill is clicked", async () => {
     const user = userEvent.setup();
     markSyncedBefore();
-    render(
+    renderWithRouter(
       <SyncProvider>
         <Consumer />
       </SyncProvider>,
@@ -108,15 +134,22 @@ describe("SyncProvider", () => {
 
     const pill = await screen.findByText("Sync failed");
     expect(syncCollection).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("location").textContent).toBe("/");
 
+    // The pill can't explain the failure, so it routes to Settings (which
+    // re-runs the sync there and shows the reason inline) rather than silently
+    // retrying in place.
     await user.click(pill);
-    expect(syncCollection).toHaveBeenCalledTimes(2);
-    // A retry returns to the syncing state.
-    expect(await screen.findByText("Syncing…")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/settings:syncOnArrive",
+      ),
+    );
+    expect(syncCollection).toHaveBeenCalledTimes(1);
   });
 
   it("hides the syncing indicator while a page shows its own spinner", async () => {
-    render(
+    renderWithRouter(
       <SyncProvider>
         <Consumer pageLoadAtFirst />
       </SyncProvider>,
@@ -136,7 +169,7 @@ describe("SyncProvider", () => {
 
   it("still shows a sync failure even while a page is loading", async () => {
     markSyncedBefore();
-    render(
+    renderWithRouter(
       <SyncProvider>
         <Consumer pageLoadAtFirst />
       </SyncProvider>,
