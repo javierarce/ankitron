@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
 import { useVimNav } from "@/hooks/use-vim-nav";
-import { isDescendantDeck } from "@/lib/deck";
+import { studyableDecks } from "@/lib/deck";
 import type { DueCounts } from "@/lib/types";
 
 interface DeckListProps {
@@ -17,13 +17,7 @@ function totalOf(due: DueCounts | undefined) {
 export function DeckList({ decks, dueCounts }: DeckListProps) {
   useVimNav();
 
-  const dueDecks = decks.filter((d) => {
-    if (totalOf(dueCounts[d]) === 0) return false;
-    const hasChildWithDue = decks.some(
-      (other) => isDescendantDeck(other, d) && totalOf(dueCounts[other]) > 0
-    );
-    return !hasChildWithDue;
-  });
+  const dueDecks = studyableDecks(decks, (d) => totalOf(dueCounts[d]) > 0);
 
   const dueGroups: { root: string; decks: string[] }[] = [];
   {

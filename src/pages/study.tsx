@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { CurrentCard, Ease, Note } from "@/lib/types";
+import { CurrentCard, DueCounts, Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
 import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Spinner } from "@/components/spinner";
-import { syncCollection } from "@/lib/anki-fetch";
+import { fetchAllDueCounts, syncCollection } from "@/lib/anki-fetch";
 import { extractSoundFilenames } from "@/lib/audio";
-import { fetchDeckStats } from "@/lib/decks";
+import { fetchDeckNames, fetchDeckStats } from "@/lib/decks";
+import {
+  deckLeaf,
+  formatDeckPath,
+  nextDeckToStudy,
+  studyableDecks,
+} from "@/lib/deck";
 import { fetchCardFlags, setNoteFlag } from "@/lib/flags";
 import { useToast } from "@/lib/toast-context";
 import {
@@ -33,7 +39,17 @@ import {
 const FADE_MS = 180;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function StudyPage() {
+// A study session's state (progress, completion, the served card) belongs to
+// one deck. The completion screen can navigate straight into another deck's
+// study URL, which only changes the route param — React Router would otherwise
+// reuse the same StudyPage instance and carry its stale "complete" state over.
+// Keying on the deck remounts it, so each deck starts a fresh session.
+export function StudyRoute() {
+  const { deckName } = useParams();
+  return <StudyPage key={deckName} />;
+}
+
+function StudyPage() {
   const params = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -60,6 +76,14 @@ export function StudyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  // A snapshot of every deck and its due counts, prefetched in the background
+  // once the session is under way (see the effect below) so the completion
+  // screen can offer the next deck to study the instant the session ends,
+  // rather than after a couple of AnkiConnect round trips. null until it lands.
+  const [dueSnapshot, setDueSnapshot] = useState<{
+    names: string[];
+    counts: Record<string, DueCounts>;
+  } | null>(null);
   const [reviewed, setReviewed] = useState(0);
   const [initialTotal, setInitialTotal] = useState(0);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -75,6 +99,11 @@ export function StudyPage() {
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
+  // The completion screen's primary action. Focused imperatively when it
+  // appears (see the effect below): React silently drops autoFocus on an <a>
+  // (what Link renders), so it wouldn't otherwise show a focus ring or answer
+  // to Enter.
+  const primaryActionRef = useRef<HTMLAnchorElement>(null);
   // Whether the flag was changed during the current card's review, so grading
   // knows to re-assert it (set or cleared) over the reviewer's stale card copy.
   const flagTouchedRef = useRef(false);
@@ -341,6 +370,91 @@ export function StudyPage() {
     };
   }, [completed, reviewed, syncStatus]);
 
+  // Prefetch the deck list and due counts in the background as soon as the first
+  // card is up, so the completion screen's "study next" button is ready the
+  // instant the session ends instead of after a couple of AnkiConnect round
+  // trips. Gated on !loading so it never competes with serving the first card.
+  // Studying this deck doesn't change any other deck's due counts, so a snapshot
+  // taken mid-session is still accurate at completion.
+  useEffect(() => {
+    if (loading || error) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const names = await fetchDeckNames();
+        const counts = await fetchAllDueCounts(names);
+        if (!cancelled) setDueSnapshot({ names, counts });
+      } catch {
+        // Couldn't read the collection — resolve to an empty snapshot so the
+        // completion screen falls back to "nothing else to study" rather than
+        // waiting on a button that never arrives.
+        if (!cancelled) setDueSnapshot({ names: [], counts: {} });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, error]);
+
+  // The deck to offer studying next, derived from the prefetched snapshot: a
+  // sibling with due cards if there is one, else the next due deck anywhere
+  // (nextDeckToStudy). `nextResolved` is true once the snapshot has landed, so
+  // the completion screen's actions reflect reality rather than flashing a guess.
+  const nextResolved = dueSnapshot !== null;
+  const nextDeck = dueSnapshot
+    ? nextDeckToStudy(
+        deckName,
+        studyableDecks(dueSnapshot.names, (d) => {
+          const c = dueSnapshot.counts[d];
+          return c ? c.new + c.learn + c.review > 0 : false;
+        }),
+      )
+    : null;
+
+  // Where the completion screen's primary action goes: straight into the next
+  // due deck's session, or the decks page when nothing else is due.
+  const continueTarget = nextDeck
+    ? `/decks/${encodeURIComponent(nextDeck)}/study`
+    : "/decks";
+
+  // Focus the primary action once the completion screen shows it, so it reads a
+  // focus ring and Enter activates it. Skipped while a form/dialog is up so we
+  // never pull focus out from under the add/edit form or the exit confirm.
+  useEffect(() => {
+    if (!completed || !nextResolved) return;
+    if (editingNote || showAddForm || pendingExit !== null) return;
+    primaryActionRef.current?.focus();
+  }, [completed, nextResolved, editingNote, showAddForm, pendingExit]);
+
+  // After grading the last card the user's hands are still on the keyboard, so
+  // Space advances the completion screen the way it drove the cards — into the
+  // next deck, or to the decks page. Waits for nextResolved so it never fires
+  // toward a target that's still being worked out. A separate listener from the
+  // in-session shortcuts above (which ignore Space), scoped to the done screen.
+  useEffect(() => {
+    if (!completed) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (editingNote || showAddForm || pendingExit !== null) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      // Also bail on BUTTON: Space is the native activation key for buttons, so
+      // a keyboard user pressing Space on a focused control (e.g. "Retry sync",
+      // or a header button) must activate it rather than advance the screen.
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "BUTTON" ||
+        (e.target as HTMLElement)?.isContentEditable
+      )
+        return;
+      if (e.key === " ") {
+        e.preventDefault();
+        if (nextResolved) navigate(continueTarget);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [completed, nextResolved, continueTarget, editingNote, showAddForm, pendingExit, navigate]);
+
   async function handleReveal() {
     if (transitioningRef.current) return;
     transitioningRef.current = true;
@@ -557,12 +671,36 @@ export function StudyPage() {
               </button>
             </div>
           )}
-          <Link
-            to="/"
-            className="rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background inline-block"
-          >
-            Back to Study
-          </Link>
+          {nextResolved && (
+            <div className="fade-in flex flex-col items-center gap-3">
+              {nextDeck ? (
+                <>
+                  <Link
+                    ref={primaryActionRef}
+                    to={continueTarget}
+                    className="inline-block max-w-xs truncate rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background"
+                    title={`Study ${formatDeckPath(nextDeck)}`}
+                  >
+                    Continue with {deckLeaf(nextDeck)}
+                  </Link>
+                  <Link
+                    to="/"
+                    className="text-sm text-foreground/50 transition-colors hover:text-foreground"
+                  >
+                    Back to Study
+                  </Link>
+                </>
+              ) : (
+                <Link
+                  ref={primaryActionRef}
+                  to={continueTarget}
+                  className="inline-block rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background"
+                >
+                  Go to Decks
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       )}
 
