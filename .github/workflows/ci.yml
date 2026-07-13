@@ -35,7 +35,7 @@ jobs:
 
       - run: pnpm lint
 
-      # --hang / stuck files fail the run rather than blocking forever: a test
+      # Hung / stuck tests fail the run rather than blocking forever: a test
       # (or its setup) that deadlocks is exactly what we want CI to catch.
       - run: pnpm test
         timeout-minutes: 5
