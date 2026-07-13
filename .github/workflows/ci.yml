@@ -1,0 +1,41 @@
+name: CI
+run-name: CI ${{ github.ref_name }}
+# Lint + the vitest suite on every push to main and every PR. Kept separate from
+# release.yml (which only fires on a v* tag) so a failing or hanging test is
+# caught here, before a release — release.yml never runs the tests. Runs on
+# Ubuntu: no app build/signing here, just code checks. The Node matrix guards
+# against version-specific breakage (e.g. a vitest module-runner deadlock that
+# only shows up on a newer Node than the one the release build pins).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "24"]
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm must be set up before setup-node so its `cache: pnpm` can find it.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      # Hung / stuck tests fail the run rather than blocking forever: a test
+      # (or its setup) that deadlocks is exactly what we want CI to catch.
+      - run: pnpm test
+        timeout-minutes: 5
