@@ -4,6 +4,7 @@ import {
   fetchDueCount,
   fetchAllDueCounts,
   fetchAllNoteCounts,
+  syncCollection,
 } from "./anki-fetch";
 
 describe("ankiFetch", () => {
@@ -59,6 +60,65 @@ describe("ankiFetch", () => {
     );
 
     await expect(ankiFetch("deckNames")).rejects.toThrow("deck not found");
+  });
+});
+
+describe("syncCollection", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("resolves when AnkiConnect reports a successful sync", async () => {
+    const mockFetch = vi.mocked(globalThis.fetch);
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ result: null, error: null })),
+    );
+
+    await expect(syncCollection()).resolves.toBeUndefined();
+  });
+
+  it("rethrows a full-sync refusal as an actionable message", async () => {
+    const mockFetch = vi.mocked(globalThis.fetch);
+    mockFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          result: null,
+          error: "Sync status 2 not one of [0, 1]",
+        }),
+      ),
+    );
+
+    // Capture the single call's error so both assertions check the same
+    // rejection: the opaque AnkiConnect wording is replaced with something the
+    // user can act on, and the raw status text is not leaked through.
+    const error = await syncCollection().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/full sync is required/i);
+    expect((error as Error).message).not.toMatch(/Sync status/);
+    // The original refusal is preserved as the cause for debugging.
+    expect((error as Error).cause).toBeInstanceOf(Error);
+  });
+
+  it("passes other sync failures through unchanged", async () => {
+    const mockFetch = vi.mocked(globalThis.fetch);
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          result: null,
+          error: "sync: not currently authenticated",
+        }),
+      ),
+    );
+
+    await expect(syncCollection()).rejects.toThrow(
+      "sync: not currently authenticated",
+    );
   });
 });
 

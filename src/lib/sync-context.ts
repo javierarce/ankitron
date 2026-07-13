@@ -5,6 +5,12 @@ export type SyncStatus = "idle" | "syncing" | "error";
 export interface SyncContextValue {
   status: SyncStatus;
   /**
+   * The reason the last sync failed, for surfaces with room to show it (the
+   * Settings sync row). Empty unless `status` is "error". The corner pill only
+   * has room for "Sync failed", so it sends the user to Settings to read this.
+   */
+  error: string;
+  /**
    * Increments each time a sync completes successfully. Pages key their
    * background refetch off this so fresh data lands without a navigation.
    */
@@ -24,6 +30,7 @@ export interface SyncContextValue {
 
 export const SyncContext = createContext<SyncContextValue>({
   status: "idle",
+  error: "",
   syncedAt: 0,
   sync: () => {},
   pageLoading: false,

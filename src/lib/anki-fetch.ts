@@ -47,12 +47,37 @@ export async function ankiFetch<T = unknown>(
 }
 
 /**
+ * AnkiConnect's `sync` action runs the collection sync itself and only accepts
+ * an incremental result — ChangesRequired NO_CHANGES (0) or NORMAL_SYNC (1). If
+ * AnkiWeb instead demands a one-way full sync (FULL_SYNC 2, FULL_DOWNLOAD 3,
+ * FULL_UPLOAD 4 — after a schema bump, or when the two sides have diverged) it
+ * gives up with "Sync status N not one of [0, 1]", because picking upload vs
+ * download is a destructive choice the headless API can't make. Match that
+ * message so we can replace it with something the user can act on.
+ */
+const FULL_SYNC_ERROR = /Sync status \d+ not one of/i;
+
+const FULL_SYNC_MESSAGE =
+  "A full sync is required, which Ankitron can't do on its own. Quit Ankitron, " +
+  "open Anki and sync there (choosing which side to keep), then reopen Ankitron.";
+
+/**
  * Trigger a sync with AnkiWeb. Throws on failure (no AnkiWeb account
  * configured, network down); callers own how visibly to surface that — the
- * launch sync shows a corner pill, the Settings button shows inline text.
+ * launch sync shows a corner pill, the Settings button shows inline text. A
+ * "full sync required" refusal is rethrown with an actionable message, since
+ * the raw AnkiConnect wording ("Sync status 2 not one of [0, 1]") is opaque.
  */
 export async function syncCollection(): Promise<void> {
-  await ankiFetch("sync");
+  try {
+    await ankiFetch("sync");
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (FULL_SYNC_ERROR.test(message)) {
+      throw new Error(FULL_SYNC_MESSAGE, { cause: e });
+    }
+    throw e;
+  }
 }
 
 /**
