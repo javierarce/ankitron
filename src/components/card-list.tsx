@@ -77,6 +77,12 @@ interface CardListProps {
   /** Add-card form visibility, owned by the page so the button can live in its header. */
   showAddForm: boolean;
   onShowAddForm: (show: boolean) => void;
+  /**
+   * Reports the single subdeck the list is currently scoped to (null when
+   * scoped to "All" or to several subdecks at once). Lets the page header
+   * retarget its title and its Settings/Add note/Study actions to that subdeck.
+   */
+  onScopeChange?: (deck: string | null) => void;
 }
 
 export function CardList({
@@ -91,6 +97,7 @@ export function CardList({
   onChanged,
   showAddForm,
   onShowAddForm,
+  onScopeChange,
 }: CardListProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [movingNote, setMovingNote] = useState<Note | null>(null);
@@ -356,6 +363,13 @@ export function CardList({
     ? deckLeaf(onlySegment)
     : "the selected decks";
 
+  // Surface the scoped subdeck to the page header, so its title and actions can
+  // follow the selection. Only a lone selection names a deck; "All" or a
+  // multi-select reports null and the header falls back to the opened deck.
+  useEffect(() => {
+    onScopeChange?.(onlySegment);
+  }, [onlySegment, onScopeChange]);
+
   return (
     <div>
       <div className={hasSegments ? "flex items-start gap-6" : undefined}>
@@ -455,7 +469,10 @@ export function CardList({
 
       {showAddForm && (
         <CardForm
-          deckName={deckName}
+          // Default a new note to the scoped subdeck when one is selected, so
+          // "Add note" files where the header says it will; otherwise the
+          // opened deck.
+          deckName={onlySegment ?? deckName}
           onClose={() => onShowAddForm(false)}
           onSaved={() => {
             onShowAddForm(false);

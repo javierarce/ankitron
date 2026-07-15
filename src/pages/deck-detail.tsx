@@ -5,7 +5,7 @@ import { CenteredSpinner } from "@/components/spinner";
 import { fetchAllDueCounts } from "@/lib/anki-fetch";
 import { areSuspended, fetchCardDecks } from "@/lib/cards";
 import { fetchCardFlags } from "@/lib/flags";
-import { compareDeckPaths, deckLeaf, subdecksOf } from "@/lib/deck";
+import { compareDeckPaths, deckLeaf, formatDeckPath, subdecksOf } from "@/lib/deck";
 import { fetchDeckNames } from "@/lib/decks";
 import { resolveDeckRedirect } from "@/lib/deck-redirects";
 import { fetchNotes, findNoteIds } from "@/lib/notes";
@@ -80,11 +80,24 @@ export function DeckDetailPage() {
   const [noteFlags, setNoteFlags] = useState<Record<number, number>>({});
   // Every deck nested under this one ("Spanish::Verbs", …), sorted as a tree.
   const [subdecks, setSubdecks] = useState<string[]>([]);
-  const [due, setDue] = useState<DueCounts>({ new: 0, learn: 0, review: 0 });
+  // Due counts for the opened deck and each subdeck, so the header's Study
+  // action can follow the scoped subdeck the way its title does.
+  const [dueByDeck, setDueByDeck] = useState<Record<string, DueCounts>>({});
+  // The single subdeck the card list is scoped to (null = the whole deck),
+  // reported up by CardList. Drives the header title and its action targets.
+  const [scopedDeck, setScopedDeck] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const { registerPageLoad } = useSync();
+
+  // A fresh deck starts unscoped; clear any lingering scope from the previous
+  // deck before its card list remounts and reports the new one.
+  const [prevDeck, setPrevDeck] = useState(deckName);
+  if (deckName !== prevDeck) {
+    setPrevDeck(deckName);
+    setScopedDeck(null);
+  }
 
   // While our blocking spinner is up, suppress the corner sync indicator so the
   // two never show at once.
@@ -92,14 +105,20 @@ export function DeckDetailPage() {
     if (loading) return registerPageLoad();
   }, [loading, registerPageLoad]);
 
-  const refreshDue = useCallback(async () => {
+  const refreshDue = useCallback(async (subdeckList: string[]) => {
     try {
-      const counts = await fetchAllDueCounts([deckName]);
-      setDue(counts[deckName] ?? { new: 0, learn: 0, review: 0 });
+      setDueByDeck(await fetchAllDueCounts([deckName, ...subdeckList]));
     } catch {
       // keep the previous counts
     }
   }, [deckName]);
+
+  // The view-scoped refresh used after in-place edits, over the subdecks
+  // already in state.
+  const refreshDueForView = useCallback(
+    () => refreshDue(subdecks),
+    [refreshDue, subdecks],
+  );
 
   const applyData = useCallback(
     (data: Awaited<ReturnType<typeof fetchDeckData>>) => {
@@ -125,8 +144,13 @@ export function DeckDetailPage() {
       return;
     }
     try {
-      applyData(await fetchDeckData(deckName));
-      await refreshDue();
+      // Use the just-fetched subdeck list, not the subdecks still in state — a
+      // refresh can surface a brand-new subdeck (a move or add that created a
+      // deck), and refreshDueForView would miss its due counts until the next
+      // full load.
+      const data = await fetchDeckData(deckName);
+      applyData(data);
+      await refreshDue(data.subdecks);
     } catch {
       // Keep the current view if a refresh fails; the user just acted on it.
     }
@@ -155,7 +179,7 @@ export function DeckDetailPage() {
         }
         applyData(data);
         if (cancelled) return;
-        await refreshDue();
+        await refreshDue(data.subdecks);
       } catch {
         if (!cancelled) setError("Could not load notes. Make sure Anki is running.");
       } finally {
@@ -171,22 +195,37 @@ export function DeckDetailPage() {
     return <CenteredSpinner />;
   }
 
+  // The header follows the scoped subdeck: its title names it and Study,
+  // Settings, and Add note all act on it. Falls back to the opened deck when the
+  // list is scoped to "All" (or to several subdecks at once).
+  const targetDeck = scopedDeck ?? deckName;
+  const encodedTarget = encodeURIComponent(targetDeck);
+  const due = dueByDeck[targetDeck] ?? { new: 0, learn: 0, review: 0 };
   const totalDue = due.new + due.learn + due.review;
-
-  // Study always targets the deck the user opened, never a subdeck selected in
-  // the list. The title, Settings, and Add note all act on this deck, so Study
-  // stays consistent with them; subdeck selection scopes the note list only.
-  const studyTo = `/decks/${encodeURIComponent(deckName)}/study`;
+  const studyTo = `/decks/${encodedTarget}/study`;
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="min-w-0 truncate text-2xl font-bold" title={deckLeaf(deckName)}>
-          {deckLeaf(deckName)}
+        <h1 className="flex min-w-0 items-baseline gap-2 text-2xl">
+          <span className="truncate font-bold" title={formatDeckPath(deckName)}>
+            {deckLeaf(deckName)}
+          </span>
+          {scopedDeck && (
+            // The scoped subdeck's leaf, set apart from the deck title in a
+            // lighter weight and muted colour — "Geografía Europa", never the
+            // full path however deep the subdeck sits.
+            <span
+              className="truncate font-normal text-foreground/50"
+              title={formatDeckPath(scopedDeck)}
+            >
+              {deckLeaf(scopedDeck)}
+            </span>
+          )}
         </h1>
         <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
           <Link
-            to={`/decks/${encodeURIComponent(deckName)}/settings`}
+            to={`/decks/${encodedTarget}/settings`}
             className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
           >
             Settings
@@ -223,11 +262,12 @@ export function DeckDetailPage() {
           noteFlags={noteFlags}
           noteDecks={noteDecks}
           subdecks={subdecks}
-          onSuspendChange={refreshDue}
-          onCardsMoved={refreshDue}
+          onSuspendChange={refreshDueForView}
+          onCardsMoved={refreshDueForView}
           onChanged={refresh}
           showAddForm={showAddForm}
           onShowAddForm={setShowAddForm}
+          onScopeChange={setScopedDeck}
         />
       )}
     </div>

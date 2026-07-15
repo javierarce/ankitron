@@ -473,6 +473,33 @@ describe("CardList segments", () => {
     expect(screen.queryByText("Tres")).toBeNull();
     expect(screen.getByText("1 note")).toBeTruthy();
   });
+
+  it("reports the scoped subdeck up, and null when cleared", async () => {
+    const user = userEvent.setup();
+    const onScopeChange = vi.fn();
+    renderInRouter(
+      <CardList
+        deckName="Spanish"
+        notes={threeNotes}
+        noteDecks={{ 1: "Spanish::Verbs", 2: "Spanish", 3: "Spanish" }}
+        subdecks={["Spanish::Verbs"]}
+        showAddForm={false}
+        onShowAddForm={vi.fn()}
+        onChanged={vi.fn()}
+        onScopeChange={onScopeChange}
+      />,
+    );
+
+    // Reports null once on mount (scoped to "All").
+    expect(onScopeChange).toHaveBeenLastCalledWith(null);
+
+    await user.click(screen.getByRole("button", { name: /Verbs/ }));
+    expect(onScopeChange).toHaveBeenLastCalledWith("Spanish::Verbs");
+
+    // Clicking the sole selection again clears the scope back to null.
+    await user.click(screen.getByRole("button", { name: /Verbs/ }));
+    expect(onScopeChange).toHaveBeenLastCalledWith(null);
+  });
 });
 
 describe("CardList sort persistence", () => {
