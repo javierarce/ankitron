@@ -53,7 +53,9 @@ function StudyPage() {
   const params = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const deckName = decodeURIComponent(params.deckName as string);
+  // React Router already URL-decodes path params; decoding again throws
+  // URIError on any deck whose name contains a "%" and blanks the page.
+  const deckName = params.deckName as string;
 
   // The decks this session reviews. Anki reviews one deck at a time, and a deck
   // pulls in its whole subtree, so studying the opened deck covers its subdecks.

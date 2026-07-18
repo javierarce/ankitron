@@ -12,8 +12,10 @@ import { fetchNotes, findNoteIds } from "@/lib/notes";
 import type { Note } from "@/lib/types";
 
 export function DeckSettingsPage() {
+  // React Router already URL-decodes path params; decoding again throws
+  // URIError on any deck whose name contains a "%" and blanks the page.
   const { deckName: rawName } = useParams<{ deckName: string }>();
-  const deckName = decodeURIComponent(rawName!);
+  const deckName = rawName!;
   const navigate = useNavigate();
 
   // Loaded only so Export has the deck's notes to write out.

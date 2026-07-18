@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { CenteredSpinner } from "@/components/spinner";
@@ -13,6 +13,7 @@ import {
   formatDeckPath,
   joinDeck,
   subdecksOf,
+  type DeckRename,
 } from "@/lib/deck";
 import { fetchDeckNames, renameDeck } from "@/lib/decks";
 import { recordDeckRedirect, resolveDeckRedirect } from "@/lib/deck-redirects";
@@ -74,8 +75,11 @@ async function fetchDeckData(deckName: string) {
 }
 
 export function DeckDetailPage() {
+  // React Router already URL-decodes path params, so use the value as-is.
+  // Decoding it a second time throws URIError on any deck whose name contains
+  // a "%" (e.g. "50% done"), which blanks the page — see the redirect on rename.
   const { deckName: rawName } = useParams<{ deckName: string }>();
-  const deckName = decodeURIComponent(rawName!);
+  const deckName = rawName!;
   const navigate = useNavigate();
 
   const [notes, setNotes] = useState<Note[]>([]);
@@ -103,17 +107,45 @@ export function DeckDetailPage() {
   const [nameDraft, setNameDraft] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
+  // When we rename the opened deck we navigate to its new URL, but we've
+  // already patched our state to match, so the load effect skips the refetch
+  // (and its spinner) for that one navigation instead of reloading the page.
+  // The ref drives the effect (refs can't be read during render); the state
+  // drives the render, so the destination render skips the spinner too.
+  const renamedSelfTo = useRef<string | null>(null);
+  const [selfRenameTo, setSelfRenameTo] = useState<string | null>(null);
+  // The deck the page is currently showing, tracked for async work: a rename is
+  // a long sequence of round trips, and the user can navigate away (e.g. a
+  // breadcrumb click) before it resolves. Read in the rename handler to detect
+  // that — refs can't be read during render, so the effect below keeps it fresh.
+  const liveDeckName = useRef(deckName);
+  useEffect(() => {
+    liveDeckName.current = deckName;
+  }, [deckName]);
+  // The last rename's from→to mapping, handed to the card list so it can carry
+  // a scoped subdeck selection over to the renamed name in place.
+  const [scopeRenames, setScopeRenames] = useState<DeckRename[] | null>(null);
   const { registerPageLoad } = useSync();
 
   // A fresh deck starts unscoped; clear any lingering scope from the previous
   // deck before its card list remounts and reports the new one.
   const [prevDeck, setPrevDeck] = useState(deckName);
-  if (deckName !== prevDeck) {
+  const deckChanged = deckName !== prevDeck;
+  // A navigation caused by renaming the opened deck: its state is already
+  // patched to the new name, so this isn't a "load a different deck" change.
+  const isSelfRename = deckChanged && selfRenameTo === deckName;
+  if (deckChanged) {
     setPrevDeck(deckName);
     setScopedDeck(null);
     // Leave any half-open rename behind with the old deck.
     setEditingName(false);
     setRenameError(null);
+    // Show the spinner until the new deck loads. The still-mounted page holds
+    // the previous deck's notes/subdecks, and rendering that stale data under
+    // the new deck name crashes (e.g. buildSubdeckTree walks subdecks that
+    // don't sit under the new root). The load effect below flips this back.
+    // A self-rename already carries matching state, so it skips the reload.
+    if (!isSelfRename) setLoading(true);
   }
 
   // While our blocking spinner is up, suppress the corner sync indicator so the
@@ -174,6 +206,14 @@ export function DeckDetailPage() {
   }, [deckName, notes, applyData, refreshDue]);
 
   useEffect(() => {
+    // We just renamed the opened deck and navigated to its new URL; our state is
+    // already the renamed deck's, so skip the refetch and its spinner.
+    if (renamedSelfTo.current === deckName) {
+      renamedSelfTo.current = null;
+      setSelfRenameTo(null);
+      return;
+    }
+
     let cancelled = false;
 
     async function load() {
@@ -236,6 +276,7 @@ export function DeckDetailPage() {
       return;
     }
     const newName = joinDeck(deckParent(target), trimmed);
+    const renamingSelf = !scopedDeck;
     setRenameBusy(true);
     setRenameError(null);
     try {
@@ -246,19 +287,56 @@ export function DeckDetailPage() {
       setRenameBusy(false);
       setEditingName(false);
       if (renames.length === 0) return;
-      // Land on the renamed deck — its own page when a subdeck was scoped.
-      // Renaming the opened deck invalidates the current history entry (its old
-      // name is gone), so replace it. A scoped rename leaves the current entry —
-      // the parent deck's URL — still valid, so push instead to keep Back
-      // returning to the parent rather than skipping it.
-      navigate(`/decks/${encodeURIComponent(newName)}`, { replace: !scopedDeck });
+
+      // The user may have navigated to a different deck while the rename was in
+      // flight (a nested deck's breadcrumb links stay live during it). If so,
+      // don't patch that unrelated deck's state or yank them back to the renamed
+      // deck — the rename already applied in Anki, and the redirects above
+      // forward any stale history to the new name.
+      if (liveDeckName.current !== deckName) return;
+
+      // Rename the deck (and its subdecks) in place so the list, subdeck chips,
+      // and due counts follow the new name without a reload. The plan maps every
+      // affected deck exactly, so a plain lookup rewrites each stored name.
+      const renameMap = new Map(renames.map((r) => [r.from, r.to]));
+      const rename = (deck: string) => renameMap.get(deck) ?? deck;
+      setSubdecks((prev) => prev.map(rename).sort(compareDeckPaths));
+      setNoteDecks((prev) => {
+        const next: Record<number, string> = {};
+        for (const [id, deck] of Object.entries(prev)) next[Number(id)] = rename(deck);
+        return next;
+      });
+      setDueByDeck((prev) => {
+        const next: Record<string, DueCounts> = {};
+        for (const [deck, counts] of Object.entries(prev)) next[rename(deck)] = counts;
+        return next;
+      });
+
+      if (renamingSelf) {
+        // The opened deck's own name changed, so its URL is now stale — move to
+        // the new one, replacing the dead entry. Our state already matches, so
+        // the destination render and load effect skip the reload and spinner.
+        renamedSelfTo.current = newName;
+        setSelfRenameTo(newName);
+        navigate(`/decks/${encodeURIComponent(newName)}`, { replace: true });
+      } else {
+        // A scoped subdeck rename stays put on the parent deck's page. Carry the
+        // selection to the new name (the header follows it) and hand the mapping
+        // to the card list so its scoped segment moves with it.
+        setScopedDeck((prev) => (prev ? rename(prev) : prev));
+        setScopeRenames(renames);
+      }
     } catch (err) {
       setRenameError(err instanceof Error ? err.message : "Rename failed.");
       setRenameBusy(false);
     }
   }
 
-  if (loading) {
+  // `deckChanged` covers the first render after navigation, where `loading` is
+  // still false (the effect that sets it runs after this render commits) but
+  // the state below still belongs to the previous deck. A self-rename is exempt:
+  // its state already matches the new name, so it renders straight through.
+  if (loading || (deckChanged && !isSelfRename)) {
     return <CenteredSpinner />;
   }
 
@@ -371,6 +449,7 @@ export function DeckDetailPage() {
           noteFlags={noteFlags}
           noteDecks={noteDecks}
           subdecks={subdecks}
+          scopeRenames={scopeRenames}
           onSuspendChange={refreshDueForView}
           onCardsMoved={refreshDueForView}
           onChanged={refresh}

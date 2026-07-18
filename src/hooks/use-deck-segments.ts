@@ -8,18 +8,49 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import type { DeckRename } from "@/lib/deck";
 
 interface UseDeckSegmentsOptions {
   /** The chips, in row order — Shift+click ranges follow it. */
   segmentDecks: string[];
+  /**
+   * A just-applied deck rename's from→to mapping. When a scoped subdeck is
+   * renamed in place, its chip keeps the same position but a new name, so we
+   * carry the selection (and the Shift anchor) across rather than dropping it.
+   */
+  renames?: DeckRename[] | null;
 }
 
-export function useDeckSegments({ segmentDecks }: UseDeckSegmentsOptions) {
+export function useDeckSegments({
+  segmentDecks,
+  renames,
+}: UseDeckSegmentsOptions) {
   const [activeSegments, setActiveSegments] = useState<Set<string>>(
     () => new Set<string>(),
   );
   // The last segment clicked, used as the anchor for Shift+click ranges.
   const [lastSegment, setLastSegment] = useState<string | null>(null);
+
+  // Apply a fresh rename mapping once (keyed by its identity) — renaming a
+  // scoped subdeck changes the active segment's name, not the selection itself.
+  const [appliedRenames, setAppliedRenames] = useState(renames);
+  if (renames !== appliedRenames) {
+    setAppliedRenames(renames);
+    if (renames && renames.length > 0) {
+      const map = new Map(renames.map((r) => [r.from, r.to]));
+      setActiveSegments((prev) => {
+        let changed = false;
+        const next = new Set<string>();
+        for (const seg of prev) {
+          const to = map.get(seg);
+          if (to) changed = true;
+          next.add(to ?? seg);
+        }
+        return changed ? next : prev;
+      });
+      setLastSegment((prev) => (prev && map.get(prev)) || prev);
+    }
+  }
 
   function handleSegmentClick(deck: string, e: ReactMouseEvent) {
     const anchor = lastSegment;

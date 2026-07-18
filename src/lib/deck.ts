@@ -237,7 +237,10 @@ export function buildSubdeckTree(root: string, subdecks: string[]): DeckNode {
       if (!byFull.has(fullName)) {
         const child: DeckNode = { name: parts[i], fullName, children: [] };
         byFull.set(fullName, child);
-        byFull.get(parts.slice(0, i).join("::"))!.children.push(child);
+        // Skip a subdeck whose ancestor chain doesn't lead back to the root
+        // rather than dereferencing a missing parent — a transient
+        // root/subdecks mismatch shouldn't crash the whole tree.
+        byFull.get(parts.slice(0, i).join("::"))?.children.push(child);
       }
     }
   }

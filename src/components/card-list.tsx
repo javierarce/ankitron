@@ -24,7 +24,7 @@ import {
 import { stripCloze } from "@/lib/cloze";
 import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
-import { deckLeaf, isCardInDeck } from "@/lib/deck";
+import { deckLeaf, isCardInDeck, type DeckRename } from "@/lib/deck";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useDeckSegments } from "@/hooks/use-deck-segments";
 import { useNoteDrag } from "@/hooks/use-note-drag";
@@ -62,6 +62,12 @@ interface CardListProps {
   noteDecks?: Record<number, string>;
   /** Decks nested under this one, sorted as a tree. Drives the segmented control. */
   subdecks?: string[];
+  /**
+   * The most recent deck rename's from→to mapping. When a scoped subdeck is
+   * renamed in place, this carries the active segment selection over to the new
+   * name instead of dropping it (the subdeck's chip just changed identity).
+   */
+  scopeRenames?: DeckRename[] | null;
   /** Called after cards are suspended or unsuspended, so the parent can refresh due counts. */
   onSuspendChange?: () => void;
   /** Called after cards are moved between (sub)decks, so the parent can refresh due counts. */
@@ -92,6 +98,7 @@ export function CardList({
   noteFlags,
   noteDecks,
   subdecks,
+  scopeRenames,
   onSuspendChange,
   onCardsMoved,
   onChanged,
@@ -135,6 +142,7 @@ export function CardList({
 
   const { activeSegments, handleSegmentClick, clearSegments } = useDeckSegments({
     segmentDecks,
+    renames: scopeRenames,
   });
 
   // Reset back to "All" whenever we navigate to a different deck.
