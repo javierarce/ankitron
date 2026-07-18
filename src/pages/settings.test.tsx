@@ -35,10 +35,6 @@ vi.mock("@/components/update-context", () => ({
 vi.mock("@/components/elevenlabs-settings", () => ({
   ElevenLabsSettings: () => null,
 }));
-vi.mock("@/lib/experimental", () => ({
-  isExperimentalEnabled: () => false,
-  setExperimentalEnabled: vi.fn(),
-}));
 
 import { SettingsPage } from "./settings";
 
