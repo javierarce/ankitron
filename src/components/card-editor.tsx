@@ -9,7 +9,6 @@ import {
   storeImageFile,
 } from "@/lib/audio";
 import { isConfigured } from "@/lib/elevenlabs";
-import { isExperimentalEnabled } from "@/lib/experimental";
 import { TtsDialog } from "./tts-dialog";
 import { LinkDialog } from "./link-dialog";
 import { HtmlSourceEditor } from "./html-source-editor";
@@ -132,12 +131,10 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
   useEffect(() => {
     ttsOpenRef.current = ttsText !== null;
   }, [ttsText]);
-  // The TTS button appears only when the experimental feature is enabled and an
-  // ElevenLabs key is configured. Both read from non-secret localStorage flags,
-  // so this is a synchronous check with no Rust round-trip on editor open.
-  const [ttsAvailable] = useState(
-    () => isExperimentalEnabled() && isConfigured()
-  );
+  // The TTS button appears only when an ElevenLabs key is configured. Reads from
+  // a non-secret localStorage flag, so this is a synchronous check with no Rust
+  // round-trip on editor open.
+  const [ttsAvailable] = useState(() => isConfigured());
   // The TTS button enables only with a selection. Tracked via editor events
   // rather than read inline during render: useEditor doesn't reliably re-render
   // on selection-only changes, so an inline read would go stale and leave the
