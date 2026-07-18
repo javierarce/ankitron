@@ -5,9 +5,17 @@ import { CenteredSpinner } from "@/components/spinner";
 import { fetchAllDueCounts } from "@/lib/anki-fetch";
 import { areSuspended, fetchCardDecks } from "@/lib/cards";
 import { fetchCardFlags } from "@/lib/flags";
-import { compareDeckPaths, deckLeaf, formatDeckPath, subdecksOf } from "@/lib/deck";
-import { fetchDeckNames } from "@/lib/decks";
-import { resolveDeckRedirect } from "@/lib/deck-redirects";
+import { PencilSimple } from "@phosphor-icons/react/dist/ssr/PencilSimple";
+import {
+  compareDeckPaths,
+  deckLeaf,
+  deckParent,
+  formatDeckPath,
+  joinDeck,
+  subdecksOf,
+} from "@/lib/deck";
+import { fetchDeckNames, renameDeck } from "@/lib/decks";
+import { recordDeckRedirect, resolveDeckRedirect } from "@/lib/deck-redirects";
 import { fetchNotes, findNoteIds } from "@/lib/notes";
 import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
@@ -89,6 +97,12 @@ export function DeckDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  // Inline rename of the deck title. Only the deck's own leaf is editable (the
+  // parent path is preserved), matching RenameDeckDialog.
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const { registerPageLoad } = useSync();
 
   // A fresh deck starts unscoped; clear any lingering scope from the previous
@@ -97,6 +111,9 @@ export function DeckDetailPage() {
   if (deckName !== prevDeck) {
     setPrevDeck(deckName);
     setScopedDeck(null);
+    // Leave any half-open rename behind with the old deck.
+    setEditingName(false);
+    setRenameError(null);
   }
 
   // While our blocking spinner is up, suppress the corner sync indicator so the
@@ -191,6 +208,56 @@ export function DeckDetailPage() {
     return () => { cancelled = true; };
   }, [deckName, applyData, refreshDue, navigate]);
 
+  // Rename follows the scoped subdeck the way the header's other actions do: a
+  // selected subdeck is what you rename, not the deck the page opened on.
+  function startRename() {
+    setNameDraft(deckLeaf(scopedDeck ?? deckName));
+    setRenameError(null);
+    setEditingName(true);
+  }
+
+  function cancelRename() {
+    setEditingName(false);
+    setRenameError(null);
+  }
+
+  async function applyRename() {
+    const target = scopedDeck ?? deckName;
+    const trimmed = nameDraft.trim();
+    const currentLeaf = deckLeaf(target);
+    if (trimmed.includes("::")) {
+      setRenameError("A deck name can’t contain “::”. Use Settings → Move.");
+      return;
+    }
+    // Empty or a case-only change (Anki matches names case-insensitively) is a
+    // no-op — just drop out of edit mode.
+    if (!trimmed || trimmed.toLowerCase() === currentLeaf.toLowerCase()) {
+      cancelRename();
+      return;
+    }
+    const newName = joinDeck(deckParent(target), trimmed);
+    setRenameBusy(true);
+    setRenameError(null);
+    try {
+      const renames = await renameDeck(target, newName);
+      // Forward stale history entries (e.g. cmd+left onto the pre-rename deck)
+      // to the new name instead of dead-ending.
+      for (const { from, to } of renames) recordDeckRedirect(from, to);
+      setRenameBusy(false);
+      setEditingName(false);
+      if (renames.length === 0) return;
+      // Land on the renamed deck — its own page when a subdeck was scoped.
+      // Renaming the opened deck invalidates the current history entry (its old
+      // name is gone), so replace it. A scoped rename leaves the current entry —
+      // the parent deck's URL — still valid, so push instead to keep Back
+      // returning to the parent rather than skipping it.
+      navigate(`/decks/${encodeURIComponent(newName)}`, { replace: !scopedDeck });
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : "Rename failed.");
+      setRenameBusy(false);
+    }
+  }
+
   if (loading) {
     return <CenteredSpinner />;
   }
@@ -206,50 +273,92 @@ export function DeckDetailPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="flex min-w-0 items-baseline gap-2 text-2xl">
-          <span className="truncate font-bold" title={formatDeckPath(deckName)}>
-            {deckLeaf(deckName)}
-          </span>
-          {scopedDeck && (
-            // The scoped subdeck's leaf, set apart from the deck title in a
-            // lighter weight and muted colour — "Geografía Europa", never the
-            // full path however deep the subdeck sits.
-            <span
-              className="truncate font-normal text-foreground/50"
-              title={formatDeckPath(scopedDeck)}
-            >
-              {deckLeaf(scopedDeck)}
-            </span>
-          )}
-        </h1>
-        <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-          <Link
-            to={`/decks/${encodedTarget}/settings`}
-            className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
-          >
-            Settings
-          </Link>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
-          >
-            Add note
-            <kbd className="relative top-px font-sans text-[11px] leading-none text-foreground/30">A</kbd>
-          </button>
-          {totalDue > 0 ? (
+      <div className="mb-6">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="flex min-w-0 items-baseline gap-2 text-2xl">
+            {/* When scoped to a subdeck, the opened deck's title stays put and
+                the subdeck — set apart in a lighter weight and muted colour —
+                is what rename edits, matching the header's other actions. */}
+            {scopedDeck && (
+              <span className="truncate font-bold" title={formatDeckPath(deckName)}>
+                {deckLeaf(deckName)}
+              </span>
+            )}
+            {editingName ? (
+              <input
+                type="text"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyRename();
+                  else if (e.key === "Escape") cancelRename();
+                }}
+                onBlur={() => {
+                  if (!renameBusy) cancelRename();
+                }}
+                spellCheck={false}
+                autoFocus
+                disabled={renameBusy}
+                aria-label={scopedDeck ? "Subdeck name" : "Deck name"}
+                className={`min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 py-0.5 focus:border-foreground/40 focus:outline-none disabled:opacity-60 ${
+                  scopedDeck ? "font-normal text-foreground/50" : "font-bold"
+                }`}
+              />
+            ) : (
+              // Click the title (or its hover pencil) to rename in place.
+              <button
+                type="button"
+                onClick={startRename}
+                title={scopedDeck ? "Rename subdeck" : "Rename deck"}
+                className="group flex min-w-0 items-baseline gap-1.5 text-left"
+              >
+                <span
+                  className={`truncate ${
+                    scopedDeck ? "font-normal text-foreground/50" : "font-bold"
+                  }`}
+                  title={formatDeckPath(targetDeck)}
+                >
+                  {deckLeaf(targetDeck)}
+                </span>
+                <PencilSimple
+                  size={15}
+                  weight="bold"
+                  className="shrink-0 self-center text-transparent transition-colors group-hover:text-foreground/40"
+                />
+              </button>
+            )}
+          </h1>
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <Link
-              to={studyTo}
-              className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+              to={`/decks/${encodedTarget}/settings`}
+              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
             >
-              Study
+              Settings
             </Link>
-          ) : (
-            <span className="rounded-lg border border-border px-4 py-2 text-sm text-foreground/30 cursor-not-allowed">
-              No cards due
-            </span>
-          )}
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
+            >
+              Add note
+              <kbd className="relative top-px font-sans text-[11px] leading-none text-foreground/30">A</kbd>
+            </button>
+            {totalDue > 0 ? (
+              <Link
+                to={studyTo}
+                className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+              >
+                Study
+              </Link>
+            ) : (
+              <span className="rounded-lg border border-border px-4 py-2 text-sm text-foreground/30 cursor-not-allowed">
+                No cards due
+              </span>
+            )}
+          </div>
         </div>
+        {renameError && (
+          <p className="mt-2 text-sm text-red-500">{renameError}</p>
+        )}
       </div>
 
       {error ? (
