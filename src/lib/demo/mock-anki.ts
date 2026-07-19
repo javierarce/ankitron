@@ -17,6 +17,7 @@
 // the simulator logic.
 
 import { isCardInDeck } from "../deck";
+import type { CardReview, Ease } from "../types";
 import { notesMatchingSearch } from "./match-query";
 import {
   addDemoNote,
@@ -71,6 +72,75 @@ const noteInfo = (n: DemoNote) => ({
   mod: 1_700_000_000,
 });
 
+// A fixed "now" so synthesized review histories (and the schedule derived from
+// them) are deterministic — the demo build has no real scheduler, and tests
+// need stable output. Matches the seconds-scale `mod` used in noteInfo above.
+const DEMO_NOW = 1_700_000_000_000;
+const DAY_MS = 86_400_000;
+
+// A plausible review history for a note, shaped by its demo `state`. New notes
+// have none; learning notes have a step or two; review/done notes climb a
+// growing-interval ladder, and every third note takes a lapse partway so the
+// panel's failure→relearn→regrow story has something to show. Deterministic in
+// the note id, so the demo and its tests are stable without a clock or RNG.
+const demoReviews = (n: DemoNote): CardReview[] => {
+  if (n.state === "new") return [];
+
+  type Step = { daysAgo: number; ease: Ease; type: number; ivl: number };
+  const steps: Step[] = [];
+  if (n.state === "learn") {
+    steps.push({ daysAgo: 0, ease: 3, type: 0, ivl: -600 });
+  } else {
+    steps.push({ daysAgo: 30, ease: 3, type: 0, ivl: -600 });
+    steps.push({ daysAgo: 29, ease: 3, type: 0, ivl: 1 });
+    steps.push({ daysAgo: 25, ease: 3, type: 1, ivl: 4 });
+    if (n.noteId % 3 === 0) {
+      steps.push({ daysAgo: 18, ease: 1, type: 1, ivl: 0 }); // forgot it
+      steps.push({ daysAgo: 18, ease: 3, type: 2, ivl: -600 }); // relearn
+      steps.push({ daysAgo: 17, ease: 3, type: 2, ivl: 3 });
+      steps.push({ daysAgo: 9, ease: 3, type: 1, ivl: 7 });
+      steps.push({ daysAgo: 2, ease: 4, type: 1, ivl: 15 });
+    } else {
+      steps.push({ daysAgo: 16, ease: 3, type: 1, ivl: 9 });
+      steps.push({ daysAgo: 5, ease: 4, type: 1, ivl: 22 });
+    }
+  }
+
+  let factor = 2500;
+  return steps.map((s, i) => {
+    if (s.ease === 1) factor = Math.max(1300, factor - 200);
+    else if (s.ease === 4) factor += 150;
+    return {
+      id: DEMO_NOW - s.daysAgo * DAY_MS + i * 1000, // +i keeps ids strictly rising
+      usn: 1,
+      ease: s.ease,
+      ivl: s.ivl,
+      lastIvl: i > 0 ? steps[i - 1].ivl : 0,
+      factor,
+      time: 3000 + (n.noteId % 5) * 800,
+      type: s.type,
+    };
+  });
+};
+
+// The current scheduling state, kept consistent with the synthesized log above
+// (interval/reps/lapses/factor all read off it) so cardsInfo and the review
+// history never disagree in the panel.
+const demoSchedule = (n: DemoNote) => {
+  const reviews = demoReviews(n);
+  const last = reviews[reviews.length - 1];
+  const type = n.state === "new" ? 0 : n.state === "learn" ? 1 : 2;
+  return {
+    ord: 0,
+    type,
+    queue: n.suspended ? -1 : type,
+    interval: last && last.ivl > 0 ? last.ivl : 0,
+    reps: reviews.length,
+    lapses: reviews.filter((r) => r.ease === 1).length,
+    factor: last ? last.factor : 0,
+  };
+};
+
 // AnkiConnect's cardsInfo shape (the fields the app actually reads).
 const cardInfo = (cardId: number) => {
   const n = findNote(noteIdOfCard(cardId));
@@ -84,9 +154,7 @@ const cardInfo = (cardId: number) => {
     fields: fieldsOf(n),
     question: questionHtml(n),
     answer: answerHtml(n),
-    ord: 0,
-    type: 2,
-    queue: n.suspended ? -1 : 2,
+    ...demoSchedule(n),
   };
 };
 
@@ -236,6 +304,18 @@ async function handleAction(
     case "cardsInfo": {
       const ids = (params.cards as number[]) ?? [];
       return ids.map(cardInfo).filter(Boolean);
+    }
+
+    case "getReviewsOfCards": {
+      // { cardId(as string): [{ id, usn, ease, ivl, lastIvl, factor, time, type }] }.
+      // Drives the per-note stats panel's history charts.
+      const ids = (params.cards as number[]) ?? [];
+      const out: Record<string, CardReview[]> = {};
+      for (const cardId of ids) {
+        const n = findNote(noteIdOfCard(cardId));
+        out[String(cardId)] = n ? demoReviews(n) : [];
+      }
+      return out;
     }
 
     case "getDecks": {

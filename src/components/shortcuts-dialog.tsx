@@ -52,6 +52,7 @@ const SECTIONS: Section[] = [
       { combos: [{ keys: ["Space"] }], desc: "Toggle selection of the focused note" },
       { combos: [{ keys: ["a"] }], desc: "Add a new note" },
       { combos: [{ keys: ["e"] }], desc: "Edit the selected notes" },
+      { combos: [{ keys: ["i"] }], desc: "View statistics" },
       { combos: [{ keys: ["t"] }], desc: "Add or remove tags" },
       { combos: [{ keys: ["s"] }], desc: "Suspend or unsuspend" },
       { combos: [{ keys: ["Cmd", "1–7"] }], desc: "Flag (Cmd 0 clears)" },

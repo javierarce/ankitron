@@ -26,6 +26,8 @@ interface CardListShortcutsOptions {
   onAddNote: () => void;
   /** Open the sequential editor over these notes. */
   onEditNotes: (ids: number[]) => void;
+  /** Open the statistics dialog over these notes (paging through them). */
+  onStatsNotes: (ids: number[]) => void;
   /** Select these notes and open the bulk tag dialog. */
   onTagNotes: (ids: number[]) => void;
   /** Select these notes and open the move dialog. */
@@ -50,6 +52,7 @@ export function useCardListShortcuts({
   targetNoteIds,
   onAddNote,
   onEditNotes,
+  onStatsNotes,
   onTagNotes,
   onMoveNotes,
   onSuspendNotes,
@@ -171,6 +174,16 @@ export function useCardListShortcuts({
         }
         return;
       }
+      if (e.key === "i" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Stats for the selection (paged), or the focused row when nothing is
+        // selected — the read-only counterpart to Edit.
+        const ids = targetNoteIds();
+        if (ids.length > 0) {
+          e.preventDefault();
+          onStatsNotes(ids);
+        }
+        return;
+      }
       if (e.key === "t" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         // Tag the selection; with nothing selected, tag the focused row by
         // selecting it first so the dialog (which reads the selection) has it.
@@ -213,6 +226,7 @@ export function useCardListShortcuts({
     targetNoteIds,
     onAddNote,
     onEditNotes,
+    onStatsNotes,
     onTagNotes,
     onMoveNotes,
     onSuspendNotes,
