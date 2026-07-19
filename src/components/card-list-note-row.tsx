@@ -192,6 +192,8 @@ interface NoteRowProps {
   draggable: boolean;
   /** Open the note in the editor. */
   onOpen: (note: Note) => void;
+  /** Open the note's statistics. */
+  onStats: (note: Note) => void;
   onCheckboxClick: (e: ReactMouseEvent, note: Note) => void;
   onToggleSuspend: (note: Note) => void;
   /** Set the note's flag (0 clears it). */
@@ -211,6 +213,7 @@ export const NoteRow = memo(function NoteRow({
   flag,
   draggable,
   onOpen,
+  onStats,
   onCheckboxClick,
   onToggleSuspend,
   onSetFlag,
@@ -335,6 +338,11 @@ export const NoteRow = memo(function NoteRow({
               label: "Edit",
               kbd: "E",
               onSelect: () => onOpen(note),
+            },
+            {
+              label: "Statistics",
+              kbd: "I",
+              onSelect: () => onStats(note),
             },
             {
               label: suspended ? "Unsuspend" : "Suspend",

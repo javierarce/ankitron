@@ -10,6 +10,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
 import { Note } from "@/lib/types";
 import { CardForm } from "./card-form";
+import { NoteStatsDialog } from "./note-stats-dialog";
 import { SearchInput } from "./search-input";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveCardDialog } from "./move-card-dialog";
@@ -100,6 +101,21 @@ export function CardList({
   onScopeChange,
 }: CardListProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  // The notes whose stats dialog is open (ids, so the row's onStats handler
+  // stays identity-stable for the memo'd rows) plus the page within them. A
+  // row opens just its note; the `i` shortcut opens the whole selection so you
+  // can page through it — mirroring Edit.
+  const [statsIds, setStatsIds] = useState<number[] | null>(null);
+  const [statsIndex, setStatsIndex] = useState(0);
+  const openStats = useCallback((note: Note) => {
+    setStatsIds([note.noteId]);
+    setStatsIndex(0);
+  }, []);
+  const openStatsForIds = useCallback((ids: number[]) => {
+    if (ids.length === 0) return;
+    setStatsIds(ids);
+    setStatsIndex(0);
+  }, []);
   const [movingNote, setMovingNote] = useState<Note | null>(null);
   const [bulkMoving, setBulkMoving] = useState(false);
   const [bulkTagging, setBulkTagging] = useState(false);
@@ -272,6 +288,7 @@ export function CardList({
     bulkMoving ||
     bulkTagging ||
     bulkDeleteOpen ||
+    statsIds !== null ||
     !!editSeq;
 
   useVimNav({ enabled: !hasDialog });
@@ -326,6 +343,7 @@ export function CardList({
     targetNoteIds,
     onAddNote,
     onEditNotes: beginEdit,
+    onStatsNotes: openStatsForIds,
     onTagNotes,
     onMoveNotes,
     onSuspendNotes: suspendNotes,
@@ -453,6 +471,7 @@ export function CardList({
                   flag={noteFlag(note)}
                   draggable={hasSegments}
                   onOpen={setEditingNote}
+                  onStats={openStats}
                   onCheckboxClick={handleCheckboxClick}
                   onToggleSuspend={handleToggleSuspend}
                   onSetFlag={handleSetFlag}
@@ -522,6 +541,26 @@ export function CardList({
               blocked={seqDeleteOpen}
               onSaved={(updated) => applyStep(editSequenceSaved(editSeq, updated))}
               onClose={() => finishEdit(editSeq.dirty)}
+            />
+          );
+        })()}
+
+      {statsIds !== null &&
+        (() => {
+          // The notes to page through: a single note when opened from a row,
+          // the whole selection when opened with `i`. Drop any that vanished
+          // (edited away) and clamp the page so it stays in range.
+          const statsNotes = statsIds
+            .map((id) => notes.find((n) => n.noteId === id))
+            .filter((n): n is Note => !!n);
+          if (statsNotes.length === 0) return null;
+          const index = Math.min(statsIndex, statsNotes.length - 1);
+          return (
+            <NoteStatsDialog
+              notes={statsNotes}
+              index={index}
+              onIndexChange={setStatsIndex}
+              onClose={() => setStatsIds(null)}
             />
           );
         })()}
