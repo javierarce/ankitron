@@ -17,28 +17,44 @@ export interface FlagDef {
   value: number;
   /** Anki's colour name for the flag. */
   name: string;
-  /** The flag colour, as Anki renders it (same in light and dark). */
+  /**
+   * The flag colour, as a `var(--flag-N)` reference rather than a literal hex,
+   * so it tracks the theme: the actual light/dark values live in globals.css.
+   * Usable anywhere a CSS colour is (inline `style`, box-shadow, color-mix).
+   */
   color: string;
 }
 
 /**
- * The seven flags, in Anki's order and colours (`_color-palette.scss`). The
- * value is the number stored in the card's `flags` byte and used by `flag:N`
- * searches; 0 means unflagged and isn't listed here.
+ * The seven flags, in Anki's order. The value is the number stored in the
+ * card's `flags` byte and used by `flag:N` searches; 0 means unflagged and
+ * isn't listed here. Each colour is a CSS variable defined in globals.css
+ * (`--flag-1` … `--flag-7`), with distinct light and dark values.
  */
 export const FLAGS: readonly FlagDef[] = [
-  { value: 1, name: "Red", color: "#ef4444" },
-  { value: 2, name: "Orange", color: "#fb923c" },
-  { value: 3, name: "Green", color: "#4ade80" },
-  { value: 4, name: "Blue", color: "#3b82f6" },
-  { value: 5, name: "Pink", color: "#e879f9" },
-  { value: 6, name: "Turquoise", color: "#2dd4bf" },
-  { value: 7, name: "Purple", color: "#a855f7" },
+  { value: 1, name: "Red", color: "var(--flag-1)" },
+  { value: 2, name: "Orange", color: "var(--flag-2)" },
+  { value: 3, name: "Green", color: "var(--flag-3)" },
+  { value: 4, name: "Blue", color: "var(--flag-4)" },
+  { value: 5, name: "Pink", color: "var(--flag-5)" },
+  { value: 6, name: "Turquoise", color: "var(--flag-6)" },
+  { value: 7, name: "Purple", color: "var(--flag-7)" },
 ];
 
 /** The colour for a flag number, or null for "no flag" (0) / an unknown value. */
 export function flagColor(flag: number): string | null {
   return FLAGS.find((f) => f.value === flag)?.color ?? null;
+}
+
+/**
+ * The translucent fill for a flagged card's front — the flag colour at
+ * `percent` opacity (10% by default) — or null for "no flag" (0) / an unknown
+ * value. Kept alongside flagColor (the solid border colour) so both derive from
+ * the same token; the percent lets callers make a stronger hover variant.
+ */
+export function flagTint(flag: number, percent = 10): string | null {
+  const color = flagColor(flag);
+  return color ? `color-mix(in srgb, ${color} ${percent}%, transparent)` : null;
 }
 
 /**

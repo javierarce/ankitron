@@ -12,7 +12,7 @@ import {
   groupRuns,
 } from "@/lib/typed-answer-diff";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
-import { flagColor } from "@/lib/flags";
+import { flagColor, flagTint } from "@/lib/flags";
 import { ActionsMenu } from "./actions-menu";
 import { FlagPicker } from "./flag-picker";
 import { HtmlContent } from "./card-html";
@@ -66,22 +66,6 @@ function splitAnkiAnswer(html: string): { front: string; back: string } {
     front: html.slice(0, match.index),
     back: html.slice(match.index + match[0].length),
   };
-}
-
-// The flag indicator: a 4px rounded pill down the left edge of the card's
-// front, inset 8px from the top, bottom, and left. Absolutely positioned inside
-// a `relative` section so it never affects text layout, and always rendered
-// (transparent when unflagged) so toggling a flag can't remount the sibling
-// text node and drop an in-progress selection. On a revealed card the front is
-// just the question section, so the pill only spans that.
-function FlagPill({ flag }: { flag: number }) {
-  return (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute bottom-2 left-2 top-2 w-1 rounded-full"
-      style={{ background: flagColor(flag) ?? "transparent" }}
-    />
-  );
 }
 
 // The per-card actions menu shown on the study card (top-right, on hover). It
@@ -335,6 +319,13 @@ export function StudyCard({
     return diffTypedAnswer(submittedValue.trim(), expectedAnswer);
   }, [typed, submittedValue, expectedAnswer]);
 
+  // A flagged card is tinted rather than marked with a bar: the whole card
+  // border takes the flag colour, and the front (the unrevealed content, or the
+  // question section once revealed) gets a 10% fill of it. The back/answer
+  // sections stay untinted. Both null when unflagged.
+  const flagBorder = flagColor(flag);
+  const flagFill = flagTint(flag);
+
   return (
     <div className="w-full max-w-2xl">
       <div
@@ -348,6 +339,7 @@ export function StudyCard({
               }
             : undefined
         }
+        style={flagBorder ? { borderColor: flagBorder } : undefined}
         className={`study-card-body group relative rounded-xl border border-border shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
           !isRevealed && !typed ? "cursor-pointer hover:bg-foreground/[0.02] transition-colors" : ""
         }`}
@@ -367,8 +359,11 @@ export function StudyCard({
         </div>
 
         {!isRevealed ? (
-          <div key="content" className="relative pl-8 pr-12 py-6">
-            <FlagPill flag={flag} />
+          <div
+            key="content"
+            className="rounded-xl pl-8 pr-12 py-6"
+            style={flagFill ? { background: flagFill } : undefined}
+          >
             {typed ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
                 <HtmlContent html={questionBefore} />
@@ -397,9 +392,14 @@ export function StudyCard({
           </div>
         ) : (
           <div key="content">
-            {/* Section 1 — question (gray background) */}
-            <div className="relative rounded-t-xl bg-foreground/[0.03] pl-8 pr-12 py-6">
-              <FlagPill flag={flag} />
+            {/* Section 1 — question. A subtle gray fill normally; the flag's
+               10% tint when flagged (the answer sections below stay untinted). */}
+            <div
+              className={`rounded-t-xl pl-8 pr-12 py-6 ${
+                flagFill ? "" : "bg-foreground/[0.03]"
+              }`}
+              style={flagFill ? { background: flagFill } : undefined}
+            >
               <HtmlContent
                 html={
                   typed
@@ -414,7 +414,10 @@ export function StudyCard({
                the first carries a full-width top border so the dividers run
                edge to edge across the card. */}
             {typed ? (
-              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-3">
+              <div
+                className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-3"
+                style={flagBorder ? { borderTopColor: flagBorder } : undefined}
+              >
                 {typedDiff ? (
                   typedDiff.correct ? (
                     <div className="flex justify-center">
@@ -466,7 +469,10 @@ export function StudyCard({
               </div>
             ) : (
               isClozeReveal && (
-                <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-6">
+                <div
+                  className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-6"
+                  style={flagBorder ? { borderTopColor: flagBorder } : undefined}
+                >
                   <HtmlContent html={splitAnswer.front} />
                 </div>
               )
@@ -474,7 +480,10 @@ export function StudyCard({
 
             {/* Section 3 — back of the card */}
             {splitAnswer.back.trim() && (
-              <div className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-6">
+              <div
+                className="study-answer prose prose-sm dark:prose-invert max-w-none border-t border-border pl-8 pr-12 py-6"
+                style={flagBorder ? { borderTopColor: flagBorder } : undefined}
+              >
                 <HtmlContent html={splitAnswer.back} />
               </div>
             )}
