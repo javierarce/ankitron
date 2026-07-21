@@ -8,6 +8,7 @@ import {
   useEffect,
   useId,
   useState,
+  type CSSProperties,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -17,7 +18,7 @@ import { Image as ImageIcon } from "@phosphor-icons/react/dist/ssr/Image";
 import { SpeakerHigh } from "@phosphor-icons/react/dist/ssr/SpeakerHigh";
 import { SpeakerSlash } from "@phosphor-icons/react/dist/ssr/SpeakerSlash";
 import type { Note } from "@/lib/types";
-import { flagColor } from "@/lib/flags";
+import { flagColor, flagTint } from "@/lib/flags";
 import { ActionsMenu } from "./actions-menu";
 import { FlagPicker } from "./flag-picker";
 import { stripCloze } from "@/lib/cloze";
@@ -187,7 +188,7 @@ interface NoteRowProps {
   note: Note;
   selected: boolean;
   suspended: boolean;
-  /** The note's flag (0 = none), shown as the coloured left border. */
+  /** The note's flag (0 = none); tints the row's border and background. */
   flag: number;
   draggable: boolean;
   /** Open the note in the editor. */
@@ -239,22 +240,29 @@ export const NoteRow = memo(function NoteRow({
           onOpen(note);
         }
       }}
+      style={
+        flag > 0
+          ? ({
+              // Consumed by the `.note-row-flagged` rules in globals.css, which
+              // apply the tint with !important so it survives the row's own
+              // selected/focus/nav background + border rules.
+              "--flag-color": flagColor(flag),
+              "--flag-fill": flagTint(flag),
+              "--flag-fill-hover": flagTint(flag, 16),
+            } as CSSProperties)
+          : undefined
+      }
       className={`group relative flex select-none items-center gap-3 rounded-lg border px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer transition-[background-color] ${
-        selected
-          ? "border-foreground/40 bg-foreground/[0.05]"
-          : "border-border hover:bg-foreground/[0.02]"
-      } ${suspended && !selected ? "bg-foreground/[0.03]" : ""}`}
+        // A flagged row is tinted by `.note-row-flagged` (border + fill), and
+        // keeps that tint whether selected or not — the checkbox carries the
+        // selected state. Unflagged rows use the usual selected/hover styles.
+        flag > 0
+          ? "note-row-flagged"
+          : selected
+            ? "border-foreground/40 bg-foreground/[0.05]"
+            : "border-border hover:bg-foreground/[0.02]"
+      } ${suspended && !selected && flag === 0 ? "bg-foreground/[0.03]" : ""}`}
     >
-      {/* Flag indicator — a 4px rounded pill down the row's left edge, inset 4px
-         from the top, bottom, and left. Sits in the px-4 gutter, clear of the
-         checkbox. */}
-      {flag > 0 && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute bottom-1 left-1 top-1 w-1 rounded-full"
-          style={{ background: flagColor(flag) ?? undefined }}
-        />
-      )}
       <button
         onClick={(e) => onCheckboxClick(e, note)}
         aria-label={selected ? "Deselect note" : "Select note"}

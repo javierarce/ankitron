@@ -11,12 +11,33 @@
      `border-border` / `divide-border` utilities rather than ad-hoc
      border-foreground/NN so the two themes stay in sync. */
   --border: color-mix(in srgb, var(--foreground) 13%, transparent);
+
+  /* Card flag colours (1–7, Anki's order). Used directly as the flagged card's
+     border, and at 10% as its front tint (see src/lib/flags.ts). These light
+     values are vivid iOS-family hues; the dark theme swaps in lightened,
+     slightly-desaturated variants so a border stays legible and the 10% fill
+     still reads against the near-black background. */
+  --flag-1: #ff383c; /* Red */
+  --flag-2: #ff8d28; /* Orange */
+  --flag-3: #00d492; /* Green */
+  --flag-4: #0088ff; /* Blue */
+  --flag-5: #ff4d8d; /* Pink — shifted toward magenta rose, clear of red */
+  --flag-6: #00c3d0; /* Turquoise */
+  --flag-7: #cb30e0; /* Purple */
 }
 
 :root.dark {
   --background: #0a0a0a;
   --foreground: #ededed;
   --border: color-mix(in srgb, var(--foreground) 20%, transparent);
+
+  --flag-1: #ff5a5a; /* Red — pure red, kept clear of pink */
+  --flag-2: #ffa04d; /* Orange */
+  --flag-3: #35e08a; /* Green — pushed greener, clear of turquoise */
+  --flag-4: #4da2ff; /* Blue */
+  --flag-5: #ff77a8; /* Pink — lighter, rosier, clear of red */
+  --flag-6: #3ccee8; /* Turquoise — pushed to cyan, clear of green */
+  --flag-7: #d964ee; /* Purple */
 }
 
 @theme inline {
@@ -186,6 +207,27 @@ summary {
 [data-note-id]:focus-visible {
   border-color: #3b82f6;
   outline: 3px solid rgba(0, 0, 255, 0.1);
+}
+
+/* A flagged card-list row is tinted with its flag colour (border + a 10% fill,
+   deepening to 16% on hover). The row's own selected/focus/nav background and
+   border rules above out-specify a utility class, so these must win with
+   !important to keep the flag colour visible when the row is selected or
+   focused. The blue focus *outline* (set above, untouched here) still marks
+   keyboard focus. The three colours come from inline `--flag-*` variables. */
+[data-note-id].note-row-flagged {
+  border-color: var(--flag-color) !important;
+  background-color: var(--flag-fill) !important;
+}
+[data-note-id].note-row-flagged:hover {
+  background-color: var(--flag-fill-hover) !important;
+}
+/* When a flagged row is focused, tint its focus ring with the flag colour too,
+   rather than the default blue, so the whole selection cue stays on-hue. Higher
+   specificity than the blue-outline rule above, so no !important needed. */
+[data-note-id].note-row-flagged:focus,
+[data-note-id].note-row-flagged:focus-visible {
+  outline-color: color-mix(in srgb, var(--flag-color) 25%, transparent);
 }
 
 /* Native selects render their chevron inconsistently across platforms
