@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { Minus } from "@phosphor-icons/react/dist/ssr/Minus";
-import { createDeck, renameDeck } from "@/lib/decks";
+import { renameDeck } from "@/lib/decks";
 import {
   buildDeckTree,
   canDeleteDeck,
@@ -21,11 +21,11 @@ import type { DueCounts } from "@/lib/types";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { ActionsMenu } from "./actions-menu";
 import { CardForm } from "./card-form";
+import { CreateDeckDialog } from "./create-deck-dialog";
 import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { MoveDeckDialog } from "./move-deck-dialog";
 import { DecksImportExport } from "./decks-import-export";
 import { ImportResultModal } from "./import-result-modal";
-import { ModalDialog } from "./modal-dialog";
 
 // Whether a deck (or any of its subdecks, since studying a deck includes them)
 // has cards due. While due counts are still loading we report `true` so the
@@ -73,10 +73,6 @@ export function AllDecksList({
   }, [expanded]);
 
   const [showDialog, setShowDialog] = useState(false);
-  const [newDeckName, setNewDeckName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Deck to add a card to (renders the CardForm when set).
   const [addCardDeck, setAddCardDeck] = useState<string | null>(null);
@@ -149,13 +145,6 @@ export function AllDecksList({
   useVimNav({ enabled: !hasDialog, onExpand: expandRow, onCollapse: collapseRow });
 
   useEffect(() => {
-    if (showDialog) {
-      const t = setTimeout(() => inputRef.current?.focus(), 0);
-      return () => clearTimeout(t);
-    }
-  }, [showDialog]);
-
-  useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Every dialog (create-deck included) handles its own Escape; just keep
       // the search shortcut from firing underneath one.
@@ -175,18 +164,6 @@ export function AllDecksList({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [hasDialog]);
 
-  function openDialog() {
-    setNewDeckName("");
-    setError(null);
-    setShowDialog(true);
-  }
-
-  function closeDialog() {
-    setShowDialog(false);
-    setNewDeckName("");
-    setError(null);
-  }
-
   function toggle(fullName: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -195,34 +172,6 @@ export function AllDecksList({
       return next;
     });
   }
-
-  async function handleCreateDeck(e: React.FormEvent) {
-    e.preventDefault();
-    const name = newDeckName.trim();
-    if (!name) return;
-    // Anki's createDeck silently returns the existing deck, so guard here —
-    // otherwise "creating" a duplicate just navigates to it with no feedback.
-    if (decks.some((d) => d.toLowerCase() === name.toLowerCase())) {
-      setError("A deck with this name already exists.");
-      return;
-    }
-    setCreating(true);
-    setError(null);
-    try {
-      await createDeck(name);
-      closeDialog();
-      navigate(`/decks/${encodeURIComponent(name)}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create deck");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  const trimmedNewName = newDeckName.trim();
-  const deckNameExists = decks.some(
-    (d) => d.toLowerCase() === trimmedNewName.toLowerCase(),
-  );
 
   // noteCounts already spans subdecks (the `deck:` search matches descendants),
   // so a deck's own entry is the full total — use it directly. It surfaces the
@@ -281,7 +230,7 @@ export function AllDecksList({
         <div className="flex items-center gap-2">
           <DecksImportExport decks={decks} />
           <button
-            onClick={openDialog}
+            onClick={() => setShowDialog(true)}
             className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
           >
             Add deck
@@ -350,43 +299,14 @@ export function AllDecksList({
       )}
 
       {showDialog && (
-        <ModalDialog title="Create New Deck" busy={creating} onClose={closeDialog}>
-          <form onSubmit={handleCreateDeck}>
-            <input
-              ref={inputRef}
-              type="text"
-              value={newDeckName}
-              onChange={(e) => setNewDeckName(e.target.value)}
-              spellCheck={false}
-              placeholder="Deck name…"
-              className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-            />
-            {deckNameExists ? (
-              <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">
-                A deck named “{trimmedNewName}” already exists.
-              </p>
-            ) : error ? (
-              <p className="mt-2 text-sm text-red-500">{error}</p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={closeDialog}
-                disabled={creating}
-                className="rounded-lg px-4 py-2 text-sm text-foreground/60 hover:text-foreground transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={creating || !trimmedNewName || deckNameExists}
-                className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
-              >
-                {creating ? "Creating…" : "Create Deck"}
-              </button>
-            </div>
-          </form>
-        </ModalDialog>
+        <CreateDeckDialog
+          decks={decks}
+          onClose={() => setShowDialog(false)}
+          onCreated={(name) => {
+            setShowDialog(false);
+            navigate(`/decks/${encodeURIComponent(name)}`);
+          }}
+        />
       )}
 
       {addCardDeck && (

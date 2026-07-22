@@ -5,6 +5,7 @@ import { ArrowUp } from "@phosphor-icons/react/dist/ssr/ArrowUp";
 import { ArrowDown } from "@phosphor-icons/react/dist/ssr/ArrowDown";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
+import { FolderPlus } from "@phosphor-icons/react/dist/ssr/FolderPlus";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { Sun } from "@phosphor-icons/react/dist/ssr/Sun";
 import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";
@@ -16,11 +17,17 @@ import { foldText } from "@/lib/fold-text";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
 import { useTheme } from "@/lib/theme-context";
 import { CardForm } from "./card-form";
+import { CreateDeckDialog } from "./create-deck-dialog";
 import { ModalDialog } from "./modal-dialog";
 
 type Mode = "search" | "pickDeckForCard";
 
-type ActionId = "new-card" | "settings" | "theme-toggle" | "theme-system";
+type ActionId =
+  | "new-card"
+  | "new-deck"
+  | "settings"
+  | "theme-toggle"
+  | "theme-system";
 
 type ActionDef = {
   id: ActionId;
@@ -48,6 +55,7 @@ export function CommandPalette() {
   const [decks, setDecks] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
   const [addingToDeck, setAddingToDeck] = useState<string | null>(null);
+  const [creatingDeck, setCreatingDeck] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -140,6 +148,13 @@ export function CommandPalette() {
       hint: "new note",
     },
     {
+      id: "new-deck",
+      label: "New deck…",
+      keywords: "new deck add deck create deck",
+      icon: FolderPlus,
+      hint: "new deck",
+    },
+    {
       id: "settings",
       label: "Settings",
       keywords: "settings preferences update version",
@@ -190,6 +205,11 @@ export function CommandPalette() {
     const item = items[index];
     if (!item) return;
     if (item.kind === "action") {
+      if (item.id === "new-deck") {
+        setCreatingDeck(true);
+        close();
+        return;
+      }
       if (item.id === "settings") {
         navigate("/settings");
         close();
@@ -350,6 +370,17 @@ export function CommandPalette() {
         <CardForm
           deckName={addingToDeck}
           onClose={() => setAddingToDeck(null)}
+        />
+      )}
+
+      {creatingDeck && (
+        <CreateDeckDialog
+          decks={decks}
+          onClose={() => setCreatingDeck(false)}
+          onCreated={(name) => {
+            setCreatingDeck(false);
+            navigate(`/decks/${encodeURIComponent(name)}`);
+          }}
         />
       )}
     </>

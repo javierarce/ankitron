@@ -12,6 +12,7 @@ import {
   fetchDeckAccuracyHistory,
   type DailyAccuracy,
 } from "@/lib/session-history";
+import { fetchCardState } from "@/lib/cards";
 import { extractSoundFilenames } from "@/lib/audio";
 import { fetchDeckNames, fetchDeckStats } from "@/lib/decks";
 import {
@@ -76,6 +77,12 @@ function StudyPage() {
   // flashes the previous card's flag while its own is being read. The bar and
   // menu use the derived `flag` below, which is 0 until this card's read lands.
   const [flagFor, setFlagFor] = useState<{ id: number; flag: number } | null>(
+    null,
+  );
+  // Whether the served card is new, tagged with the card it belongs to (like
+  // flagFor) so a just-served card never flashes the previous card's badge.
+  // The derived `isNew` below is false until this card's state read lands.
+  const [isNewFor, setIsNewFor] = useState<{ id: number; isNew: boolean } | null>(
     null,
   );
   const [isRevealed, setIsRevealed] = useState(false);
@@ -155,19 +162,23 @@ function StudyPage() {
   const applyResult = useCallback(async (result: NextCardResult) => {
     if (result.kind === "card") {
       const served = result.card;
-      // Read the flag before showing the card, so its bar is present on the
-      // first paint of the new card rather than popping in a beat later.
-      // guiCurrentCard doesn't carry the flag, so this is a separate read; it
-      // runs while the card is still hidden mid-transition, overlapping the
-      // fade. The two state writes below batch into one render (React 18), so
-      // the card and its bar appear together.
-      let servedFlag = 0;
-      try {
-        servedFlag = (await fetchCardFlags([served.cardId])).get(served.cardId) ?? 0;
-      } catch {
-        // A flag read failing is non-fatal — show the card without a bar.
-      }
+      // Read the flag and scheduling state before showing the card, so both
+      // are present on its first paint rather than popping in a beat later.
+      // guiCurrentCard carries neither, so these are separate reads; they run
+      // in parallel while the card is still hidden mid-transition, overlapping
+      // the fade. Each is independent (one failing doesn't drop the other), and
+      // the state writes below batch into one render (React 18), so the card,
+      // its bar, and its badge appear together.
+      const [servedFlag, servedIsNew] = await Promise.all([
+        fetchCardFlags([served.cardId])
+          .then((flags) => flags.get(served.cardId) ?? 0)
+          .catch(() => 0),
+        fetchCardState(served.cardId)
+          .then((state) => state === "new")
+          .catch(() => false),
+      ]);
       setFlagFor({ id: served.cardId, flag: servedFlag });
+      setIsNewFor({ id: served.cardId, isNew: servedIsNew });
       // A freshly served card starts untouched — its flag matches what the
       // reviewer just cached, so grading needn't re-assert unless the user edits it.
       flagTouchedRef.current = false;
@@ -283,6 +294,10 @@ function StudyPage() {
   // present on the card's first paint rather than fading in late.
   const cardId = card?.cardId;
   const flag = cardId != null && flagFor?.id === cardId ? flagFor.flag : 0;
+  // The current card's "new" badge state, or false if isNewFor belongs to a
+  // card already replaced — same guard as `flag`, so the badge can't linger
+  // from the previous card while this one's state read is still in flight.
+  const isNew = cardId != null && isNewFor?.id === cardId ? isNewFor.isNew : false;
 
   // Flag (or clear) the current card. Applied to the whole note's cards, like
   // suspension, so the deck list — which shows a note's flag from its first
@@ -756,6 +771,7 @@ function StudyPage() {
             sounds={sounds}
             flag={flag}
             onSetFlag={handleSetFlag}
+            isNew={isNew}
           />
         </div>
       )}
