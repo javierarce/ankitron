@@ -40,7 +40,10 @@ export function CreateDeckDialog({
   async function handleCreateDeck(e: React.FormEvent) {
     e.preventDefault();
     const name = newDeckName.trim();
-    if (!name) return;
+    if (!name) {
+      setError("Enter a name for the new deck.");
+      return;
+    }
     // Anki's createDeck silently returns the existing deck, so guard here —
     // otherwise "creating" a duplicate just navigates to it with no feedback.
     if (decks.some((d) => d.toLowerCase() === name.toLowerCase())) {
@@ -68,7 +71,10 @@ export function CreateDeckDialog({
           ref={inputRef}
           type="text"
           value={newDeckName}
-          onChange={(e) => setNewDeckName(e.target.value)}
+          onChange={(e) => {
+            setNewDeckName(e.target.value);
+            setError(null);
+          }}
           spellCheck={false}
           placeholder="Deck name…"
           className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
@@ -91,7 +97,7 @@ export function CreateDeckDialog({
           </button>
           <button
             type="submit"
-            disabled={creating || !trimmedNewName || deckNameExists}
+            disabled={creating}
             className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-40"
           >
             {creating ? "Creating…" : "Create Deck"}
