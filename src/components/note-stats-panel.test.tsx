@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import type { Note } from "@/lib/types";
 
 // Canned scheduling data so the panel's shaping and rendering are deterministic,
@@ -54,19 +53,14 @@ describe("NoteStatsPanel", () => {
     expect(screen.getByText(/interval grows on Good/i)).toBeTruthy();
   });
 
-  it("labels each review dot and reflects the hovered one in the readout", async () => {
-    const user = userEvent.setup();
+  it("gives each review dot a tooltip with its grade, interval, and date", async () => {
     render(<NoteStatsPanel note={studiedNote} />);
 
-    // Every dot is an accessible target named with grade · interval · date. The
-    // last review here is Easy at 15 days; the forgotten one is Again at <1d.
-    const easy = await screen.findByRole("button", { name: /Easy · 15d/ });
-    expect(screen.getByRole("button", { name: /Again · <1d/ })).toBeTruthy();
-
-    // Hovering a dot surfaces its label in the header readout — no floating
-    // tooltip to be clipped by the dialog.
-    await user.hover(easy);
-    expect(screen.getByText(/Easy · 15d/)).toBeTruthy();
+    // Each dot carries a tooltip labelled grade · interval · date, rendered in
+    // the DOM (its visibility is toggled on hover). The last review here is Easy
+    // at 15 days; the forgotten one is Again at <1d.
+    expect(await screen.findByText(/Easy · 15d/)).toBeTruthy();
+    expect(screen.getByText(/Again · <1d/)).toBeTruthy();
   });
 
   it("shows an empty state for a note with no reviews", async () => {

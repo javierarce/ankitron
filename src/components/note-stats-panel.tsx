@@ -1,20 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Spinner } from "./spinner";
 import { Tooltip } from "./tooltip";
+import { GradeDistribution } from "./grade-distribution";
+import { ChartDot } from "./chart-dot";
 import { fetchNoteStats } from "@/lib/note-stats";
+import { GRADES, gradeColor } from "@/lib/grades";
 import type { CardReview, CardState, Note, NoteStats } from "@/lib/types";
-
-// The four answer buttons, in Anki's order, with the colours the charts and the
-// distribution bar share. Again reads as a failure, the rest as a pass.
-const GRADES = [
-  { ease: 1, label: "Again", color: "#ef4444" },
-  { ease: 2, label: "Hard", color: "#f59e0b" },
-  { ease: 3, label: "Good", color: "#22c55e" },
-  { ease: 4, label: "Easy", color: "#3b82f6" },
-] as const;
-
-const gradeColor = (ease: number) =>
-  GRADES.find((g) => g.ease === ease)?.color ?? "#a1a1aa";
 
 const DAY_MS = 86_400_000;
 
@@ -84,7 +75,6 @@ export function NoteStatsPanel({
 }: NoteStatsPanelProps) {
   const [stats, setStats] = useState<NoteStats | null>(null);
   const [error, setError] = useState(false);
-  const [hovered, setHovered] = useState<number | null>(null);
   const [height, setHeight] = useState<number | undefined>(initialHeight);
 
   // Clip overflow only while the height is animating (so content doesn't spill
@@ -151,7 +141,7 @@ export function NoteStatsPanel({
         <Spinner size="md" />
       </div>
     ) : (
-      <StatsBody stats={stats} hovered={hovered} onHover={setHovered} />
+      <StatsBody stats={stats} />
     );
 
   return (
@@ -167,15 +157,7 @@ export function NoteStatsPanel({
   );
 }
 
-function StatsBody({
-  stats,
-  hovered,
-  onHover,
-}: {
-  stats: NoteStats;
-  hovered: number | null;
-  onHover: (i: number | null) => void;
-}) {
+function StatsBody({ stats }: { stats: NoteStats }) {
   const studied = stats.totalReviews > 0;
   const allReviews = stats.cards
     .flatMap((c) => c.reviews)
@@ -204,22 +186,18 @@ function StatsBody({
         </p>
       ) : (
         <>
-          {/* Evolution: interval growth with each review coloured by grade. The
-              hovered review's details show in the header — a fixed readout
-              rather than a floating tooltip, so nothing is clipped by the
-              dialog edges. */}
+          {/* Evolution: interval growth with each review coloured by grade.
+              Hovering a dot surfaces that review's details in a tooltip. */}
           <section>
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <h4 className="text-xs font-medium uppercase tracking-wide text-foreground/40">
                 History
               </h4>
               <span className="truncate text-xs tabular-nums text-foreground/50">
-                {hovered != null && allReviews[hovered]
-                  ? reviewLabel(allReviews[hovered])
-                  : `${allReviews.length} reviews`}
+                {allReviews.length} reviews
               </span>
             </div>
-            <IntervalChart reviews={allReviews} hovered={hovered} onHover={onHover} />
+            <IntervalChart reviews={allReviews} />
           </section>
 
           {/* Answer-button distribution. */}
@@ -358,78 +336,14 @@ function Fact({
   );
 }
 
-function GradeDistribution({
-  counts,
-  total,
-}: {
-  counts: NoteStats["gradeCounts"];
-  total: number;
-}) {
-  const byGrade = [
-    { ...GRADES[0], n: counts.again },
-    { ...GRADES[1], n: counts.hard },
-    { ...GRADES[2], n: counts.good },
-    { ...GRADES[3], n: counts.easy },
-  ];
-  return (
-    <section>
-      <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-foreground/40">
-        Answers
-      </h4>
-      <div className="flex h-3 overflow-hidden rounded-full bg-foreground/5">
-        {byGrade.map(
-          (g) =>
-            g.n > 0 && (
-              <div
-                key={g.ease}
-                style={{ width: `${(g.n / total) * 100}%`, backgroundColor: g.color }}
-              />
-            ),
-        )}
-      </div>
-      {/* Legend doubles as the key for the chart's dot colours — each grade that
-          actually occurred, with its count and share. Grades with no answers are
-          omitted rather than shown at 0%. */}
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-        {byGrade
-          .filter((g) => g.n > 0)
-          .map((g) => (
-            <span key={g.ease} className="flex items-center gap-1.5 text-xs text-foreground/50">
-              <span
-                className="inline-block h-2 w-2 rounded-full"
-                style={{ backgroundColor: g.color }}
-              />
-              {g.label}
-              <span className="tabular-nums text-foreground/70">
-                {g.n}
-                <span className="text-foreground/40">
-                  {" "}
-                  · {Math.round((g.n / total) * 100)}%
-                </span>
-              </span>
-            </span>
-          ))}
-      </div>
-    </section>
-  );
-}
-
 // A compact "evolution" chart: interval (y) over *real time* (x), so same-day
 // reviews cluster and gaps reflect the actual days between them. The line is an
 // SVG stretched to fill (distorting a thin stroke is invisible); the dots are
 // HTML overlaid at the same coordinates so they stay round and hoverable. Reads
 // left-to-right as the card's life: intervals climb, collapse on a lapse, then
-// rebuild. Hovering a dot surfaces its details in the section header; the dates
-// under the chart anchor the time axis.
-function IntervalChart({
-  reviews,
-  hovered,
-  onHover,
-}: {
-  reviews: CardReview[];
-  hovered: number | null;
-  onHover: (i: number | null) => void;
-}) {
+// rebuild. Hovering a dot surfaces its details in a tooltip; the dates under the
+// chart anchor the time axis.
+function IntervalChart({ reviews }: { reviews: CardReview[] }) {
   const padX = 1.5; // just enough inset that edge dots aren't clipped
   const padY = 12;
   const maxIvl = Math.max(1, ...reviews.map((r) => Math.max(0, r.ivl)));
@@ -495,28 +409,13 @@ function IntervalChart({
       {reviews.map((r, i) => {
         const p = pos(r, i);
         return (
-          <button
+          <ChartDot
             key={r.id}
-            type="button"
-            tabIndex={-1}
-            aria-label={reviewLabel(r)}
-            // A fixed 20px box centered on the point grows the hover target
-            // without shifting the dot (a negative margin would move an
-            // absolutely-positioned element off the line).
-            className="absolute flex h-5 w-5 items-center justify-center"
-            style={{ left: `${p.x}%`, top: `${p.y}%`, transform: "translate(-50%, -50%)" }}
-            onMouseEnter={() => onHover(i)}
-            onMouseLeave={() => onHover(null)}
-            onFocus={() => onHover(i)}
-            onBlur={() => onHover(null)}
-          >
-            <span
-              className={`block h-2.5 w-2.5 rounded-full ring-2 ring-background transition-transform ${
-                hovered === i ? "scale-150" : ""
-              }`}
-              style={{ backgroundColor: gradeColor(r.ease) }}
-            />
-          </button>
+            x={p.x}
+            y={p.y}
+            color={gradeColor(r.ease)}
+            content={reviewLabel(r)}
+          />
         );
       })}
       </div>

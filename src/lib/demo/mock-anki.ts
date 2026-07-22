@@ -265,13 +265,26 @@ async function handleAction(
 
     case "cardReviews": {
       // [id, cardId, usn, ease, ivl, lastIvl, factor, durationMs, type].
-      // fetchTodayStudyStats only reads index 0 (ordering) and 7 (duration);
-      // it keeps the newest N across all decks, so any plausible rows work.
+      // Two app readers consume these rows:
+      //  - fetchTodayStudyStats reads index 0 (ordering) and 7 (duration), keeping
+      //    the newest N across decks — so any recent, equal-duration rows work.
+      //  - computeDailyAccuracy (the session summary's sparkline) reads index 3
+      //    (ease, which must be 1–4) and treats index 0 as a real epoch-ms time.
+      // So emit plausible grades spread over the last couple of weeks. Everything
+      // is derived from the note id, not the loop index, so a note fetched via
+      // both a deck and its subdeck yields the same row and dedupes cleanly.
       const deck = params.deck as string;
-      const rows = notesInSubtree(deck).map((n, i) => {
+      const now = Date.now();
+      const DAY = 86_400_000;
+      const EASE_CYCLE = [3, 3, 4, 3, 2, 3, 1, 4, 3, 3]; // mostly passes, a few misses
+      const rows = notesInSubtree(deck).map((n) => {
+        const dayOffset = n.noteId % 12; // 0–11 days ago, stable per note
         const r = new Array(9).fill(0);
-        r[0] = n.noteId * 1000 + i; // a stable, monotonic-ish id for ordering
+        // Recent, unique per note, and safely within its own calendar day.
+        r[0] = now - dayOffset * DAY - (n.noteId % 3600) * 1000;
+        r[3] = EASE_CYCLE[n.noteId % EASE_CYCLE.length];
         r[7] = DEMO_STATS.secondsPerCard * 1000; // → "N cards in ~M min" footer
+        r[8] = 1; // a review-type row
         return r;
       });
       return rows;

@@ -2,11 +2,16 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { CurrentCard, DueCounts, Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
+import { SessionSummary, type SessionAnswer } from "@/components/session-summary";
 import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Spinner } from "@/components/spinner";
 import { fetchAllDueCounts, syncCollection } from "@/lib/anki-fetch";
+import {
+  fetchDeckAccuracyHistory,
+  type DailyAccuracy,
+} from "@/lib/session-history";
 import { fetchCardState } from "@/lib/cards";
 import { extractSoundFilenames } from "@/lib/audio";
 import { fetchDeckNames, fetchDeckStats } from "@/lib/decks";
@@ -93,8 +98,22 @@ function StudyPage() {
     names: string[];
     counts: Record<string, DueCounts>;
   } | null>(null);
-  const [reviewed, setReviewed] = useState(0);
+  // The graded answers this session, in order. Drives the completion summary
+  // (grade spread, accuracy) and, via its length, everything that used to track
+  // a bare `reviewed` count — the progress bar, the undo guard, the sync gate.
+  const [answers, setAnswers] = useState<SessionAnswer[]>([]);
+  const reviewed = answers.length;
   const [initialTotal, setInitialTotal] = useState(0);
+  // Session wall-clock: stamped when the first card is served, then measured
+  // into `elapsedMs` when the session completes so the summary can report how
+  // long it took. (The elapsed value is derived at completion rather than during
+  // render — reading a ref while rendering isn't allowed.)
+  const startedAtRef = useRef<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  // This deck's recent daily accuracy, for the completion sparkline. Fetched
+  // once the session ends (see the effect below); null until it lands.
+  const [history, setHistory] = useState<DailyAccuracy[] | null>(null);
+  const historyRequestedRef = useRef(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   // A pending "leave study" navigation while its confirm dialog is up (null =
@@ -108,11 +127,6 @@ function StudyPage() {
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
-  // The completion screen's primary action. Focused imperatively when it
-  // appears (see the effect below): React silently drops autoFocus on an <a>
-  // (what Link renders), so it wouldn't otherwise show a focus ring or answer
-  // to Enter.
-  const primaryActionRef = useRef<HTMLAnchorElement>(null);
   // Whether the flag was changed during the current card's review, so grading
   // knows to re-assert it (set or cleared) over the reviewer's stale card copy.
   const flagTouchedRef = useRef(false);
@@ -171,6 +185,11 @@ function StudyPage() {
       setCard(served);
       setIsRevealed(false);
     } else if (result.kind === "completed") {
+      // Measure the session the moment the queue empties, so its time reflects
+      // the session rather than however long the done screen then sits up.
+      setElapsedMs(
+        startedAtRef.current != null ? Date.now() - startedAtRef.current : 0,
+      );
       setCompleted(true);
       setCard(null);
     } else {
@@ -204,6 +223,8 @@ function StudyPage() {
         } catch {
           // progress bar will simply not show — non-fatal
         }
+        // Start the session clock just before the first card lands.
+        startedAtRef.current = Date.now();
         await applyResult(await nextCard(session));
       } catch {
         setError(
@@ -235,7 +256,7 @@ function StudyPage() {
       transitioningRef.current = false;
       return;
     }
-    setReviewed((r) => Math.max(0, r - 1));
+    setAnswers((a) => a.slice(0, -1));
     setSyncStatus("idle");
     // Fade the current card out while the queue is rebuilt and the undone card
     // is re-revealed, so the swap reads as a smooth transition rather than a snap.
@@ -387,6 +408,35 @@ function StudyPage() {
     };
   }, [completed, reviewed, syncStatus]);
 
+  // Once the session ends, fetch this deck's recent accuracy for the summary's
+  // trend sparkline. Waits for the prefetched deck snapshot so the fetch can
+  // cover subdecks (cardReviews reports only a deck's own cards); the snapshot
+  // fills during the session, so this rarely waits. Fired once via the ref —
+  // reviews persist as they're graded, so today's point is already complete by
+  // the time the queue empties. A failure just leaves the sparkline hidden.
+  useEffect(() => {
+    if (!completed || reviewed === 0 || historyRequestedRef.current) return;
+    if (!dueSnapshot) return;
+    historyRequestedRef.current = true;
+    const subtree = dueSnapshot.names.length
+      ? dueSnapshot.names.filter(
+          (n) => n === deckName || n.startsWith(`${deckName}::`),
+        )
+      : [deckName];
+    let cancelled = false;
+    (async () => {
+      try {
+        const h = await fetchDeckAccuracyHistory(subtree);
+        if (!cancelled) setHistory(h);
+      } catch {
+        if (!cancelled) setHistory([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [completed, reviewed, dueSnapshot, deckName]);
+
   // Prefetch the deck list and due counts in the background as soon as the first
   // card is up, so the completion screen's "study next" button is ready the
   // instant the session ends instead of after a couple of AnkiConnect round
@@ -434,43 +484,11 @@ function StudyPage() {
     ? `/decks/${encodeURIComponent(nextDeck)}/study`
     : "/decks";
 
-  // Focus the primary action once the completion screen shows it, so it reads a
-  // focus ring and Enter activates it. Skipped while a form/dialog is up so we
-  // never pull focus out from under the add/edit form or the exit confirm.
-  useEffect(() => {
-    if (!completed || !nextResolved) return;
-    if (editingNote || showAddForm || pendingExit !== null) return;
-    primaryActionRef.current?.focus();
-  }, [completed, nextResolved, editingNote, showAddForm, pendingExit]);
-
-  // After grading the last card the user's hands are still on the keyboard, so
-  // Space advances the completion screen the way it drove the cards — into the
-  // next deck, or to the decks page. Waits for nextResolved so it never fires
-  // toward a target that's still being worked out. A separate listener from the
-  // in-session shortcuts above (which ignore Space), scoped to the done screen.
-  useEffect(() => {
-    if (!completed) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (editingNote || showAddForm || pendingExit !== null) return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      // Also bail on BUTTON: Space is the native activation key for buttons, so
-      // a keyboard user pressing Space on a focused control (e.g. "Retry sync",
-      // or a header button) must activate it rather than advance the screen.
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "BUTTON" ||
-        (e.target as HTMLElement)?.isContentEditable
-      )
-        return;
-      if (e.key === " ") {
-        e.preventDefault();
-        if (nextResolved) navigate(continueTarget);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [completed, nextResolved, continueTarget, editingNote, showAddForm, pendingExit, navigate]);
+  // The completion screen deliberately does NOT auto-focus its primary action
+  // or advance on Space/Enter. Grading the last card leaves the user's finger on
+  // the keyboard, so focusing the button (and letting Space/Enter fire it) would
+  // too easily skip past the session stats before they've been read. Continuing
+  // is a deliberate click.
 
   async function handleReveal() {
     if (transitioningRef.current) return;
@@ -606,7 +624,11 @@ function StudyPage() {
     try {
       const success = await answerCard(ease);
       if (success) {
-        setReviewed((r) => r + 1);
+        // Log the graded answer — its length is the reviewed count, and the
+        // grade spread feeds the completion summary.
+        if (answeredId != null) {
+          setAnswers((a) => [...a, { cardId: answeredId, ease }]);
+        }
         await applyResult(await nextCard(session));
         // Re-assert the graded card's flag — LAST, after the queue has advanced
         // off it. Anki's offscreen reviewer caches the card it served and can
@@ -655,7 +677,14 @@ function StudyPage() {
       : `${reviewed} reviewed`;
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center pb-[6rem]">
+    <div
+      className={`flex flex-1 flex-col items-center justify-center ${
+        // The bottom padding reserves room for the grade controls so the card
+        // sits centred above them; the completion screen has no such controls,
+        // so drop it there to centre the results in the viewport.
+        completed ? "" : "pb-[6rem]"
+      }`}
+    >
       {loading && <Spinner role="status" aria-label="Loading cards" />}
 
       {error && <p className="text-red-500">{error}</p>}
@@ -663,20 +692,26 @@ function StudyPage() {
       {!loading && !error && completed && (
         <div className="text-center">
           <p className="text-xl font-semibold mb-2">Session complete!</p>
-          <div className="mb-6">
-            <p className="text-foreground/50">
-              {reviewed > 0
-                ? `You reviewed ${reviewed} ${reviewed === 1 ? "card" : "cards"}.`
-                : "No cards are due for review."}
+          {reviewed > 0 ? (
+            // Hold the card back until the recent-accuracy history has resolved
+            // (data or empty), so it renders at its final height — sparkline
+            // included or not — and fades in as one piece rather than popping the
+            // chart in and resizing the card a beat later.
+            history !== null && (
+              <div className="rise-in mb-6">
+                <SessionSummary
+                  answers={answers}
+                  elapsedMs={elapsedMs}
+                  extraReviews={extraReviews}
+                  history={history}
+                />
+              </div>
+            )
+          ) : (
+            <p className="mb-6 text-foreground/50">
+              No cards are due for review.
             </p>
-            {extraReviews > 0 && (
-              <p className="mt-1 text-sm text-foreground/40">
-                {extraReviews === 1
-                  ? "1 was a repeat from a card that lapsed."
-                  : `${extraReviews} were repeats from cards that lapsed.`}
-              </p>
-            )}
-          </div>
+          )}
           {reviewed > 0 && syncStatus === "error" && (
             <div className="mb-4 flex flex-col items-center gap-2">
               <p className="text-xs text-foreground/40">Sync failed.</p>
@@ -693,7 +728,6 @@ function StudyPage() {
               {nextDeck ? (
                 <>
                   <Link
-                    ref={primaryActionRef}
                     to={continueTarget}
                     className="inline-block max-w-xs truncate rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background"
                     title={`Study ${formatDeckPath(nextDeck)}`}
@@ -709,7 +743,6 @@ function StudyPage() {
                 </>
               ) : (
                 <Link
-                  ref={primaryActionRef}
                   to={continueTarget}
                   className="inline-block rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background"
                 >
