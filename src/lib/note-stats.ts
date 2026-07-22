@@ -9,11 +9,10 @@
 // fetchNoteStats is the thin transport wrapper the panel calls.
 
 import { ankiFetch } from "./anki-fetch";
-import { fetchCardsInfo, findCardIds } from "./cards";
+import { cardState, fetchCardsInfo, findCardIds } from "./cards";
 import type {
   CardInfo,
   CardReview,
-  CardState,
   CardStats,
   Note,
   NoteStats,
@@ -71,21 +70,6 @@ export async function fetchNoteStats(
 }
 
 // --- Pure shaping -----------------------------------------------------------
-
-/** Friendly scheduling state from a card's `queue`/`type` (see CardInfo). */
-function cardState(card: CardInfo): CardState {
-  if (card.queue === -1) return "suspended";
-  switch (card.type) {
-    case 1:
-      return "learning";
-    case 2:
-      return "review";
-    case 3:
-      return "relearning";
-    default:
-      return "new";
-  }
-}
 
 /**
  * Current ease as a whole-number percentage (2500 permille → 250). Prefer the

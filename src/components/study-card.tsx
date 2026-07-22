@@ -32,6 +32,42 @@ interface StudyCardProps {
   flag?: number;
   /** Apply a flag to the card (0 clears it). */
   onSetFlag?: (flag: number) => void;
+  /** Whether this is a new card (never studied) — shows a "New" badge. */
+  isNew?: boolean;
+}
+
+// A small tab marking a card the user is seeing for the first time. Only new
+// cards are badged: review is the common, unremarkable state, so labelling it
+// would be noise, while "new" sets the expectation that not knowing it is fine
+// (learning/relearning are left unbadged for now).
+//
+// A chip straddling the card's top border, inset from the left. Unflagged it's
+// the designed cream/gold sticky-note (fixed colours in both themes, near-black
+// text on cream). When the card is flagged it takes the flag's colour for the
+// border and text, over an opaque light tint of that colour.
+//
+// The fill mixes the flag colour with solid white, NOT flagTint (which mixes
+// with transparent): as a straddling chip it sits half over the page and half
+// over the card, so a translucent fill would show the card body and the
+// flag-coloured border through it. Mixing with white keeps the same light
+// look as the cream default while staying fully opaque.
+function NewCardBadge({ flagBorder }: { flagBorder: string | null }) {
+  return (
+    <div
+      className="absolute -top-[11px] left-[26px] z-20 flex items-center rounded border px-1.5 py-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+      style={
+        flagBorder
+          ? {
+              borderColor: flagBorder,
+              background: `color-mix(in srgb, ${flagBorder} 10%, white)`,
+              color: flagBorder,
+            }
+          : { borderColor: "#FFCC00", background: "#FFFAE5", color: "#171717" }
+      }
+    >
+      <span className="text-xs leading-4">new card</span>
+    </div>
+  );
 }
 
 const TYPE_CLOZE_RE = /\[\[type:cloze:[^\]]+\]\]/g;
@@ -137,6 +173,7 @@ export function StudyCard({
   sounds,
   flag = 0,
   onSetFlag,
+  isNew = false,
 }: StudyCardProps) {
   const typed = useMemo(() => hasTypeCloze(question), [question]);
   // Swap the [anki:play:…] placeholders for inline play buttons; everything
@@ -357,6 +394,12 @@ export function StudyCard({
             onSetFlag={onSetFlag}
           />
         </div>
+
+        {/* Straddles the card's top border (see NewCardBadge); a single
+           absolutely-positioned tab, independent of the reveal state below. It
+           takes the flag's colour when the card is flagged, matching the card's
+           own tint, and falls back to the default cream/gold otherwise. */}
+        {isNew && <NewCardBadge flagBorder={flagBorder} />}
 
         {!isRevealed ? (
           <div

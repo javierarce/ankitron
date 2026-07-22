@@ -61,3 +61,47 @@ describe("StudyCard typed answer", () => {
     expect(input().value).toBe("");
   });
 });
+
+describe("StudyCard new-card badge", () => {
+  const props = {
+    question: "What is the capital of France?",
+    answer: "Paris",
+    onReveal: () => {},
+    onAnswer: () => {},
+    onEdit: () => {},
+    onSuspend: () => {},
+    answering: false,
+    sounds: [],
+  };
+
+  it("shows a 'new card' badge only when the card is new", () => {
+    const { rerender } = render(
+      <StudyCard {...props} isRevealed={false} isNew />,
+    );
+    expect(screen.getByText("new card")).toBeTruthy();
+
+    rerender(<StudyCard {...props} isRevealed={false} isNew={false} />);
+    expect(screen.queryByText("new card")).toBeNull();
+  });
+
+  it("keeps the badge shown after the card is revealed", () => {
+    render(<StudyCard {...props} isRevealed isNew />);
+    expect(screen.getByText("new card")).toBeTruthy();
+  });
+
+  it("uses the default cream/gold chip when the card is unflagged", () => {
+    render(<StudyCard {...props} isRevealed={false} isNew flag={0} />);
+    // The chip is the label's parent; its inline style carries the colours.
+    const chip = screen.getByText("new card").parentElement as HTMLElement;
+    expect(chip.style.borderColor).toBe("rgb(255, 204, 0)"); // #FFCC00
+    expect(chip.style.color).toBe("rgb(23, 23, 23)"); // #171717
+  });
+
+  it("recolours the badge to the flag when the card is flagged", () => {
+    render(<StudyCard {...props} isRevealed={false} isNew flag={1} />);
+    const chip = screen.getByText("new card").parentElement as HTMLElement;
+    // Flag 1's colour is the themeable --flag-1 token, not the cream/gold default.
+    expect(chip.style.borderColor).toBe("var(--flag-1)");
+    expect(chip.style.color).toBe("var(--flag-1)");
+  });
+});
