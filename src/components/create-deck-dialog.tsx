@@ -54,6 +54,9 @@ export function CreateDeckDialog({
       onCreated(name);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create deck");
+    } finally {
+      // Reset even on success so the component carries no "callers must
+      // unmount in onCreated" contract; a no-op when onCreated did unmount.
       setCreating(false);
     }
   }
