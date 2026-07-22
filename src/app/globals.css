@@ -192,6 +192,33 @@ summary {
   animation: fade-in 400ms ease-out;
 }
 
+/* A gentler entrance than a bare opacity fade: the surface rises a few pixels and
+   settles up from a near-full scale (never from nothing), on a strong ease-out so
+   it reads as arriving rather than blinking on. For occasional, one-shot reveals
+   like the end-of-session summary card. Transform + opacity only, so it stays on
+   the compositor. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.rise-in {
+  animation: rise-in 400ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Reduced motion: keep the reveal, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: fade-in 200ms ease-out;
+  }
+}
+
 /* Card rows carry their own selected state (a stronger border + fill). Keep the
    keyboard-focus highlight light so a focused-but-unselected card reads as merely
    hovered, not selected. */
