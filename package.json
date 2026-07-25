@@ -16,7 +16,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "icons": "node scripts/generate-icon.mjs"
+    "icons": "node scripts/generate-icon.mjs",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
