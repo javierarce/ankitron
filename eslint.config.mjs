@@ -6,7 +6,21 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 
 export default defineConfig([
-  globalIgnores(["dist/**", "src-tauri/**"]),
+  // Generated output, plus the Rust tree. ESLint's flat config does not read
+  // .gitignore, so every generated directory has to be repeated here or eslint
+  // walks into it: a stale artifact directory then fails `pnpm lint` with
+  // errors from files nobody wrote, while CI's clean checkout passes. That
+  // divergence also blocks `pnpm release`, which lints before tagging. The
+  // build outputs below mirror .gitignore — .next/ and out/ included, since a
+  // Next.js build left behind in the repo directory is what surfaced this.
+  globalIgnores([
+    "dist/**",
+    "docs/demo/**",
+    "coverage/**",
+    ".next/**",
+    "out/**",
+    "src-tauri/**",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
