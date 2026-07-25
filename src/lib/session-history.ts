@@ -72,8 +72,14 @@ export function computeDailyAccuracy(
  * Fetch a deck subtree's recent daily accuracy. `deckNames` should be the
  * session's covering decks *and* their subdecks — `cardReviews` reports only a
  * deck's own cards, so subdecks are fetched individually and merged (dedupe in
- * computeDailyAccuracy guards against any overlap). Each deck's failure resolves
- * to no rows so one bad deck never sinks the whole trend.
+ * computeDailyAccuracy guards against any overlap). A single deck's failure
+ * resolves to no rows so one bad deck never sinks the whole trend.
+ *
+ * Throws when EVERY deck's fetch failed. An all-failed read is "we don't know
+ * your history", which is not the same as "you have no history" — collapsing
+ * both to an empty array would let the UI tell a user with months of reviews
+ * that they've never studied. Partial failure still resolves (the trend is
+ * merely incomplete); total failure is the caller's to report.
  */
 export async function fetchDeckAccuracyHistory(
   deckNames: string[],
@@ -83,8 +89,13 @@ export async function fetchDeckAccuracyHistory(
   const startID = startOfLocalDay(now) - (days - 1) * DAY_MS;
   const perDeck = await Promise.all(
     deckNames.map((deck) =>
-      ankiFetch<number[][]>("cardReviews", { deck, startID }).catch(() => []),
+      ankiFetch<number[][]>("cardReviews", { deck, startID })
+        .then((rows) => ({ ok: true, rows }))
+        .catch(() => ({ ok: false, rows: [] as number[][] })),
     ),
   );
-  return computeDailyAccuracy(perDeck.flat(), days, now);
+  if (perDeck.length > 0 && perDeck.every((r) => !r.ok)) {
+    throw new Error("Could not read review history from Anki.");
+  }
+  return computeDailyAccuracy(perDeck.flatMap((r) => r.rows), days, now);
 }

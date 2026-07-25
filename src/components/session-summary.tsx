@@ -14,6 +14,18 @@ export interface SessionAnswer {
   ease: Ease;
 }
 
+/**
+ * The recent-accuracy trend's load state. A tagged union rather than a bare
+ * array because "still loading", "we couldn't read it" and "there genuinely
+ * isn't enough yet" are three different things to say to the user — an array
+ * alone can't tell the last two apart, and an errored read that looks like an
+ * empty one would have the card claim the user has no study history.
+ */
+export type AccuracyHistory =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; days: readonly DailyAccuracy[] };
+
 // A headline stat tile, matching the note-stats panel's tiles so the two stat
 // surfaces read the same. `note` is an optional caption under the value.
 function Stat({
@@ -34,6 +46,70 @@ function Stat({
           {note}
         </div>
       )}
+    </div>
+  );
+}
+
+// The fixed shell every state of the accuracy trend renders into: the heading
+// row and the canvas beneath it. Owning both here is what makes the card hold
+// its height — the chart, the loading skeleton and the two message states are
+// laid out by this one definition, so they cannot drift into different heights
+// the way three hand-matched copies of the same Tailwind classes can. (An
+// earlier version did exactly that and was 4px short while loading.)
+//
+// The heading is always the real one: it's known before the data is, so there's
+// nothing to placeholder. Only `aside` (the day count) and the body swap.
+function SparklineFrame({
+  aside,
+  children,
+}: {
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-foreground/40">
+          Recent accuracy
+        </h4>
+        {aside}
+      </div>
+      <div className="relative h-28 w-full">{children}</div>
+    </section>
+  );
+}
+
+// A short explanation filling the canvas — used when there's no chart to draw
+// (too little history, or we couldn't read it). Matches the note-stats panel's
+// empty treatment so the two stat surfaces read as one family.
+function SparklineNotice({
+  children,
+  testId,
+}: {
+  children: ReactNode;
+  testId: string;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      className="flex h-full w-full items-center justify-center rounded-lg border border-border bg-foreground/[0.02] px-6 text-center text-xs text-foreground/60"
+    >
+      {children}
+    </div>
+  );
+}
+
+// The loading shim. motion-safe so a reduced-motion user gets a still block
+// rather than an indefinite pulse; role=status announces the wait to assistive
+// tech, which an aria-hidden block would leave silent before content appears.
+function SparklineSkeleton() {
+  return (
+    <div
+      role="status"
+      data-testid="sparkline-skeleton"
+      className="h-full w-full rounded-lg bg-foreground/[0.04] motion-safe:animate-pulse"
+    >
+      <span className="sr-only">Loading your recent accuracy…</span>
     </div>
   );
 }
@@ -67,11 +143,13 @@ export function SessionSummary({
    */
   extraReviews: number;
   /**
-   * This deck's recent per-day accuracy, for the trend sparkline. Fetched after
-   * the session ends, so it's null while loading (the section just fades in when
-   * it lands) and may be too short to plot — both cases hide the sparkline.
+   * This deck's recent per-day accuracy, for the trend sparkline, fetched after
+   * the session ends. Required and explicitly tagged (see AccuracyHistory): the
+   * slot always renders, at a constant height, showing a skeleton while the read
+   * is in flight, the chart once there are enough days to plot, and a short
+   * notice when there aren't — or when the read failed.
    */
-  history?: readonly DailyAccuracy[] | null;
+  history: AccuracyHistory;
 }) {
   const counts = useMemo(() => {
     const c = { again: 0, hard: 0, good: 0, easy: 0 };
@@ -90,6 +168,14 @@ export function SessionSummary({
   const accuracy = total > 0 ? (total - counts.again) / total : null;
   // Average answering time — the session's wall-clock spread over its answers.
   const perCardMs = total > 0 ? elapsedMs / total : 0;
+
+  // The days to plot, or null when there's no chart to draw (still loading,
+  // the read failed, or a single day — which reads as a dot, not a trend).
+  // Derived once so the heading's day count and the body can't disagree.
+  const trend =
+    history.status === "ready" && history.days.length >= MIN_TREND_DAYS
+      ? history.days
+      : null;
 
   return (
     <div className="mx-auto w-fit space-y-6 rounded-xl border border-border p-6 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
@@ -126,13 +212,37 @@ export function SessionSummary({
       </div>
 
       {/* The trend graph sits above the answer bar, matching the note-stats
-          card's order (history chart over the distribution). Only shown once
-          enough history has landed to read as a trend. */}
-      {history && history.length >= MIN_TREND_DAYS && (
-        <div className="text-left">
-          <AccuracySparkline data={history} />
-        </div>
-      )}
+          card's order (history chart over the distribution). SparklineFrame
+          fixes the slot's height across all four states, so the card — and the
+          title and buttons the study page stacks around it — never move when the
+          read lands. A failed read says so rather than borrowing the
+          not-enough-history copy, which would tell a user with months of
+          reviews that they've never studied. */}
+      <div className="text-left">
+        <SparklineFrame
+          aside={
+            trend && (
+              <span className="text-xs tabular-nums text-foreground/50">
+                last {trend.length} days
+              </span>
+            )
+          }
+        >
+          {history.status === "loading" ? (
+            <SparklineSkeleton />
+          ) : history.status === "error" ? (
+            <SparklineNotice testId="sparkline-error">
+              Couldn&apos;t load your recent accuracy.
+            </SparklineNotice>
+          ) : trend ? (
+            <AccuracySparkline data={trend} />
+          ) : (
+            <SparklineNotice testId="sparkline-empty">
+              Study this deck on another day to chart your accuracy trend.
+            </SparklineNotice>
+          )}
+        </SparklineFrame>
+      </div>
 
       <div className="text-left">
         <GradeDistribution counts={counts} total={total} />

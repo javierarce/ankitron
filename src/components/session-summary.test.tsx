@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { SessionSummary, type SessionAnswer } from "./session-summary";
+import {
+  SessionSummary,
+  type AccuracyHistory,
+  type SessionAnswer,
+} from "./session-summary";
 import type { DailyAccuracy } from "@/lib/session-history";
 
 afterEach(cleanup);
@@ -20,9 +24,31 @@ const HISTORY: DailyAccuracy[] = [
   { dayMs: 3, total: 4, accuracy: 0.75 },
 ];
 
+const ready = (days: DailyAccuracy[]): AccuracyHistory => ({
+  status: "ready",
+  days,
+});
+
+// The stats above the sparkline come from the answer log alone, so most tests
+// don't care what the trend is doing — default to a plotted chart.
+function renderSummary(props: {
+  elapsedMs?: number;
+  extraReviews?: number;
+  history?: AccuracyHistory;
+} = {}) {
+  return render(
+    <SessionSummary
+      answers={ANSWERS}
+      elapsedMs={props.elapsedMs ?? 5_000}
+      extraReviews={props.extraReviews ?? 0}
+      history={props.history ?? ready(HISTORY)}
+    />,
+  );
+}
+
 describe("SessionSummary", () => {
   it("reports the reviewed count, accuracy, and total time with per-card", () => {
-    render(<SessionSummary answers={ANSWERS} elapsedMs={92_000} extraReviews={0} />);
+    renderSummary({ elapsedMs: 92_000 });
 
     expect(screen.getByText("Reviewed")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
@@ -34,17 +60,17 @@ describe("SessionSummary", () => {
   });
 
   it("captions the reviewed tile with the repeat count", () => {
-    render(<SessionSummary answers={ANSWERS} elapsedMs={5_000} extraReviews={2} />);
+    renderSummary({ extraReviews: 2 });
     expect(screen.getByText("+2 repeats")).toBeTruthy();
   });
 
   it("omits the repeat caption when there were none", () => {
-    render(<SessionSummary answers={ANSWERS} elapsedMs={5_000} extraReviews={0} />);
+    renderSummary();
     expect(screen.queryByText(/repeat/)).toBeNull();
   });
 
   it("shows each grade that occurred in the distribution legend", () => {
-    render(<SessionSummary answers={ANSWERS} elapsedMs={5_000} extraReviews={0} />);
+    renderSummary();
 
     // Again/Good/Easy occurred; Hard did not, so it's omitted from the legend.
     expect(screen.getByText("Again")).toBeTruthy();
@@ -54,39 +80,88 @@ describe("SessionSummary", () => {
   });
 
   it("rounds sub-minute sessions to seconds", () => {
-    render(<SessionSummary answers={ANSWERS} elapsedMs={45_400} extraReviews={0} />);
+    renderSummary({ elapsedMs: 45_400 });
     expect(screen.getByText("45s")).toBeTruthy(); // total
     expect(screen.getByText("11s / card")).toBeTruthy(); // 45.4s / 4 ≈ 11s
   });
 
-  it("shows the recent-accuracy sparkline once enough history lands", () => {
-    render(
-      <SessionSummary
-        answers={ANSWERS}
-        elapsedMs={5_000}
-        extraReviews={0}
-        history={HISTORY}
-      />,
-    );
-    expect(screen.getByText("Recent accuracy")).toBeTruthy();
-    expect(screen.getByText("last 3 days")).toBeTruthy();
-  });
+  describe("the accuracy trend slot", () => {
+    // The heading is part of the fixed frame, so it is present in every state —
+    // that's what keeps the slot (and the card) from changing height.
+    it("keeps the heading in every state", () => {
+      for (const history of [
+        { status: "loading" } as const,
+        { status: "error" } as const,
+        ready(HISTORY),
+        ready([HISTORY[0]]),
+        ready([]),
+      ]) {
+        const { unmount } = renderSummary({ history });
+        expect(screen.getByText("Recent accuracy")).toBeTruthy();
+        unmount();
+      }
+    });
 
-  it("hides the sparkline while history is loading or too short to plot", () => {
-    const { rerender } = render(
-      <SessionSummary answers={ANSWERS} elapsedMs={5_000} extraReviews={0} history={null} />,
-    );
-    expect(screen.queryByText("Recent accuracy")).toBeNull();
+    it("plots the chart once enough days land", () => {
+      renderSummary({ history: ready(HISTORY) });
+      expect(screen.getByText("last 3 days")).toBeTruthy();
+      expect(screen.queryByTestId("sparkline-skeleton")).toBeNull();
+      expect(screen.queryByTestId("sparkline-empty")).toBeNull();
+      expect(screen.queryByTestId("sparkline-error")).toBeNull();
+    });
 
-    // A single day isn't a trend.
-    rerender(
-      <SessionSummary
-        answers={ANSWERS}
-        elapsedMs={5_000}
-        extraReviews={0}
-        history={[HISTORY[0]]}
-      />,
-    );
-    expect(screen.queryByText("Recent accuracy")).toBeNull();
+    it("shows a skeleton while the history is loading", () => {
+      renderSummary({ history: { status: "loading" } });
+      expect(screen.getByTestId("sparkline-skeleton")).toBeTruthy();
+      // The day count belongs to a plotted chart only.
+      expect(screen.queryByText(/^last /)).toBeNull();
+    });
+
+    it("swaps the skeleton for the chart in place when the history lands", () => {
+      const { rerender } = render(
+        <SessionSummary
+          answers={ANSWERS}
+          elapsedMs={5_000}
+          extraReviews={0}
+          history={{ status: "loading" }}
+        />,
+      );
+      expect(screen.getByTestId("sparkline-skeleton")).toBeTruthy();
+
+      rerender(
+        <SessionSummary
+          answers={ANSWERS}
+          elapsedMs={5_000}
+          extraReviews={0}
+          history={ready(HISTORY)}
+        />,
+      );
+      expect(screen.queryByTestId("sparkline-skeleton")).toBeNull();
+      expect(screen.getByText("last 3 days")).toBeTruthy();
+    });
+
+    it("explains that a single day isn't enough to plot", () => {
+      renderSummary({ history: ready([HISTORY[0]]) });
+      expect(screen.getByTestId("sparkline-empty")).toBeTruthy();
+      expect(screen.queryByTestId("sparkline-skeleton")).toBeNull();
+    });
+
+    // A failed read must never borrow the not-enough-history copy: telling a
+    // user with months of reviews to "study on another day" is a lie, and the
+    // failure resolves to zero days, so this is the case that would regress.
+    it("reports a failed read as an error, not as an empty history", () => {
+      renderSummary({ history: { status: "error" } });
+
+      expect(screen.getByTestId("sparkline-error")).toBeTruthy();
+      expect(screen.queryByTestId("sparkline-empty")).toBeNull();
+      expect(screen.queryByTestId("sparkline-skeleton")).toBeNull();
+      expect(screen.queryByText(/study this deck on another day/i)).toBeNull();
+    });
+
+    it("treats a genuinely empty history as too short to plot", () => {
+      renderSummary({ history: ready([]) });
+      expect(screen.getByTestId("sparkline-empty")).toBeTruthy();
+      expect(screen.queryByTestId("sparkline-error")).toBeNull();
+    });
   });
 });

@@ -25,6 +25,11 @@ function formatDay(ms: number): string {
  * thin stroke distorts invisibly); the dots are HTML overlaid at the same
  * coordinates so they stay round, with the most recent day accented as "today"
  * and each showing its day's numbers in a tooltip on hover.
+ *
+ * Renders the chart body ONLY — the heading and the fixed-height canvas around
+ * it belong to SparklineFrame in session-summary, so the chart, its loading
+ * skeleton and its empty/error states are laid out by one definition and cannot
+ * drift into different heights (which would make the card resize on load).
  */
 export function AccuracySparkline({ data }: { data: readonly DailyAccuracy[] }) {
   const padX = 2;
@@ -52,70 +57,60 @@ export function AccuracySparkline({ data }: { data: readonly DailyAccuracy[] }) 
       : "";
 
   return (
-    <section>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h4 className="text-xs font-medium uppercase tracking-wide text-foreground/40">
-          Recent accuracy
-        </h4>
-        <span className="text-xs tabular-nums text-foreground/50">
-          last {n} days
-        </span>
-      </div>
-      <div className="relative h-28 w-full">
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          className="pointer-events-none absolute inset-0 h-full w-full"
-          role="img"
-          aria-label={`Accuracy over the last ${n} study days`}
-        >
-          {/* Faint 0% baseline, so the filled area reads against a floor. */}
-          <line
-            x1={padX}
-            y1={baseY}
-            x2={100 - padX}
-            y2={baseY}
-            stroke="currentColor"
-            strokeWidth={1}
-            className="text-foreground/10"
-            vectorEffect="non-scaling-stroke"
-          />
-          {n > 1 && (
-            <>
-              <polygon
-                points={areaPts}
-                fill="currentColor"
-                className="text-foreground/[0.07]"
-              />
-              <polyline
-                points={linePts.join(" ")}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                className="text-foreground/25"
-                vectorEffect="non-scaling-stroke"
-              />
-            </>
-          )}
-        </svg>
-        {data.map((d, i) => {
-          const p = pos(d, i);
-          const isToday = i === lastIdx;
-          const pct = Math.round(d.accuracy * 100);
-          return (
-            <ChartDot
-              key={d.dayMs}
-              x={p.x}
-              y={p.y}
-              size={isToday ? "lg" : "sm"}
-              color={isToday ? TODAY_COLOR : PAST_COLOR}
-              content={`${pct}% · ${d.total} ${
-                d.total === 1 ? "review" : "reviews"
-              } · ${formatDay(d.dayMs)}`}
+    <>
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        role="img"
+        aria-label={`Accuracy over the last ${n} study days`}
+      >
+        {/* Faint 0% baseline, so the filled area reads against a floor. */}
+        <line
+          x1={padX}
+          y1={baseY}
+          x2={100 - padX}
+          y2={baseY}
+          stroke="currentColor"
+          strokeWidth={1}
+          className="text-foreground/10"
+          vectorEffect="non-scaling-stroke"
+        />
+        {n > 1 && (
+          <>
+            <polygon
+              points={areaPts}
+              fill="currentColor"
+              className="text-foreground/[0.07]"
             />
-          );
-        })}
-      </div>
-    </section>
+            <polyline
+              points={linePts.join(" ")}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              className="text-foreground/25"
+              vectorEffect="non-scaling-stroke"
+            />
+          </>
+        )}
+      </svg>
+      {data.map((d, i) => {
+        const p = pos(d, i);
+        const isToday = i === lastIdx;
+        const pct = Math.round(d.accuracy * 100);
+        return (
+          <ChartDot
+            key={d.dayMs}
+            x={p.x}
+            y={p.y}
+            size={isToday ? "lg" : "sm"}
+            color={isToday ? TODAY_COLOR : PAST_COLOR}
+            content={`${pct}% · ${d.total} ${
+              d.total === 1 ? "review" : "reviews"
+            } · ${formatDay(d.dayMs)}`}
+          />
+        );
+      })}
+    </>
   );
 }
