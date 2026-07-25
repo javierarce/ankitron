@@ -102,12 +102,18 @@ const ask = async (q) => {
   if (done) bail("Input ended (EOF) while waiting for an answer.");
   return value.trim();
 };
-// Must release stdin before handing the terminal to the editor, or readline
-// competes with it for input.
 const closePrompt = () => {
   rl?.close();
   rl = null;
   lines = null;
+};
+
+// Before spawning the editor, release stdin so readline does not compete with
+// it for input — but only on a TTY. With piped input there is no terminal to
+// hand over, and closing would discard the lines readline has already buffered
+// from the pipe, i.e. the answers to the prompts after the editor.
+const releaseStdinForEditor = () => {
+  if (process.stdin.isTTY) closePrompt();
 };
 
 function parseVersion(v) {
@@ -265,7 +271,7 @@ const editor =
   "vi";
 
 console.log(`\nOpening ${editor} for the release notes…`);
-closePrompt();
+releaseStdinForEditor();
 // Via the shell: core.editor may carry flags (e.g. "code --wait").
 spawnSync(`${editor} "${notesFile}"`, { cwd: root, stdio: "inherit", shell: true });
 
@@ -324,13 +330,16 @@ git(["add", ...sites.map((s) => s.path)]);
 git(["commit", "-m", nextTag]);
 console.log(`  committed ${nextTag}`);
 
-try {
-  git(["tag", "-a", nextTag, "-m", notes]);
-  console.log(`  tagged ${nextTag}`);
-} catch (err) {
-  console.error(`\n✗ Tagging failed. Undo the commit with:\n    git reset --hard HEAD~1\n`);
-  throw err;
+// allowFailure + null check, not try/catch: git() reports failure through
+// bail(), which exits rather than throwing. A signing failure (tag.gpgSign with
+// no usable key) would otherwise leave an untagged bump commit and no hint.
+if (git(["tag", "-a", nextTag, "-m", notes], { allowFailure: true }) === null) {
+  bail(
+    `Tagging ${nextTag} failed, but the bump commit was already made.\n` +
+      `  Undo it with:  git reset --hard HEAD~1`,
+  );
 }
+console.log(`  tagged ${nextTag}`);
 
 // Always push explicit refspecs, never a bare `git push`: a global
 // push.default=matching would otherwise push every same-named local branch.
