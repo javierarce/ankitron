@@ -174,7 +174,9 @@ summary {
    surroundings instead of popping in. Runs once on mount, so a background sync
    refetch (which updates content in place) doesn't re-trigger it.
    - .count-fade-in: Decks-page note counts, which land after their rows.
-   - .fade-in: the deck lists themselves, once their page finishes loading. */
+   - .fade-in: the deck lists themselves, once their page finishes loading; the
+     session summary's accuracy chart, which replaces its skeleton once the
+     history read lands; and the note-stats body, which replaces its spinner. */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -212,9 +214,30 @@ summary {
   animation: rise-in 400ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+/* The stacked answer bar is data, so it wipes in left to right: the segments are
+   revealed at their true widths rather than growing into them, which an animated
+   width would do and would read as the proportions still settling. Delayed a beat
+   so it lands as a second step after the summary card's rise-in instead of
+   competing with it — hence `backwards`, which holds the clipped start through
+   the delay rather than flashing the full bar first. clip-path only, so nothing
+   reflows. */
+@keyframes bar-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.bar-wipe {
+  animation: bar-wipe 450ms 120ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+}
+
 /* Reduced motion: keep the reveal, drop the movement. */
 @media (prefers-reduced-motion: reduce) {
-  .rise-in {
+  .rise-in,
+  .bar-wipe {
     animation: fade-in 200ms ease-out;
   }
 }

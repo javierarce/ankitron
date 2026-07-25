@@ -164,7 +164,10 @@ function StatsBody({ stats }: { stats: NoteStats }) {
     .sort((a, b) => a.id - b.id);
 
   return (
-    <div className="space-y-5">
+    // Fades in as one surface when the read replaces the spinner, so the
+    // history chart and the answer bar arrive on a beat instead of cutting in.
+    // Opacity only, which leaves the panel's height transition to do the sizing.
+    <div className="fade-in space-y-5">
       {/* Headline tiles */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat
