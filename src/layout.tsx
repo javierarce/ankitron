@@ -16,6 +16,7 @@ import { SyncProvider } from "@/components/sync-provider";
 import { UpdateBadge } from "@/components/update-badge";
 import { UpdatePrompt } from "@/components/update-prompt";
 import { useDeckImport } from "@/hooks/use-deck-import";
+import { isTextEntryTarget } from "@/lib/history-nav";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -50,6 +51,25 @@ export function Layout() {
       window.removeEventListener("dragover", prevent);
       window.removeEventListener("drop", prevent);
     };
+  }, []);
+
+  useEffect(() => {
+    // WebKit still maps Backspace / Shift+Backspace to history back/forward.
+    // Outside a text field that's never deliberate — a stray Backspace while
+    // filling in a note abandons the form with no warning. Suppress just the
+    // navigation, in the capture phase so a handler that stops propagation
+    // can't let it slip through; Backspace keeps working wherever text is
+    // actually being edited (including the tag input's chip removal).
+    const preventHistoryNav = (e: KeyboardEvent) => {
+      if (e.key === "Backspace" && !isTextEntryTarget(e.target)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", preventHistoryNav, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", preventHistoryNav, {
+        capture: true,
+      });
   }, []);
 
   useEffect(() => {
