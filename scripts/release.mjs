@@ -18,7 +18,7 @@
 //        --skip-checks (skip lint + tests).
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -259,9 +259,17 @@ const nextTag = `v${nextVersion}`;
 
 // ------------------------------------------------------------ release notes
 
+// The notes file is deleted only once the release is actually pushed, so an
+// aborted or failed run leaves what you wrote on disk and a retry for the same
+// version re-opens it instead of a blank template. Writing release notes is the
+// one genuinely unrecoverable part of this script.
 const notesFile = join(tmpdir(), `ankitron-release-${nextVersion}.md`);
-const prefill = changes.map((c) => `- ${c.replace(/\s*\(#\d+\)$/, "")}`).join("\n\n");
-writeFileSync(notesFile, `\n\n${prefill}\n\n${NOTES_TEMPLATE_HELP}`);
+if (existsSync(notesFile)) {
+  console.log(`\nReusing the notes from your previous attempt.`);
+} else {
+  const prefill = changes.map((c) => `- ${c.replace(/\s*\(#\d+\)$/, "")}`).join("\n\n");
+  writeFileSync(notesFile, `\n\n${prefill}\n\n${NOTES_TEMPLATE_HELP}`);
+}
 
 const editor =
   process.env.GIT_EDITOR ||
@@ -280,7 +288,6 @@ const notes = readFileSync(notesFile, "utf8")
   .filter((line) => !line.startsWith("#"))
   .join("\n")
   .trim();
-unlinkSync(notesFile);
 
 if (!notes) bail("Empty release notes — aborted.");
 
@@ -302,7 +309,8 @@ console.log(`  · create annotated tag ${nextTag} with the notes above`);
 console.log(`  · push ${branch} and ${nextTag} to ${REMOTE}  ← starts the release build`);
 
 if (dryRun) {
-  console.log("\n--dry-run: nothing was written.\n");
+  console.log("\n--dry-run: nothing was written.");
+  console.log(`Your notes are kept at ${notesFile} and will be reused next run.\n`);
   closePrompt();
   process.exit(0);
 }
@@ -315,9 +323,26 @@ if (!skipChecks) {
   if (!run("pnpm", ["test"])) bail("Tests failed. Fix them, or pass --skip-checks.");
 }
 
-const confirm = await ask(`\nRelease ${nextTag}? [y/N] `);
+// Loop until the answer is explicit. Lint plus the test suite is a ~30s window
+// with the terminal apparently idle, and anything typed into it lands in the
+// buffer and answers this prompt the instant it appears. Treating that as "no"
+// silently threw away a release the user had already written the notes for.
+let approved = null;
+while (approved === null) {
+  const answer = (await ask(`\nRelease ${nextTag}? [y/n] `)).toLowerCase();
+  if (/^(y|yes)$/.test(answer)) approved = true;
+  else if (/^(n|no)$/.test(answer)) approved = false;
+  else console.log("  Please answer y or n.");
+}
 closePrompt();
-if (!/^y(es)?$/i.test(confirm)) bail("Aborted. Nothing was written.");
+
+if (!approved) {
+  // Choosing not to release is not a failure — exit 0 so pnpm does not stack
+  // an "ELIFECYCLE Command failed" on top of a deliberate answer.
+  console.log("\nCancelled. Nothing was written.");
+  console.log(`Your notes are kept at ${notesFile} and will be reused next run.\n`);
+  process.exit(0);
+}
 
 // -------------------------------------------------------------------- apply
 
@@ -356,6 +381,9 @@ if (pushedBranch === null) {
   );
 }
 git(["push", REMOTE, `refs/tags/${nextTag}`]);
+
+// Shipped — the notes are now in the tag, so the working copy can go.
+unlinkSync(notesFile);
 
 const repo = (git(["remote", "get-url", REMOTE]) ?? "")
   .replace(/^git@github\.com:/, "https://github.com/")
