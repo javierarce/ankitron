@@ -2,16 +2,17 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { CurrentCard, DueCounts, Ease, Note } from "@/lib/types";
 import { StudyCard } from "@/components/study-card";
-import { SessionSummary, type SessionAnswer } from "@/components/session-summary";
+import {
+  SessionSummary,
+  type AccuracyHistory,
+  type SessionAnswer,
+} from "@/components/session-summary";
 import { CardForm } from "@/components/card-form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Spinner } from "@/components/spinner";
 import { fetchAllDueCounts, syncCollection } from "@/lib/anki-fetch";
-import {
-  fetchDeckAccuracyHistory,
-  type DailyAccuracy,
-} from "@/lib/session-history";
+import { fetchDeckAccuracyHistory } from "@/lib/session-history";
 import { fetchCardState } from "@/lib/cards";
 import { extractSoundFilenames } from "@/lib/audio";
 import { fetchDeckNames, fetchDeckStats } from "@/lib/decks";
@@ -111,9 +112,15 @@ function StudyPage() {
   const startedAtRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   // This deck's recent daily accuracy, for the completion sparkline. Fetched
-  // once the session ends (see the effect below); null until it lands.
-  const [history, setHistory] = useState<DailyAccuracy[] | null>(null);
+  // once the session ends (see the effect below); tagged rather than a bare
+  // array so the summary can tell "couldn't read it" from "nothing to show".
+  const [history, setHistory] = useState<AccuracyHistory>({ status: "loading" });
   const historyRequestedRef = useRef(false);
+  // The collection's deck names, published as soon as they land — ahead of the
+  // due counts the full snapshot also waits on (see the prefetch effect). The
+  // accuracy fetch needs only the names, and the user is watching a skeleton
+  // until it returns, so it must not queue behind a collection-wide count read.
+  const [deckNames, setDeckNames] = useState<string[] | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   // A pending "leave study" navigation while its confirm dialog is up (null =
@@ -409,33 +416,38 @@ function StudyPage() {
   }, [completed, reviewed, syncStatus]);
 
   // Once the session ends, fetch this deck's recent accuracy for the summary's
-  // trend sparkline. Waits for the prefetched deck snapshot so the fetch can
-  // cover subdecks (cardReviews reports only a deck's own cards); the snapshot
-  // fills during the session, so this rarely waits. Fired once via the ref —
-  // reviews persist as they're graded, so today's point is already complete by
-  // the time the queue empties. A failure just leaves the sparkline hidden.
+  // trend sparkline. Waits only on the deck NAMES (not the full due snapshot),
+  // so the read isn't queued behind a collection-wide due-count pass while the
+  // user watches the summary's skeleton; names are needed because cardReviews
+  // reports only a deck's own cards, so subdecks are fetched individually.
+  // Fired once via the ref — reviews persist as they're graded, so today's point
+  // is already complete by the time the queue empties. A failed read resolves to
+  // the "error" state, which the summary reports as such rather than passing it
+  // off as an empty history.
   useEffect(() => {
     if (!completed || reviewed === 0 || historyRequestedRef.current) return;
-    if (!dueSnapshot) return;
+    if (!deckNames) return;
     historyRequestedRef.current = true;
-    const subtree = dueSnapshot.names.length
-      ? dueSnapshot.names.filter(
-          (n) => n === deckName || n.startsWith(`${deckName}::`),
-        )
-      : [deckName];
+    // Fall back to the deck itself whenever the name list yields no match — an
+    // empty subtree would fetch nothing and look indistinguishable from a deck
+    // with no reviews (e.g. renamed in the Anki GUI mid-session).
+    const matches = deckNames.filter(
+      (n) => n === deckName || n.startsWith(`${deckName}::`),
+    );
+    const subtree = matches.length ? matches : [deckName];
     let cancelled = false;
     (async () => {
       try {
-        const h = await fetchDeckAccuracyHistory(subtree);
-        if (!cancelled) setHistory(h);
+        const days = await fetchDeckAccuracyHistory(subtree);
+        if (!cancelled) setHistory({ status: "ready", days });
       } catch {
-        if (!cancelled) setHistory([]);
+        if (!cancelled) setHistory({ status: "error" });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [completed, reviewed, dueSnapshot, deckName]);
+  }, [completed, reviewed, deckNames, deckName]);
 
   // Prefetch the deck list and due counts in the background as soon as the first
   // card is up, so the completion screen's "study next" button is ready the
@@ -449,13 +461,22 @@ function StudyPage() {
     (async () => {
       try {
         const names = await fetchDeckNames();
+        // Publish the names before awaiting the counts: the accuracy fetch
+        // needs only these, and making it wait on a collection-wide count pass
+        // is skeleton time the user sits through for nothing.
+        if (!cancelled) setDeckNames(names);
         const counts = await fetchAllDueCounts(names);
         if (!cancelled) setDueSnapshot({ names, counts });
       } catch {
         // Couldn't read the collection — resolve to an empty snapshot so the
         // completion screen falls back to "nothing else to study" rather than
-        // waiting on a button that never arrives.
-        if (!cancelled) setDueSnapshot({ names: [], counts: {} });
+        // waiting on a button that never arrives. The names fall back to the
+        // empty list too, so the accuracy fetch stops waiting and reads the
+        // opened deck on its own rather than hanging on a skeleton.
+        if (!cancelled) {
+          setDeckNames((prev) => prev ?? []);
+          setDueSnapshot({ names: [], counts: {} });
+        }
       }
     })();
     return () => {
@@ -693,20 +714,21 @@ function StudyPage() {
         <div className="text-center">
           <p className="text-xl font-semibold mb-2">Session complete!</p>
           {reviewed > 0 ? (
-            // Hold the card back until the recent-accuracy history has resolved
-            // (data or empty), so it renders at its final height — sparkline
-            // included or not — and fades in as one piece rather than popping the
-            // chart in and resizing the card a beat later.
-            history !== null && (
-              <div className="rise-in mb-6">
-                <SessionSummary
-                  answers={answers}
-                  elapsedMs={elapsedMs}
-                  extraReviews={extraReviews}
-                  history={history}
-                />
-              </div>
-            )
+            // Show the summary card immediately — its stat tiles, accuracy, time,
+            // and grade spread all come from the client-side answer log, so
+            // there's nothing to wait for. Only the recent-accuracy sparkline
+            // needs the fetched history, and its slot holds one fixed height
+            // across every state (skeleton → chart, notice, or error), so the
+            // card and the title and buttons stacked around it stay put when
+            // the read lands.
+            <div className="rise-in mb-6">
+              <SessionSummary
+                answers={answers}
+                elapsedMs={elapsedMs}
+                extraReviews={extraReviews}
+                history={history}
+              />
+            </div>
           ) : (
             <p className="mb-6 text-foreground/50">
               No cards are due for review.
