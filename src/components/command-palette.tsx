@@ -6,6 +6,8 @@ import { ArrowDown } from "@phosphor-icons/react/dist/ssr/ArrowDown";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr/MagnifyingGlass";
 import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { FolderPlus } from "@phosphor-icons/react/dist/ssr/FolderPlus";
+import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
+import { GraduationCap } from "@phosphor-icons/react/dist/ssr/GraduationCap";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { Sun } from "@phosphor-icons/react/dist/ssr/Sun";
 import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";
@@ -25,6 +27,8 @@ type Mode = "search" | "pickDeckForCard";
 type ActionId =
   | "new-card"
   | "new-deck"
+  | "study"
+  | "decks"
   | "settings"
   | "theme-toggle"
   | "theme-system";
@@ -155,6 +159,20 @@ export function CommandPalette() {
       hint: "new deck",
     },
     {
+      id: "study",
+      label: "Study",
+      keywords: "study review home due today",
+      icon: GraduationCap,
+      hint: "go",
+    },
+    {
+      id: "decks",
+      label: "Decks",
+      keywords: "decks all decks browse library",
+      icon: FolderSimple,
+      hint: "go",
+    },
+    {
       id: "settings",
       label: "Settings",
       keywords: "settings preferences update version",
@@ -207,6 +225,11 @@ export function CommandPalette() {
     if (item.kind === "action") {
       if (item.id === "new-deck") {
         setCreatingDeck(true);
+        close();
+        return;
+      }
+      if (item.id === "study" || item.id === "decks") {
+        navigate(item.id === "study" ? "/" : "/decks");
         close();
         return;
       }
