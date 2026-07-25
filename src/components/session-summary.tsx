@@ -222,7 +222,9 @@ export function SessionSummary({
         <SparklineFrame
           aside={
             trend && (
-              <span className="text-xs tabular-nums text-foreground/50">
+              // Lands with the chart, so it fades on the same beat rather than
+              // appearing beside a chart that's still fading up.
+              <span className="fade-in text-xs tabular-nums text-foreground/50">
                 last {trend.length} days
               </span>
             )
@@ -230,16 +232,27 @@ export function SessionSummary({
         >
           {history.status === "loading" ? (
             <SparklineSkeleton />
-          ) : history.status === "error" ? (
-            <SparklineNotice testId="sparkline-error">
-              Couldn&apos;t load your recent accuracy.
-            </SparklineNotice>
-          ) : trend ? (
-            <AccuracySparkline data={trend} />
           ) : (
-            <SparklineNotice testId="sparkline-empty">
-              Study this deck on another day to chart your accuracy trend.
-            </SparklineNotice>
+            // The read lands a beat after the card has risen in, so the body
+            // fades up instead of cutting in over the skeleton in one frame.
+            // The animation runs because this replaces SparklineSkeleton — a
+            // different element type, so React mounts a fresh node rather than
+            // reusing one that would keep its finished animation. `relative`
+            // keeps the chart's absolutely-positioned line and dots on the same
+            // box the frame's canvas defines.
+            <div className="fade-in relative h-full w-full">
+              {history.status === "error" ? (
+                <SparklineNotice testId="sparkline-error">
+                  Couldn&apos;t load your recent accuracy.
+                </SparklineNotice>
+              ) : trend ? (
+                <AccuracySparkline data={trend} />
+              ) : (
+                <SparklineNotice testId="sparkline-empty">
+                  Study this deck on another day to chart your accuracy trend.
+                </SparklineNotice>
+              )}
+            </div>
           )}
         </SparklineFrame>
       </div>

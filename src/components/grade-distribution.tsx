@@ -31,7 +31,10 @@ export function GradeDistribution({
       <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-foreground/40">
         {heading}
       </h4>
-      <div className="flex h-3 overflow-hidden rounded-full bg-foreground/5">
+      {/* The bar's widths are final at mount — it's a finished session or a
+          finished review history, never a live count — so the entrance is a
+          one-shot wipe rather than a transition on a changing width. */}
+      <div className="bar-wipe flex h-3 overflow-hidden rounded-full bg-foreground/5">
         {byGrade.map(
           (g) =>
             g.n > 0 && (

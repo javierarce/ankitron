@@ -126,7 +126,7 @@ describe("SessionSummary", () => {
           history={{ status: "loading" }}
         />,
       );
-      expect(screen.getByTestId("sparkline-skeleton")).toBeTruthy();
+      const skeleton = screen.getByTestId("sparkline-skeleton");
 
       rerender(
         <SessionSummary
@@ -138,6 +138,16 @@ describe("SessionSummary", () => {
       );
       expect(screen.queryByTestId("sparkline-skeleton")).toBeNull();
       expect(screen.getByText("last 3 days")).toBeTruthy();
+
+      // The chart fades in rather than cutting in. A CSS entrance animation
+      // only runs on a fresh node, so assert both the class and that the
+      // skeleton's element wasn't reused to carry it.
+      const chart = screen.getByRole("img", {
+        name: /accuracy over the last/i,
+      });
+      const body = chart.parentElement;
+      expect(body?.className).toContain("fade-in");
+      expect(body).not.toBe(skeleton);
     });
 
     it("explains that a single day isn't enough to plot", () => {
