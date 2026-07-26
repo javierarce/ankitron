@@ -115,6 +115,92 @@ async fn save_text_file(path: String, contents: String) -> Result<(), String> {
     std::fs::write(&path, contents).map_err(|e| format!("Failed to write {}: {}", path, e))
 }
 
+const FEEDBACK_EMAIL: &str = "ankitron+feedback@javier.computer";
+const BUG_EMAIL: &str = "ankitron+bugs@javier.computer";
+
+/// Percent-encode a mailto query value. `url` isn't a direct dependency and the
+/// alphabet here is tiny, so encode everything outside the unreserved set —
+/// over-encoding is always safe in a query string.
+fn encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char)
+            }
+            // RFC 6068 requires CRLF line breaks in the body. Mail.app accepts
+            // a bare LF, but a handler that splits strictly on CRLF would run
+            // the whole template together on one line. Callers pass plain "\n".
+            b'\n' => out.push_str("%0D%0A"),
+            _ => out.push_str(&format!("%{:02X}", byte)),
+        }
+    }
+    out
+}
+
+/// Human-readable OS line for the report footer, e.g.
+/// "macOS Version 26.5.2 (Build 25F84)". Falls back to just the OS name when
+/// `sw_vers` isn't available (non-macOS, or it failed to run).
+fn os_description() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        let read = |arg: &str| {
+            std::process::Command::new("sw_vers")
+                .arg(arg)
+                .output()
+                .ok()
+                .filter(|out| out.status.success())
+                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        if let Some(version) = read("-productVersion") {
+            return match read("-buildVersion") {
+                Some(build) => format!("macOS Version {} (Build {})", version, build),
+                None => format!("macOS Version {}", version),
+            };
+        }
+        return "macOS".into();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::consts::OS.to_string()
+    }
+}
+
+/// Footer appended to both Help > mail templates so reports arrive with the
+/// app and OS versions already filled in.
+fn report_footer(app_version: &str) -> String {
+    format!("\u{2014}\nAnkitron {}\n{}", app_version, os_description())
+}
+
+fn feedback_mailto(app_version: &str) -> String {
+    // No prompt text: feedback is free-form, so the draft is just empty space
+    // above the version footer.
+    let body = format!("\n\n\n{}", report_footer(app_version));
+    format!(
+        "mailto:{}?subject={}&body={}",
+        FEEDBACK_EMAIL,
+        encode("Ankitron Feedback"),
+        encode(&body)
+    )
+}
+
+fn bug_mailto(app_version: &str) -> String {
+    let body = format!(
+        "Hi,\n\nI seem to have found a bug!\n\n\
+         Description\n[insert short description of the bug]\n\n\
+         What I was doing\n[describe in as much detail as possible what you were doing when the bug happened]\n\n\
+         Other Information\n[insert other details]\n{}",
+        report_footer(app_version)
+    );
+    format!(
+        "mailto:{}?subject={}&body={}",
+        BUG_EMAIL,
+        encode("Ankitron Bug Report"),
+        encode(&body)
+    )
+}
+
 fn main() {
     let anki_state = Arc::new(AnkiState::default());
     let startup_state = anki_state.clone();
@@ -136,17 +222,38 @@ fn main() {
             // platforms have no default menu bar.
             #[cfg(target_os = "macos")]
             {
-                use tauri::menu::{Menu, MenuItem, MenuItemKind};
+                use tauri::menu::{Menu, MenuItem, MenuItemKind, HELP_SUBMENU_ID};
 
                 let handle = app.handle();
                 let menu = Menu::default(handle)?;
-                if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.first() {
+                let items = menu.items()?;
+                if let Some(MenuItemKind::Submenu(app_menu)) = items.first() {
                     let about =
                         MenuItem::with_id(handle, "about", "About Ankitron", true, None::<&str>)?;
                     if let Some(native_about) = app_menu.items()?.first() {
                         app_menu.remove(native_about)?;
                     }
                     app_menu.prepend(&about)?;
+                }
+                // The default Help submenu is empty on macOS (the system adds
+                // only its search field), so both mail shortcuts go there.
+                if let Some(MenuItemKind::Submenu(help_menu)) =
+                    items.iter().find(|item| item.id() == HELP_SUBMENU_ID)
+                {
+                    help_menu.append(&MenuItem::with_id(
+                        handle,
+                        "send-feedback",
+                        "Send Feedback…",
+                        true,
+                        None::<&str>,
+                    )?)?;
+                    help_menu.append(&MenuItem::with_id(
+                        handle,
+                        "report-bug",
+                        "Report a Bug…",
+                        true,
+                        None::<&str>,
+                    )?)?;
                 }
                 app.set_menu(menu)?;
             }
@@ -161,9 +268,26 @@ fn main() {
             Ok(())
         })
         .on_menu_event(|app, event| {
-            if event.id().as_ref() == "about" {
-                use tauri::Emitter;
-                let _ = app.emit("show-about", ());
+            use tauri_plugin_shell::ShellExt;
+
+            let version = app.package_info().version.to_string();
+            match event.id().as_ref() {
+                "about" => {
+                    use tauri::Emitter;
+                    let _ = app.emit("show-about", ());
+                }
+                // `Shell::open` is deprecated in favour of tauri-plugin-opener,
+                // but the app already ships plugin-shell (the in-app links use
+                // it), so there's no reason to pull in a second plugin here.
+                #[allow(deprecated)]
+                "send-feedback" => {
+                    let _ = app.shell().open(feedback_mailto(&version), None);
+                }
+                #[allow(deprecated)]
+                "report-bug" => {
+                    let _ = app.shell().open(bug_mailto(&version), None);
+                }
+                _ => {}
             }
         })
         .on_window_event(move |_window, event| {
@@ -193,4 +317,89 @@ fn main() {
                 stop_spawned_anki(&exit_state);
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Naive percent-decoder, test-only: turns an encoded query value back into
+    /// the text the mail client will show.
+    fn decode(value: &str) -> String {
+        let bytes = value.as_bytes();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' {
+                let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap();
+                out.push(u8::from_str_radix(hex, 16).unwrap());
+                i += 3;
+            } else {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+        String::from_utf8(out).unwrap()
+    }
+
+    fn parts(url: &str) -> (String, String, String) {
+        let (to, query) = url
+            .strip_prefix("mailto:")
+            .unwrap()
+            .split_once('?')
+            .unwrap();
+        let (subject, body) = query.split_once("&body=").unwrap();
+        (
+            to.into(),
+            decode(subject.strip_prefix("subject=").unwrap()),
+            decode(body),
+        )
+    }
+
+    /// What a template's plain "\n" text looks like once encoded and decoded
+    /// again: RFC 6068 line breaks, i.e. CRLF.
+    fn as_sent(text: &str) -> String {
+        text.replace('\n', "\r\n")
+    }
+
+    #[test]
+    fn bug_mailto_is_addressed_and_prefilled() {
+        let (to, subject, body) = parts(&bug_mailto("1.1.0"));
+        assert_eq!(to, "ankitron+bugs@javier.computer");
+        assert_eq!(subject, "Ankitron Bug Report");
+        assert!(body.starts_with(&as_sent(
+            "Hi,\n\nI seem to have found a bug!\n\nDescription\n"
+        )));
+        assert!(body.contains(&as_sent("\nWhat I was doing\n")));
+        assert!(body.contains(&as_sent("\nOther Information\n")));
+        assert!(body.contains(&as_sent("\u{2014}\nAnkitron 1.1.0\n")));
+    }
+
+    #[test]
+    fn feedback_mailto_is_addressed_and_signed() {
+        let (to, subject, body) = parts(&feedback_mailto("1.1.0"));
+        assert_eq!(to, "ankitron+feedback@javier.computer");
+        assert_eq!(subject, "Ankitron Feedback");
+        assert!(body.starts_with("\r\n\r\n"));
+        assert!(body.ends_with(&as_sent(&report_footer("1.1.0"))));
+    }
+
+    /// A handler that splits strictly on CRLF must not see a lone LF, or the
+    /// whole template collapses onto one line.
+    #[test]
+    fn bodies_break_lines_with_crlf_only() {
+        for url in [bug_mailto("1.1.0"), feedback_mailto("1.1.0")] {
+            let (_, _, body) = parts(&url);
+            assert!(body.contains("\r\n"), "no CRLF in {}", url);
+            assert!(!body.replace("\r\n", "").contains('\n'), "bare LF in {}", url);
+        }
+    }
+
+    #[test]
+    fn os_description_reports_the_host() {
+        let os = os_description();
+        assert!(!os.is_empty());
+        #[cfg(target_os = "macos")]
+        assert!(os.starts_with("macOS"), "unexpected: {}", os);
+    }
 }
