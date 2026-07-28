@@ -8,6 +8,7 @@ import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { FolderPlus } from "@phosphor-icons/react/dist/ssr/FolderPlus";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
 import { GraduationCap } from "@phosphor-icons/react/dist/ssr/GraduationCap";
+import { ChartBar } from "@phosphor-icons/react/dist/ssr/ChartBar";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { Sun } from "@phosphor-icons/react/dist/ssr/Sun";
 import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";
@@ -29,6 +30,7 @@ type ActionId =
   | "new-deck"
   | "study"
   | "decks"
+  | "stats"
   | "settings"
   | "theme-toggle"
   | "theme-system";
@@ -173,6 +175,13 @@ export function CommandPalette() {
       hint: "go",
     },
     {
+      id: "stats",
+      label: "Stats",
+      keywords: "stats statistics streak retention heatmap history forecast",
+      icon: ChartBar,
+      hint: "go",
+    },
+    {
       id: "settings",
       label: "Settings",
       keywords: "settings preferences update version",
@@ -228,8 +237,8 @@ export function CommandPalette() {
         close();
         return;
       }
-      if (item.id === "study" || item.id === "decks") {
-        navigate(item.id === "study" ? "/" : "/decks");
+      if (item.id === "study" || item.id === "decks" || item.id === "stats") {
+        navigate(item.id === "study" ? "/" : `/${item.id}`);
         close();
         return;
       }

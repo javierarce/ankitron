@@ -15,6 +15,17 @@ describe("decodeHtml", () => {
 });
 
 describe("stripHtml", () => {
+  // Anki's cardsInfo question HTML leads with the card template's whole
+  // stylesheet; a bare tag-strip kept its text and lists opened with
+  // ".card { font-family: arial; … }".
+  it("removes style and script blocks with their contents", () => {
+    expect(
+      stripHtml(
+        "<style>.card { font-family: arial; }</style><div>el perro</div><script>alert(1)</script>",
+      ),
+    ).toBe("el perro");
+  });
+
   it("drops tags and trims", () => {
     expect(stripHtml("<div> <b>hola</b> </div>")).toBe("hola");
   });

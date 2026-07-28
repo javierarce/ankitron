@@ -141,9 +141,285 @@ const demoSchedule = (n: DemoNote) => {
   };
 };
 
+// --- Collection-wide review log --------------------------------------------
+//
+// `cardReviews` returns raw positional rows, and the Stats section folds its
+// whole page out of them: a rolling-year heatmap, streaks, lifetime totals,
+// true retention and the answer-time median. demoReviews above can't serve
+// that — it covers one card over a few weeks, so a year heatmap built on it
+// would be a dozen scattered squares and every lifetime total would equal the
+// note count.
+//
+// So this synthesises a plausible year instead: a study calendar with a weekly
+// rest day and one holiday gap, and per-card interval ladders snapped onto it.
+// Everything derives from the note id rather than a loop index or RNG, so a
+// note reached through both a deck and its subdeck yields identical rows that
+// dedupe cleanly, and the demo looks the same on every visit.
+
+/** How far back the demo collection's history runs. */
+const HISTORY_DAYS = 400;
+
+/**
+ * Whether the demo user studied `daysAgo` days before today: a steady habit
+ * with scattered rest days and one holiday, so the heatmap isn't a solid block.
+ *
+ * Rest days are scattered by a multiplicative hash rather than a fixed period.
+ * `daysAgo % 9 !== 4` would rest every ninth day exactly, which caps the
+ * longest streak at eight and makes the tile look like what it is — generated.
+ * Irregular gaps give runs of varying length, the way a real habit does.
+ *
+ * The last three weeks are unbroken so a visitor arrives mid-streak.
+ */
+function isDemoStudyDay(daysAgo: number): boolean {
+  if (daysAgo > HISTORY_DAYS) return false;
+  if (daysAgo < 21) return true;
+  if (daysAgo >= 250 && daysAgo <= 263) return false; // a holiday
+  if (daysAgo >= 300 && daysAgo <= 360) return true; // a focused stretch
+  return (daysAgo * 2_654_435_761) % 100 >= 8; // ~8% rest days
+}
+
+/** The nearest study day at or after `daysAgo` (i.e. shifted toward today). */
+function snapToStudyDay(daysAgo: number): number {
+  let d = daysAgo;
+  while (d > 0 && !isDemoStudyDay(d)) d--;
+  return d;
+}
+
+/**
+ * Local midnight `daysAgo` days before `nowMs`. Calendar arithmetic, not
+ * ms subtraction: a DST boundary makes a local day 23 or 25 hours long, which
+ * would smear synthesised reviews into the neighbouring day and put a visible
+ * seam in the demo's heatmap.
+ */
+function demoDayStart(nowMs: number, daysAgo: number): number {
+  const d = new Date(nowMs);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - daysAgo);
+  return d.getTime();
+}
+
+// A card's interval ladder in days. Index 0 is the learning step; the rest are
+// review intervals, deliberately spanning Anki's 21-day young/mature boundary
+// so the retention split has both buckets to report.
+const DEMO_INTERVALS = [0, 1, 3, 7, 16, 35, 70, 140];
+const DEMO_EASES = [3, 3, 4, 3, 2, 3, 1, 4, 3, 3]; // mostly passes, a few misses
+
+/**
+ * Positional revlog rows for `notes`, oldest first:
+ * [id, cardId, usn, ease, ivl, lastIvl, factor, durationMs, type].
+ *
+ * Durations sit either side of DEMO_STATS.secondsPerCard so its median still
+ * lands on it — the "N cards in ~M min" footer stays honest while the Stats
+ * page's answer-time median has real spread to work with.
+ */
+function demoRevlog(notes: DemoNote[], nowMs: number): number[][] {
+  const rows: number[][] = [];
+
+  const push = (
+    n: DemoNote,
+    daysAgo: number,
+    seq: number,
+    ease: number,
+    ivl: number,
+    lastIvl: number,
+    factor: number,
+    type: number,
+  ) =>
+    rows.push([
+      // Spread within the day so ids stay unique per note while remaining
+      // safely inside their own calendar day.
+      demoDayStart(nowMs, daysAgo) + (n.noteId % 20_000) * 1000 + seq,
+      cardIdOf(n.noteId),
+      1,
+      ease,
+      ivl,
+      lastIvl,
+      factor,
+      DEMO_STATS.secondsPerCard * 1000 + ((n.noteId % 5) - 2) * 400,
+      type,
+    ]);
+
+  for (const n of notes) {
+    if (n.state === "new") continue;
+    // When this card entered the collection, stable per note.
+    const introducedDaysAgo = HISTORY_DAYS - (n.noteId % (HISTORY_DAYS - 20));
+    let factor = 2500;
+    let rung = 0;
+
+    for (let i = 0; i < DEMO_INTERVALS.length; i++) {
+      const target = introducedDaysAgo - DEMO_INTERVALS[i];
+      if (target < 0) break;
+      const ease = DEMO_EASES[(n.noteId + i) % DEMO_EASES.length];
+      if (ease === 1) factor = Math.max(1300, factor - 200);
+      else if (ease === 4) factor += 150;
+      // Index 0 is the learning step; everything after it is a scheduled review.
+      push(
+        n,
+        snapToStudyDay(target),
+        i,
+        ease,
+        DEMO_INTERVALS[i],
+        i === 0 ? 0 : DEMO_INTERVALS[i - 1],
+        factor,
+        i === 0 ? 0 : 1,
+      );
+      rung = i;
+    }
+
+    // A card's ladder rarely lands exactly on today, so without this the demo
+    // could open with an empty heatmap square and a zeroed streak. Give a
+    // deterministic quarter of the collection a review today.
+    if (rung > 0 && n.noteId % 4 === 0) {
+      const ivl = DEMO_INTERVALS[rung];
+      push(n, 0, DEMO_INTERVALS.length, 3, ivl * 2, ivl, factor, 1);
+    }
+  }
+
+  return rows.sort((a, b) => a[0] - b[0]);
+}
+
+// --- The archive -----------------------------------------------------------
+//
+// The fixture collection is 25 browsable notes, and 20 of them are new — so the
+// ladders above produce a history for four cards. That's fine for the per-note
+// stats panel, and hopeless for the Stats page: a rolling-year heatmap drawn
+// from four cards is a handful of scattered squares, and it would tell a
+// visitor the product has nothing to show.
+//
+// Real collections don't look like that. A user's year of study is mostly
+// cards they long ago stopped thinking about, vastly outnumbering what's in
+// front of them today. So the revlog also carries an "archive": reviews of
+// cards that aren't in the fixture note set at all, at the daily pace the demo
+// already advertises (DEMO_STATS.studiedTodayCards).
+//
+// Nothing dereferences these card ids — the Stats pipeline only counts distinct
+// ones — and they're numbered above every real fixture card so they can't
+// collide. The rest of the demo is unaffected: the deck list, study flow and
+// note stats all still read from NOTES alone.
+
+/** Synthetic card ids sit above every fixture card (CARD_OFFSET + note id). */
+const ARCHIVE_CARD_BASE = 900_000;
+const ARCHIVE_CARDS = 600;
+
+/** Prior intervals for archive reviews, spanning the 21-day maturity boundary. */
+const ARCHIVE_INTERVALS = [1, 3, 7, 16, 35, 70, 140, 210];
+
+/**
+ * Which deck each archive card belongs to. Snapshotted from the fixtures at
+ * load rather than read from DECKS live, so creating a deck mid-session doesn't
+ * reshuffle a year of history under the visitor.
+ */
+const ARCHIVE_DECKS = [...new Set(NOTES.map((n) => n.deckName))];
+
+/**
+ * Archive rows for the decks under `deck`. Deterministic in the day and index,
+ * so every visit shows the same year and a note fetched under both a deck and
+ * its parent yields identical rows that dedupe on id.
+ */
+/**
+ * The fixture note an archive card stands in for, chosen from the same deck
+ * the card's reviews are attributed to (demoArchiveRevlog assigns decks by
+ * `card % ARCHIVE_DECKS.length`, so the note must come from that same deck or
+ * a Trouble Spots row would link to a deck that doesn't contain it).
+ */
+function archiveNoteOf(cardId: number): DemoNote | null {
+  const card = cardId - ARCHIVE_CARD_BASE;
+  if (card < 0 || card >= ARCHIVE_CARDS) return null;
+  const deck = ARCHIVE_DECKS[card % ARCHIVE_DECKS.length];
+  const inDeck = NOTES.filter((n) => n.deckName === deck);
+  return inDeck.length ? inDeck[card % inDeck.length] : null;
+}
+
+function demoArchiveRevlog(deck: string, nowMs: number): number[][] {
+  if (ARCHIVE_DECKS.length === 0) return [];
+  const rows: number[][] = [];
+
+  for (let daysAgo = 0; daysAgo <= HISTORY_DAYS; daysAgo++) {
+    if (!isDemoStudyDay(daysAgo)) continue;
+    // Vary the day's volume around the advertised pace so the heatmap has
+    // light and heavy days rather than one flat colour.
+    const count =
+      DEMO_STATS.studiedTodayCards + ((daysAgo * 7) % 13) - 6;
+
+    for (let i = 0; i < count; i++) {
+      const card = (daysAgo * 37 + i * 11) % ARCHIVE_CARDS;
+      // Own cards only, for the same reason as the fixture rows above: an
+      // archive card belongs to exactly one deck, and claiming it for every
+      // ancestor would break every deck filter.
+      if (ARCHIVE_DECKS[card % ARCHIVE_DECKS.length] !== deck) continue;
+
+      // Every fifth answer is a learning step: a new card being introduced,
+      // which retention must exclude and the activity charts must still count.
+      const isLearning = (daysAgo + i) % 5 === 0;
+      const lastIvl = ARCHIVE_INTERVALS[(daysAgo + i) % ARCHIVE_INTERVALS.length];
+      rows.push([
+        // Offset well clear of the fixture-note rows, which sit in the first
+        // few seconds of each day.
+        demoDayStart(nowMs, daysAgo) + 30_000_000 + i * 1000,
+        ARCHIVE_CARD_BASE + card,
+        1,
+        DEMO_EASES[(daysAgo + i) % DEMO_EASES.length],
+        isLearning ? 0 : lastIvl * 2,
+        isLearning ? 0 : lastIvl,
+        2500 + ((card % 7) - 3) * 100,
+        DEMO_STATS.secondsPerCard * 1000 + ((i % 5) - 2) * 400,
+        isLearning ? 0 : 1,
+      ]);
+    }
+  }
+
+  return rows;
+}
+
+// --- Forecast --------------------------------------------------------------
+//
+// The Stats page asks "how many cards fall due N days from now?" as a
+// `prop:due` search, one per day. The demo's query evaluator can't answer that
+// (it has no scheduling model), and even if it could, 20 of the 25 fixture
+// notes are new — a faithful answer is a chart of near-zeros.
+//
+// So, like the archive above, this answers at the pace the demo advertises.
+// Only the id *count* is ever read (fetchForecastCounts takes .length), so the
+// ids themselves need only be plausible and collision-free.
+
+const FORECAST_QUERY = /prop:due(?:<=|=)(-?\d+)/;
+
+/** Ids for a forecast query, or null when this isn't one. */
+function demoForecastIds(query: string): number[] | null {
+  const match = query.match(FORECAST_QUERY);
+  if (!match) return null;
+
+  const dayOffset = Number(match[1]);
+  const deck = query.match(/deck:"([^"]+)"/)?.[1];
+  // Day 0 carries the overdue backlog too, so it's the heaviest of the month.
+  const base =
+    dayOffset <= 0
+      ? DEMO_STATS.studiedTodayCards + 6
+      : 7 + ((dayOffset * 11) % 16);
+  // Scale a deck-scoped query by that deck's share, so per-deck forecasts add
+  // up to roughly the collection's.
+  const share = deck
+    ? notesInSubtree(deck).length / Math.max(1, NOTES.length)
+    : 1;
+
+  const count = Math.round(base * share);
+  return Array.from(
+    { length: count },
+    (_, i) => ARCHIVE_CARD_BASE + ARCHIVE_CARDS + dayOffset * 100 + i,
+  );
+}
+
 // AnkiConnect's cardsInfo shape (the fields the app actually reads).
 const cardInfo = (cardId: number) => {
-  const n = findNote(noteIdOfCard(cardId));
+  // Archive cards (see demoArchiveRevlog) have no fixture notes of their own;
+  // resolve each to a real note in ITS deck so anything that looks one up —
+  // the Stats "Trouble spots" list resolves its top lapsers this way — shows
+  // real content and links to a deck that actually holds it. Deterministic in
+  // the card id, like everything else the archive derives.
+  const n =
+    cardId >= ARCHIVE_CARD_BASE
+      ? archiveNoteOf(cardId)
+      : findNote(noteIdOfCard(cardId));
   if (!n) return null;
   return {
     cardId,
@@ -264,30 +540,19 @@ async function handleAction(
       return DEMO_STATS.studiedTodayCards;
 
     case "cardReviews": {
-      // [id, cardId, usn, ease, ivl, lastIvl, factor, durationMs, type].
-      // Two app readers consume these rows:
-      //  - fetchTodayStudyStats reads index 0 (ordering) and 7 (duration), keeping
-      //    the newest N across decks — so any recent, equal-duration rows work.
-      //  - computeDailyAccuracy (the session summary's sparkline) reads index 3
-      //    (ease, which must be 1–4) and treats index 0 as a real epoch-ms time.
-      // So emit plausible grades spread over the last couple of weeks. Everything
-      // is derived from the note id, not the loop index, so a note fetched via
-      // both a deck and its subdeck yields the same row and dedupes cleanly.
       const deck = params.deck as string;
+      const startID = (params.startID as number) ?? 0;
       const now = Date.now();
-      const DAY = 86_400_000;
-      const EASE_CYCLE = [3, 3, 4, 3, 2, 3, 1, 4, 3, 3]; // mostly passes, a few misses
-      const rows = notesInSubtree(deck).map((n) => {
-        const dayOffset = n.noteId % 12; // 0–11 days ago, stable per note
-        const r = new Array(9).fill(0);
-        // Recent, unique per note, and safely within its own calendar day.
-        r[0] = now - dayOffset * DAY - (n.noteId % 3600) * 1000;
-        r[3] = EASE_CYCLE[n.noteId % EASE_CYCLE.length];
-        r[7] = DEMO_STATS.secondsPerCard * 1000; // → "N cards in ~M min" footer
-        r[8] = 1; // a review-type row
-        return r;
-      });
-      return rows;
+      // A deck's OWN cards only — NOT its subtree. Real AnkiConnect works this
+      // way (which is why fetchCollectionRevlog fans out over every deck), and
+      // the difference is not cosmetic: the fan-out tags each row with the deck
+      // it came back under and dedupes on first occurrence, so returning the
+      // subtree here would tag a subdeck's rows with its parent and make every
+      // narrower filter come back empty.
+      const own = NOTES.filter((n) => n.deckName === deck);
+      return [...demoRevlog(own, now), ...demoArchiveRevlog(deck, now)]
+        .filter((r) => r[0] >= startID)
+        .sort((a, b) => a[0] - b[0]);
     }
 
     case "findNotes": {
@@ -300,13 +565,39 @@ async function handleAction(
       );
     }
 
+    case "multi": {
+      // AnkiConnect's request batcher: run each sub-action and return their
+      // results positionally. The Stats forecast uses it to ask 30 due-date
+      // searches in one round trip instead of 30, which is the difference
+      // between a page that appears and a page that crawls in.
+      const actions =
+        (params.actions as { action: string; params?: Record<string, unknown> }[]) ??
+        [];
+      // Each sub-action gets its OWN {result, error} envelope, exactly like a
+      // top-level response — verified against a live AnkiConnect. Returning
+      // bare results here would be a mock that's easier to consume than the
+      // real thing, which is the kind that lets a bug ship green.
+      return Promise.all(
+        actions.map(async (a) => {
+          try {
+            return { result: await handleAction(a.action, a.params ?? {}), error: null };
+          } catch (e) {
+            return { result: null, error: e instanceof Error ? e.message : String(e) };
+          }
+        }),
+      );
+    }
+
     case "findCards": {
-      // Same evaluator: it honours the `-deck:"X::*"` exclusion a rename uses to
+      const query = params.query as string;
+      // The Stats forecast is a scheduling question the fixtures can't answer
+      // (see demoForecastIds); everything else goes to the query evaluator.
+      const forecast = demoForecastIds(query);
+      if (forecast) return forecast;
+      // The evaluator honours the `-deck:"X::*"` exclusion a rename uses to
       // grab only a deck's OWN cards, without which moving a deck with subdecks
       // would flatten them.
-      return notesMatchingSearch(NOTES, params.query as string).map((n) =>
-        cardIdOf(n.noteId),
-      );
+      return notesMatchingSearch(NOTES, query).map((n) => cardIdOf(n.noteId));
     }
 
     case "notesInfo": {

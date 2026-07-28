@@ -10,7 +10,10 @@ export function Breadcrumb() {
   // don't belong under Decks at all.
   if (
     segments.length === 0 ||
-    (segments.length === 1 && (segments[0] === "decks" || segments[0] === "settings"))
+    (segments.length === 1 &&
+      (segments[0] === "decks" ||
+        segments[0] === "settings" ||
+        segments[0] === "stats"))
   )
     return <div className="h-5" />;
 

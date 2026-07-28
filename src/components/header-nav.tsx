@@ -4,6 +4,7 @@ export function HeaderNav() {
   const { pathname } = useLocation();
   const isStudy = pathname === "/";
   const isDecks = pathname === "/decks" || pathname.startsWith("/decks/");
+  const isStats = pathname === "/stats";
 
   return (
     <nav className="flex items-center gap-5 text-sm">
@@ -12,6 +13,9 @@ export function HeaderNav() {
       </NavLink>
       <NavLink href="/decks" active={isDecks}>
         Decks
+      </NavLink>
+      <NavLink href="/stats" active={isStats}>
+        Stats
       </NavLink>
     </nav>
   );

@@ -53,7 +53,11 @@ export async function showAnswer(): Promise<void> {
   await ankiFetch("guiShowAnswer");
 }
 
-/** Grade the current card; resolves true when Anki accepted the answer. */
+/**
+ * Grade the current card; resolves true when Anki accepted the answer.
+ * (Grading also invalidates the Stats page's revlog cache — that happens in
+ * the transport layer, which clears it for every revlog-affecting action.)
+ */
 export async function answerCard(ease: Ease): Promise<boolean> {
   return ankiFetch<boolean>("guiAnswerCard", { ease });
 }
