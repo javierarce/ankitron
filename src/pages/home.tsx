@@ -6,12 +6,9 @@ import { FullScreenSpinner } from "@/components/full-screen-spinner";
 import { CenteredSpinner } from "@/components/spinner";
 import { StudySummary } from "@/components/study-summary";
 import { useSync } from "@/lib/sync-context";
-import {
-  fetchAllDueCounts,
-  fetchTodayStudyStats,
-  isCollectionEmpty,
-} from "@/lib/anki-fetch";
+import { fetchAllDueCounts, isCollectionEmpty } from "@/lib/anki-fetch";
 import { fetchDeckNames } from "@/lib/decks";
+import { fetchTodayStudyStats } from "@/lib/stats/today";
 import type { DueCounts, StudyStats } from "@/lib/types";
 
 // The first home load of a session happens during app startup, right after the

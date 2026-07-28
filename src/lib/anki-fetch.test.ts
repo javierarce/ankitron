@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   ankiFetch,
+  ankiMulti,
   fetchDueCount,
   fetchAllDueCounts,
   fetchAllNoteCounts,
@@ -60,6 +61,91 @@ describe("ankiFetch", () => {
     );
 
     await expect(ankiFetch("deckNames")).rejects.toThrow("deck not found");
+  });
+});
+
+describe("ankiMulti", () => {
+  const originalFetch = globalThis.fetch;
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  /** The envelope shape captured from a live AnkiConnect (version 6). */
+  const respond = (body: unknown) =>
+    vi
+      .mocked(globalThis.fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify(body)));
+
+  it("batches the actions into one request, stamping each with version 6", async () => {
+    respond({ result: [{ result: [1, 2], error: null }], error: null });
+
+    await ankiMulti<number[]>([{ action: "findCards", params: { query: "x" } }]);
+
+    const body = JSON.parse(
+      vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string,
+    );
+    expect(body.action).toBe("multi");
+    expect(body.params.actions).toEqual([
+      { action: "findCards", params: { query: "x" }, version: 6 },
+    ]);
+  });
+
+  // The trap this helper exists for: `multi` gives every sub-action its own
+  // {result, error} envelope. Reading the array as bare results misreads all
+  // of them — and does so silently.
+  it("unwraps each sub-action's own result envelope", async () => {
+    respond({
+      result: [
+        { result: [1, 2, 3], error: null },
+        { result: [], error: null },
+      ],
+      error: null,
+    });
+
+    const outcomes = await ankiMulti<number[]>([
+      { action: "findCards", params: { query: "a" } },
+      { action: "findCards", params: { query: "b" } },
+    ]);
+
+    expect(outcomes).toEqual([
+      { ok: true, value: [1, 2, 3] },
+      { ok: true, value: [] },
+    ]);
+  });
+
+  // A failed sub-action is reported in-band; the request itself still resolves.
+  it("reports a failed sub-action without rejecting the batch", async () => {
+    respond({
+      result: [
+        { result: [7], error: null },
+        { result: null, error: "Invalid search: expected a whole number" },
+      ],
+      error: null,
+    });
+
+    const outcomes = await ankiMulti<number[]>([
+      { action: "findCards", params: { query: "ok" } },
+      { action: "findCards", params: { query: "bad" } },
+    ]);
+
+    expect(outcomes[0]).toEqual({ ok: true, value: [7] });
+    expect(outcomes[1].ok).toBe(false);
+  });
+
+  it("treats a malformed entry as a failure rather than trusting it", async () => {
+    respond({ result: ["not an envelope"], error: null });
+
+    const [outcome] = await ankiMulti<number[]>([{ action: "findCards" }]);
+
+    expect(outcome.ok).toBe(false);
+  });
+
+  it("skips the round trip entirely for an empty batch", async () => {
+    expect(await ankiMulti([])).toEqual([]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
 

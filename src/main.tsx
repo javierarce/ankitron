@@ -8,6 +8,7 @@ import { DeckDetailPage } from "./pages/deck-detail";
 import { DeckSettingsPage } from "./pages/deck-settings";
 import { StudyRoute } from "./pages/study";
 import { SettingsPage } from "./pages/settings";
+import { StatsPage } from "./pages/stats";
 import { ThemeProvider } from "./lib/theme";
 import { UpdateProvider } from "./components/update-provider";
 import { ToastProvider } from "./components/toast-provider";
@@ -29,6 +30,7 @@ const routes = (
       <Route path="decks/:deckName" element={<DeckDetailPage />} />
       <Route path="decks/:deckName/settings" element={<DeckSettingsPage />} />
       <Route path="decks/:deckName/study" element={<StudyRoute />} />
+      <Route path="stats" element={<StatsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </Route>
   </Routes>

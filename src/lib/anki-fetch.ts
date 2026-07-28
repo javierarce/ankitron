@@ -1,10 +1,45 @@
-import { AnkiResponse, DeckStats, DueCounts, StudyStats } from "./types";
+import { clearStatsCache } from "./stats/cache";
+import { AnkiResponse, DeckStats, DueCounts } from "./types";
 
 /** True when running inside Tauri's webview. */
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+/**
+ * Actions that change what the Stats page reports: revlog rows (grading,
+ * undo, deletion), a card's deck attribution (RevlogEntry.deck is the card's
+ * CURRENT deck), or the due schedule the forecast queries. Any of these
+ * succeeding drops the Stats caches (see stats/cache.ts).
+ *
+ * Invalidation lives here — the one chokepoint every write passes through —
+ * rather than sprinkled over call sites, because the sprinkled version was
+ * incomplete the day it was written: grading cleared the cache, deleting a
+ * note did not. A new mutating action added to this file should be checked
+ * against this set, which is still one place instead of N.
+ */
+const STATS_MUTATING = new Set([
+  "guiAnswerCard",
+  "guiUndo",
+  "deleteNotes",
+  "deleteDecks",
+  "changeDeck",
+  "suspend",
+  "unsuspend",
+  "importPackage",
+]);
+
 export async function ankiFetch<T = unknown>(
+  action: string,
+  params?: Record<string, unknown>
+): Promise<T> {
+  const result = await ankiTransport<T>(action, params);
+  // Only a SUCCESSFUL mutation invalidates — a rejected grade or failed
+  // delete wrote nothing, so the cache is still right.
+  if (STATS_MUTATING.has(action)) clearStatsCache();
+  return result;
+}
+
+async function ankiTransport<T>(
   action: string,
   params?: Record<string, unknown>
 ): Promise<T> {
@@ -44,6 +79,51 @@ export async function ankiFetch<T = unknown>(
   }
 
   return data.result;
+}
+
+/** One sub-action's outcome from `ankiMulti`. */
+export type MultiOutcome<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
+
+/**
+ * Run many actions in a single request.
+ *
+ * AnkiConnect serialises every request on Anki's main thread, so a fan-out of N
+ * calls costs N round trips and visibly stalls a page — batching 30 due-date
+ * searches this way took them from ~770ms to ~50ms against a live collection.
+ *
+ * The envelope is the catch, and it's worth stating plainly because it's easy
+ * to get wrong: `multi` wraps EACH sub-result in its own `{result, error}`,
+ * exactly like a top-level response, and it does NOT reject when a sub-action
+ * fails — the failure is reported in-band. Consuming the array as bare results
+ * silently misreads every entry. This helper unwraps that once, so callers deal
+ * in a tagged outcome instead.
+ */
+export async function ankiMulti<T>(
+  actions: Array<{ action: string; params?: Record<string, unknown> }>,
+): Promise<MultiOutcome<T>[]> {
+  if (actions.length === 0) return [];
+
+  const results = await ankiFetch<unknown[]>("multi", {
+    actions: actions.map((a) => ({ ...a, version: 6 })),
+  });
+
+  // ankiFetch's invalidation only sees the outer "multi" verb, so mutating
+  // SUB-actions have to be caught here or a future batched write would leave
+  // the Stats cache stale — the same trap the demo mock's persistence check
+  // has with its own MUTATING set.
+  if (actions.some((a) => STATS_MUTATING.has(a.action))) clearStatsCache();
+
+  return actions.map((_, i) => {
+    const item = results[i];
+    if (item && typeof item === "object" && "result" in item) {
+      const envelope = item as { result: unknown; error?: unknown };
+      if (envelope.error == null) return { ok: true, value: envelope.result as T };
+      return { ok: false, error: String(envelope.error) };
+    }
+    return { ok: false, error: "Malformed response from Anki." };
+  });
 }
 
 /**
@@ -109,43 +189,6 @@ export async function fetchDueCount(deckName: string): Promise<DueCounts> {
   } catch {
     return { new: 0, learn: 0, review: 0 };
   }
-}
-
-// A `cardReviews` row: [id(ms), cardId, usn, ease, ivl, lastIvl, factor, durationMs, type].
-// We only need the review id (index 0, for ordering) and its duration (index 7).
-const REVIEW_ID = 0;
-const REVIEW_DURATION_MS = 7;
-
-/**
- * Today's study totals, matching Anki's main-screen line. The card count comes
- * straight from `getNumCardsReviewedToday` (which honours Anki's day-rollover
- * hour). For time, we can't ask AnkiConnect for "today's reviews" directly, so
- * we pull recent reviews per deck, take the most recent N (N = today's count —
- * reviews are chronological, so the newest N are exactly today's), and sum their
- * durations. The lookback window only needs to exceed one Anki day.
- */
-export async function fetchTodayStudyStats(
-  deckNames: string[],
-): Promise<StudyStats> {
-  const cards = await ankiFetch<number>("getNumCardsReviewedToday");
-  if (cards <= 0) return { cards: 0, seconds: 0 };
-
-  const lookbackMs = 2 * 24 * 60 * 60 * 1000; // two days, safely past any rollover
-  const startID = Date.now() - lookbackMs;
-
-  const perDeck = await Promise.all(
-    deckNames.map((deck) =>
-      ankiFetch<number[][]>("cardReviews", { deck, startID }).catch(() => []),
-    ),
-  );
-
-  const recent = perDeck
-    .flat()
-    .sort((a, b) => b[REVIEW_ID] - a[REVIEW_ID])
-    .slice(0, cards);
-  const totalMs = recent.reduce((sum, r) => sum + (r[REVIEW_DURATION_MS] ?? 0), 0);
-
-  return { cards, seconds: totalMs / 1000 };
 }
 
 /**

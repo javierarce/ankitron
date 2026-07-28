@@ -21,9 +21,21 @@ export function decodeHtml(html: string): string {
 }
 
 /** Plain text of an HTML field: sound tags and markup dropped, entities
- * decoded, surrounding whitespace trimmed. */
+ * decoded, surrounding whitespace trimmed.
+ *
+ * `<style>` and `<script>` elements are removed WITH their contents — a bare
+ * tag-strip keeps their text, and Anki's `cardsInfo` question HTML leads with
+ * the card template's whole stylesheet, which would render as
+ * ".card { font-family: arial; … } Ells … de vacances." in any list built
+ * from it. */
 export function stripHtml(html: string): string {
-  return decodeHtml(stripSoundTags(html).replace(/<[^>]*>/g, "")).trim();
+  const withoutBlocks = html.replace(
+    /<(style|script)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,
+    "",
+  );
+  return decodeHtml(
+    stripSoundTags(withoutBlocks).replace(/<[^>]*>/g, ""),
+  ).trim();
 }
 
 /** Clip text to `max` characters, appending an ellipsis when it was longer. */

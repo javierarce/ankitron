@@ -25,8 +25,12 @@ interface ChartDotProps {
 export function ChartDot({ x, y, color, content, size = "md" }: ChartDotProps) {
   const side = x < 20 ? "top-start" : x > 80 ? "top-end" : "top";
   return (
+    // The translate transform makes this wrapper a stacking context, which
+    // TRAPS the tooltip's z-index inside it — so sibling dots later in the
+    // DOM paint over an open tooltip whenever dots sit close together.
+    // Raising the hovered/focused wrapper above its siblings frees it.
     <div
-      className="absolute -translate-x-1/2 -translate-y-1/2"
+      className="absolute -translate-x-1/2 -translate-y-1/2 hover:z-50 focus-within:z-50"
       style={{ left: `${x}%`, top: `${y}%` }}
     >
       <Tooltip side={side} content={content}>
