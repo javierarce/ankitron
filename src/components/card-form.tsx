@@ -18,11 +18,15 @@ import {
   type NewNote,
 } from "@/lib/notes";
 import { CLOZE_TYPED_MODEL, ensureClozeTypedModel } from "@/lib/cloze-typed-model";
+import {
+  CARD_TYPE_OPTIONS,
+  defaultCardTypeFor,
+  type CardType,
+} from "@/lib/card-types";
 import { useAllTags } from "@/hooks/use-all-tags";
 import { useDeckNames } from "@/hooks/use-deck-names";
 import { ModalDialog } from "./modal-dialog";
 
-type CardType = "Basic" | "BasicReversed" | "Cloze" | "ClozeTyped";
 
 // Anki's stock note type that generates a forward and a reverse card per note.
 const BASIC_REVERSED_MODEL = "Basic (and reversed card)";
@@ -36,13 +40,6 @@ const KNOWN_MODELS = new Set<string>([
   "Cloze",
   CLOZE_TYPED_MODEL,
 ]);
-
-const CARD_TYPE_OPTIONS: { value: CardType; label: string }[] = [
-  { value: "Basic", label: "Basic" },
-  { value: "BasicReversed", label: "Basic (and reversed)" },
-  { value: "Cloze", label: "Cloze" },
-  { value: "ClozeTyped", label: "Cloze (typed)" },
-];
 
 // "Create a new deck" sentinel. The leading space is deliberate: Anki trims
 // deck names, so no real deck path can equal this, keeping it collision-proof.
@@ -111,7 +108,7 @@ export function CardForm({
         : note.modelName === BASIC_REVERSED_MODEL
           ? "BasicReversed"
           : "Basic"
-    : "Basic";
+    : defaultCardTypeFor(deckName);
 
   const [cardType, setCardType] = useState<CardType>(initialType);
 
@@ -185,6 +182,12 @@ export function CardForm({
 
   const creatingDeck = targetDeck === NEW_DECK;
   const destDeck = creatingDeck ? newDeck.trim() : targetDeck;
+
+  // Which deck's TTS voice the editors should offer. The destination deck, so
+  // moving a note to another deck while editing picks up that deck's voice —
+  // except while a new deck is still being named, where there's nothing to look
+  // up yet and the deck we opened on is the better guess.
+  const voiceDeck = creatingDeck ? deckName : targetDeck;
 
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -503,6 +506,7 @@ export function CardForm({
                   }
                   placeholder={`${f.name}…`}
                   clozeMode={isClozeField}
+                  deckName={voiceDeck}
                 />
               </div>
             );
@@ -513,13 +517,23 @@ export function CardForm({
               <label className="mb-1.5 block text-sm font-medium text-foreground/70">
                 Front
               </label>
-              <CardEditor content={front} onChange={setFront} placeholder="Front side..." />
+              <CardEditor
+                content={front}
+                onChange={setFront}
+                placeholder="Front side..."
+                deckName={voiceDeck}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground/70">
                 Back
               </label>
-              <CardEditor content={back} onChange={setBack} placeholder="Back side..." />
+              <CardEditor
+                content={back}
+                onChange={setBack}
+                placeholder="Back side..."
+                deckName={voiceDeck}
+              />
             </div>
           </>
         ) : (
@@ -533,13 +547,19 @@ export function CardForm({
                 onChange={setClozeText}
                 placeholder="The capital of {{c1::France}} is {{c2::Paris}}."
                 clozeMode
+                deckName={voiceDeck}
               />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground/70">
                 Back Extra <span className="font-normal text-foreground/40">(optional)</span>
               </label>
-              <CardEditor content={backExtra} onChange={setBackExtra} placeholder="Extra info shown on the back..." />
+              <CardEditor
+                content={backExtra}
+                onChange={setBackExtra}
+                placeholder="Extra info shown on the back..."
+                deckName={voiceDeck}
+              />
             </div>
           </>
         )}

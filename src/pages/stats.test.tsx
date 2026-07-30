@@ -77,9 +77,9 @@ const stats = (over: Partial<CollectionStats> = {}): CollectionStats => ({
   ...over,
 });
 
-const renderPage = () =>
+const renderPage = (entry = "/stats") =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <StatsPage />
     </MemoryRouter>,
   );
@@ -190,6 +190,22 @@ describe("StatsPage", () => {
       deckName: undefined,
       cacheKey: 0,
     });
+  });
+
+  // How a deck links to its own stats: the decks-list menu and the deck page's
+  // menu both open /stats?deck=…, so the page must start scoped there.
+  it("opens scoped to the deck named in the URL", async () => {
+    fetchStatsMock.mockResolvedValue(stats());
+    const { getByLabelText } = renderPage("/stats?deck=Spanish%3A%3AVerbs");
+
+    await screen.findByText("Retention by card age");
+    expect(fetchStatsMock).toHaveBeenCalledWith({
+      deckName: "Spanish::Verbs",
+      cacheKey: 0,
+    });
+    expect(getByLabelText("Filter stats by deck").textContent).toContain(
+      "Verbs",
+    );
   });
 
   // The jargon tiles carry plain-language hover hints (spec §11.2 requires

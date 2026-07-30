@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
+import { DeckHeaderMenu } from "@/components/deck-header-menu";
 import { CenteredSpinner } from "@/components/spinner";
 import { fetchAllDueCounts } from "@/lib/anki-fetch";
 import { areSuspended, fetchCardDecks } from "@/lib/cards";
@@ -11,12 +12,14 @@ import {
   deckLeaf,
   deckParent,
   formatDeckPath,
+  isCardInDeck,
   joinDeck,
   subdecksOf,
   type DeckRename,
 } from "@/lib/deck";
 import { fetchDeckNames, renameDeck } from "@/lib/decks";
 import { recordDeckRedirect, resolveDeckRedirect } from "@/lib/deck-redirects";
+import { renameDeckPrefs } from "@/lib/deck-prefs";
 import { fetchNotes, findNoteIds } from "@/lib/notes";
 import { useSync } from "@/lib/sync-context";
 import type { Note, DueCounts } from "@/lib/types";
@@ -101,8 +104,9 @@ export function DeckDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  // Inline rename of the deck title. Only the deck's own leaf is editable (the
-  // parent path is preserved), matching RenameDeckDialog.
+  // Inline rename of the deck title, and the only way to rename a deck. Just
+  // the leaf is editable — the parent path is preserved, since changing where a
+  // deck lives is Move's job.
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
@@ -284,6 +288,8 @@ export function DeckDetailPage() {
       // Forward stale history entries (e.g. cmd+left onto the pre-rename deck)
       // to the new name instead of dead-ending.
       for (const { from, to } of renames) recordDeckRedirect(from, to);
+      // The deck's own preferences are keyed by name, so they move with it.
+      renameDeckPrefs(renames);
       setRenameBusy(false);
       setEditingName(false);
       if (renames.length === 0) return;
@@ -345,6 +351,17 @@ export function DeckDetailPage() {
   // list is scoped to "All" (or to several subdecks at once).
   const targetDeck = scopedDeck ?? deckName;
   const encodedTarget = encodeURIComponent(targetDeck);
+  // What deleting the header's target would destroy. `notes` and `subdecks`
+  // already span the opened deck's whole subtree, so a scoped subdeck just
+  // filters them — the menu gets exact counts without another round trip.
+  const targetNoteCount = scopedDeck
+    ? notes.filter((n) =>
+        isCardInDeck(noteDecks[n.noteId] ?? deckName, targetDeck),
+      ).length
+    : notes.length;
+  const targetSubdecks = scopedDeck
+    ? subdecksOf(subdecks, targetDeck)
+    : subdecks;
   const due = dueByDeck[targetDeck] ?? { new: 0, learn: 0, review: 0 };
   const totalDue = due.new + due.learn + due.review;
   const studyTo = `/decks/${encodedTarget}/study`;
@@ -407,12 +424,6 @@ export function DeckDetailPage() {
             )}
           </h1>
           <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-            <Link
-              to={`/decks/${encodedTarget}/settings`}
-              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
-            >
-              Settings
-            </Link>
             <button
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-foreground/5 transition-colors"
@@ -432,6 +443,15 @@ export function DeckDetailPage() {
                 No cards due
               </span>
             )}
+            {/* The two things you do with a deck stay as buttons; everything
+                you do to one sits behind the kebab. Like the rest of the
+                header, it follows the scoped subdeck. */}
+            <DeckHeaderMenu
+              deck={targetDeck}
+              isOpenedDeck={!scopedDeck}
+              noteCount={targetNoteCount}
+              subdeckCount={targetSubdecks.length}
+            />
           </div>
         </div>
         {renameError && (

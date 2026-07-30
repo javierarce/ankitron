@@ -14,6 +14,7 @@ import {
   subdecksOf,
   type DeckNode,
 } from "@/lib/deck";
+import { renameDeckPrefs } from "@/lib/deck-prefs";
 import { recordDeckRedirect } from "@/lib/deck-redirects";
 import { foldText } from "@/lib/fold-text";
 import { exportDeckToJson } from "@/lib/import-export";
@@ -197,6 +198,8 @@ export function AllDecksList({
       // No-op (e.g. a case-only change) — nothing moved.
       if (renames.length === 0) return;
       for (const { from, to } of renames) recordDeckRedirect(from, to);
+      // The deck's own preferences are keyed by name, so they move with it.
+      renameDeckPrefs(renames);
       onRefresh();
     } catch (err) {
       setMoveError(err instanceof Error ? err.message : "Move failed.");
@@ -540,6 +543,16 @@ function DeckRowMenu({
         { label: "Add a note", onSelect: onAddCard },
         { label: "Move", onSelect: onMove },
         { label: "Export", onSelect: onExport },
+        {
+          // The Stats page reads its deck filter from the URL, so this opens it
+          // already scoped to this deck. Sits next to Settings, the same pairing
+          // the deck page's own menu uses.
+          label: "Stats",
+          // URLSearchParams, not encodeURIComponent: the latter leaves "+"
+          // alone, and a query parser reads that back as a space — a deck named
+          // "C++" would arrive as "C  ".
+          onSelect: () => navigate(`/stats?${new URLSearchParams({ deck })}`),
+        },
         {
           label: "Settings",
           onSelect: () => navigate(`/decks/${encoded}/settings`),
