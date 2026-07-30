@@ -67,6 +67,8 @@ interface CardEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   clozeMode?: boolean;
+  /** The note's deck, so text-to-speech can offer that deck's preferred voice. */
+  deckName?: string;
 }
 
 function getNextClozeNumber(html: string): number {
@@ -105,7 +107,13 @@ function normalizeHtml(html: string): string {
   return html.replace(/\s+/g, " ").replace(/>\s+</g, "><").trim();
 }
 
-export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEditorProps) {
+export function CardEditor({
+  content,
+  onChange,
+  placeholder,
+  clozeMode,
+  deckName,
+}: CardEditorProps) {
   const audioInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [attachingAudio, setAttachingAudio] = useState(false);
@@ -724,6 +732,7 @@ export function CardEditor({ content, onChange, placeholder, clozeMode }: CardEd
       {ttsText !== null && (
         <TtsDialog
           text={ttsText}
+          deckName={deckName}
           onInsert={insertTtsAudio}
           onClose={() => setTtsText(null)}
         />

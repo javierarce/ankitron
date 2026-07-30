@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ModalDialog } from "./modal-dialog";
+import { getDeckPrefs } from "@/lib/deck-prefs";
 import {
   ElevenLabsVoice,
   generateSpeech,
@@ -14,9 +15,34 @@ import {
 interface TtsDialogProps {
   /** The text the user selected in the editor. */
   text: string;
+  /**
+   * The note's deck. When it has a preferred voice, that wins over the
+   * last-used one — otherwise a German deck keeps inheriting whichever voice
+   * the Spanish deck used a minute ago.
+   */
+  deckName?: string;
   /** Called with the stored media filename once the user inserts. */
   onInsert: (filename: string) => void;
   onClose: () => void;
+}
+
+/**
+ * Which voice to preselect: the deck's own first, then the last one used
+ * anywhere, then the top of the list. Each candidate is only taken if it's
+ * actually in `list` — a voice since deleted at ElevenLabs would otherwise
+ * leave the picker showing an option that isn't there.
+ */
+function preferredVoice(
+  list: ElevenLabsVoice[],
+  deckName: string | undefined
+): string {
+  const known = (id: string | null | undefined) =>
+    !!id && list.some((v) => v.voiceId === id);
+  const deckVoice = deckName ? getDeckPrefs(deckName).ttsVoiceId : undefined;
+  const last = getLastVoiceId();
+  if (known(deckVoice)) return deckVoice!;
+  if (known(last)) return last!;
+  return list[0]?.voiceId ?? "";
 }
 
 /** Decode base64 mp3 into a playable object URL for the preview step. */
@@ -25,21 +51,16 @@ function base64ToObjectUrl(base64: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
 }
 
-export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
+export function TtsDialog({ text, deckName, onInsert, onClose }: TtsDialogProps) {
   const modelId = getModelId();
 
   // Seed the picker from the cache so it's usable immediately, then refresh.
   const [voices, setVoices] = useState<ElevenLabsVoice[]>(() =>
     getCachedVoices()
   );
-  const [voiceId, setVoiceId] = useState<string>(() => {
-    const cached = getCachedVoices();
-    const last = getLastVoiceId();
-    return (
-      (last && cached.some((v) => v.voiceId === last) ? last : cached[0]?.voiceId) ??
-      ""
-    );
-  });
+  const [voiceId, setVoiceId] = useState<string>(() =>
+    preferredVoice(getCachedVoices(), deckName)
+  );
 
   const [generating, setGenerating] = useState(false);
   const [inserting, setInserting] = useState(false);
@@ -63,10 +84,13 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
       .then((fetched) => {
         if (cancelled || fetched.length === 0) return;
         setVoices(fetched);
+        // Re-resolve rather than jumping to fetched[0]: on a cold cache the
+        // picker starts empty, and this is where the deck's preferred voice
+        // first becomes selectable.
         setVoiceId((current) =>
           current && fetched.some((v) => v.voiceId === current)
             ? current
-            : fetched[0].voiceId
+            : preferredVoice(fetched, deckName)
         );
       })
       .catch((e) => {
@@ -79,7 +103,9 @@ export function TtsDialog({ text, onInsert, onClose }: TtsDialogProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // deckName only feeds the voice fallback above, and it's fixed for as long
+    // as the dialog is open, so this stays a once-on-open fetch.
+  }, [deckName]);
 
   // Keep focus inside the dialog so keystrokes can't reach the editor/form
   // behind it. This re-runs as the dialog's state changes — notably when

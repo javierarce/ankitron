@@ -1,4 +1,4 @@
-import { ankiFetch } from "./anki-fetch";
+import { ankiFetch, ankiMulti } from "./anki-fetch";
 import { NoteField } from "./types";
 
 /** An `[sound:file]` reference inside a raw note field. */
@@ -350,35 +350,74 @@ export async function playAudio(files: string[]): Promise<void> {
   if (token === playToken) setCurrentFile(null);
 }
 
-// --- Autoplay ---------------------------------------------------------------
+// --- Audio options -----------------------------------------------------------
 //
-// During study Ankitron drives Anki's real reviewer, so automatic playback is
-// Anki's doing, governed by the deck's "Don't play audio automatically"
-// option. These helpers surface that option. Note that deck configs are
-// shared presets: changing it affects every deck using the same preset, and
-// studying in Anki desktop directly.
+// During study Ankitron drives Anki's real reviewer, so playback is Anki's
+// doing, governed by two options: "Don't play audio automatically" (autoplay)
+// and "Skip question when replaying answer" (replayq).
+//
+// Anki keeps them on a deck's *config* — a preset any number of decks point at.
+// So these read and write the preset the given deck uses, exactly as Anki's own
+// deck options screen does, and getDeckPreset names it so the UI can say whose
+// settings these really are instead of pretending they belong to one deck.
 
-export async function getDeckAutoplay(deckName: string): Promise<boolean | null> {
+/** Read one audio flag off a deck's preset, or null if Anki is unreachable. */
+export async function getDeckAudioFlag(
+  deckName: string,
+  key: "autoplay" | "replayq"
+): Promise<boolean | null> {
   try {
-    const config = await ankiFetch<{ autoplay?: boolean }>("getDeckConfig", {
+    const config = await ankiFetch<Record<string, unknown>>("getDeckConfig", {
       deck: deckName,
     });
-    return config?.autoplay ?? true;
+    // Anki defaults both to on, so a preset missing the key counts as on.
+    return config?.[key] !== false;
   } catch {
     return null;
   }
 }
 
-export async function setDeckAutoplay(
+export async function setDeckAudioFlag(
   deckName: string,
-  autoplay: boolean
+  key: "autoplay" | "replayq",
+  value: boolean
 ): Promise<void> {
-  // saveDeckConfig replaces the whole config object, so round-trip it.
+  // saveDeckConfig replaces the whole config object, so round-trip it rather
+  // than sending a patch.
   const config = await ankiFetch<Record<string, unknown>>("getDeckConfig", {
     deck: deckName,
   });
-  config.autoplay = autoplay;
+  config[key] = value;
   await ankiFetch("saveDeckConfig", { config });
+}
+
+/**
+ * How many decks share this deck's options preset, itself included — 1 when it's
+ * the deck's own. Null when Anki couldn't tell us, so a caller can stay quiet
+ * rather than guess.
+ *
+ * This exists only to warn that a change reaches other decks. AnkiConnect can't
+ * list presets, so it takes a config read per deck, batched into one request.
+ */
+export async function countDecksSharingOptions(
+  deckName: string
+): Promise<number | null> {
+  try {
+    const config = await ankiFetch<Record<string, unknown>>("getDeckConfig", {
+      deck: deckName,
+    });
+    if (!config) return null;
+    const deckNames = await ankiFetch<string[]>("deckNames");
+    const results = await ankiMulti<Record<string, unknown>>(
+      deckNames.map((deck) => ({ action: "getDeckConfig", params: { deck } }))
+    );
+    // A deck whose config can't be read is skipped rather than failing the
+    // count — undercounting reads better than reporting nothing.
+    const count = results.filter((r) => r.ok && r.value?.id === config.id).length;
+    return count || 1;
+  } catch {
+    return null;
+  }
 }
 
 // --- Storing ----------------------------------------------------------------

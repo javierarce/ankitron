@@ -9,7 +9,13 @@ import {
   act,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route, useNavigate } from "react-router-dom";
+import {
+  MemoryRouter,
+  Routes,
+  Route,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 // A tiny in-memory AnkiConnect: a parent deck "Spanish" with a subdeck
 // "Spanish::Verbs", each holding one card. Enough for the deck page to load,
@@ -150,11 +156,23 @@ Object.defineProperty(window, "localStorage", {
 beforeEach(reset);
 afterEach(cleanup);
 
+// Stands in for the routes the header's menu navigates to, so a test can read
+// back where it landed (Stats carries its deck scope in the query string).
+function Landed({ name }: { name: string }) {
+  const { pathname, search } = useLocation();
+  return <div data-testid={name}>{pathname + search}</div>;
+}
+
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/decks/Spanish"]}>
+      {/* Always-mounted probe, so a test can read the URL even when the
+          destination is the deck page itself (a move lands on one). */}
+      <Landed name="location" />
       <Routes>
         <Route path="/decks/:deckName" element={<DeckDetailPage />} />
+        <Route path="/decks/:deckName/settings" element={<Landed name="settings" />} />
+        <Route path="/stats" element={<Landed name="stats" />} />
         <Route path="*" element={<div data-testid="elsewhere" />} />
       </Routes>
     </MemoryRouter>,
@@ -302,6 +320,118 @@ describe("DeckDetailPage inline rename", () => {
     expect(screen.queryByTestId("elsewhere")).toBeNull();
     expect(screen.getByTitle("Rename deck").textContent).not.toContain(
       "Español",
+    );
+  });
+});
+
+describe("DeckDetailPage header menu", () => {
+  // Everything you do TO a deck lives here — the settings page keeps only the
+  // deck's options.
+  it("holds the deck's actions", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("button", { name: /Verbs/i });
+
+    await user.click(screen.getByLabelText("Deck actions"));
+
+    // No Import: it can't be scoped to this deck (its target comes from the
+    // file), so it stays on the Decks page rather than implying otherwise here.
+    const menu = screen.getByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Move", "Export", "Stats", "Settings", "Delete deck"]);
+  });
+
+  // Ported from the deck settings page, which used to own Move.
+  it("moves the deck under the chosen parent, keeping its name", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("button", { name: /Verbs/i });
+
+    await user.click(screen.getByLabelText("Deck actions"));
+    await user.click(screen.getByRole("button", { name: "Move" }));
+    await screen.findByRole("heading", { name: "Move Deck" });
+
+    // Pick a new parent from the deck tree and confirm (the dialog's own button
+    // is the last "Move" on screen).
+    await user.click(await screen.findByRole("button", { name: "Other" }));
+    const moveButtons = screen.getAllByRole("button", { name: "Move" });
+    await user.click(moveButtons[moveButtons.length - 1]);
+
+    // The leaf is preserved, and the page follows the deck to its new home.
+    await waitFor(() => {
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/decks/Other%3A%3ASpanish",
+      );
+    });
+    expect(screen.queryByRole("heading", { name: "Move Deck" })).toBeNull();
+  });
+
+  // Ported from the settings page's Danger Zone.
+  it("deletes the deck and leaves for the deck list", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("button", { name: /Verbs/i });
+
+    await user.click(screen.getByLabelText("Deck actions"));
+    await user.click(screen.getByRole("button", { name: "Delete deck" }));
+    await screen.findByRole("heading", { name: "Delete Deck" });
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location").textContent).toBe("/decks");
+    });
+    expect(state.decks.has("Spanish")).toBe(false);
+  });
+
+  it("opens this deck's stats, scoped by the query string", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("button", { name: /Verbs/i });
+
+    await user.click(screen.getByLabelText("Deck actions"));
+    await user.click(screen.getByRole("button", { name: "Stats" }));
+
+    expect((await screen.findByTestId("stats")).textContent).toBe(
+      "/stats?deck=Spanish",
+    );
+  });
+
+  // Settings moved off the header into the same menu; it must still act on the
+  // deck the header is showing.
+  it("still reaches deck settings", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("button", { name: /Verbs/i });
+
+    await user.click(screen.getByLabelText("Deck actions"));
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+
+    expect((await screen.findByTestId("settings")).textContent).toBe(
+      "/decks/Spanish/settings",
+    );
+  });
+
+  // Everything else in the header follows a scoped subdeck; Stats does too, so
+  // scoping the list to "Verbs" and opening Stats doesn't silently widen back
+  // out to the parent deck.
+  it("follows the scoped subdeck", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /Verbs/i }));
+    const heading = screen.getByRole("heading", { level: 1 });
+    await waitFor(() =>
+      expect(within(heading).getByTitle("Rename subdeck")).toBeTruthy(),
+    );
+
+    await user.click(screen.getByLabelText("Deck actions"));
+    await user.click(screen.getByRole("button", { name: "Stats" }));
+
+    expect((await screen.findByTestId("stats")).textContent).toBe(
+      "/stats?deck=Spanish%3A%3AVerbs",
     );
   });
 });

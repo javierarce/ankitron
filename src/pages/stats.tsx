@@ -10,7 +10,7 @@
 // legend as its relief.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CenteredSpinner, Spinner } from "@/components/spinner";
 import { Tooltip } from "@/components/tooltip";
 import { AnkiConnectionError } from "@/components/anki-connection-error";
@@ -27,7 +27,14 @@ import {
 import { addDays, type DayActivity } from "@/lib/stats/activity";
 
 export function StatsPage() {
-  const [deckName, setDeckName] = useState("");
+  // The deck filter lives in the URL (?deck=…) so a deck can link straight to
+  // its own stats — from the decks list menu or the deck page — and so the
+  // scope survives a reload. Replacing rather than pushing keeps in-page filter
+  // changes out of the back stack: back returns to wherever you came from.
+  const [params, setParams] = useSearchParams();
+  const deckName = params.get("deck") ?? "";
+  const setDeckName = (deck: string) =>
+    setParams(deck ? { deck } : {}, { replace: true });
   // What's currently on screen, and which deck it describes. Keeping them
   // together means "the selection has moved ahead of the data" is derived
   // rather than a third state to keep in sync.
