@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decodeHtml, stripHtml, truncate } from "./html-text";
+import { decodeHtml, stripHtml, truncate, charBoundary } from "./html-text";
 
 describe("decodeHtml", () => {
   it("decodes the common entities (non-DOM fallback path)", () => {
@@ -47,5 +47,26 @@ describe("truncate", () => {
 
   it("clips long text and appends an ellipsis", () => {
     expect(truncate("abcdef", 5)).toBe("abcde…");
+  });
+});
+
+describe("charBoundary", () => {
+  it("leaves an index that already starts a character alone", () => {
+    expect(charBoundary("abc", 2)).toBe(2);
+    expect(charBoundary("\u{1F436}a", 2)).toBe(2);
+    expect(charBoundary("abc", 0)).toBe(0);
+  });
+
+  it("moves an index inside a surrogate pair back to its start", () => {
+    expect(charBoundary("a\u{1F436}", 2)).toBe(1);
+  });
+});
+
+describe("truncate at a surrogate pair", () => {
+  it("clips before the pair rather than stranding half of it", () => {
+    // Cutting at 5 would land between the emoji's two code units and render
+    // the leftover half as "".
+    const text = "abcd\u{1F436}efgh";
+    expect(truncate(text, 5)).toBe("abcd…");
   });
 });

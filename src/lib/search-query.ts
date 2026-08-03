@@ -410,3 +410,35 @@ export function hasOperators(query: string): boolean {
   }
   return false;
 }
+
+/**
+ * The literal text a query looks for, so the results can highlight what
+ * matched. Returns the terms in the order they'd be read, or an empty list when
+ * the query has no literal text to point at.
+ *
+ * A plain-text query is a single phrase: the in-memory filter tests the whole
+ * string as one substring (see notesForQuery), so `dog cat` matches — and so
+ * highlights as — `dog cat`, not as two separate words. An operator query is
+ * AND-ed term by term by Anki's backend, so each bare word stands on its own.
+ *
+ * The parts of a query that describe *which* notes match rather than what text
+ * to point at are skipped: qualifiers (`tag:animals`), negation (`-dog`, whose
+ * match is an absence), grouping, and `or`. Wildcards are skipped too — only
+ * Anki's matcher knows what `d*g` actually matched. Skipping is always safe:
+ * the cost is a missing highlight, never a wrong one.
+ */
+export function searchTerms(query: string): string[] {
+  const trimmed = query.trim();
+  if (trimmed === "") return [];
+  if (!hasOperators(trimmed)) return [trimmed];
+  const terms: string[] = [];
+  for (const t of tokenize(trimmed)) {
+    if (t.text.startsWith("-")) continue;
+    if (/[()*]/.test(t.text)) continue;
+    if (t.text.indexOf(":") > 0) continue;
+    const term = unquote(t.text).trim();
+    if (term === "" || term.toLowerCase() === "or") continue;
+    terms.push(term);
+  }
+  return terms;
+}

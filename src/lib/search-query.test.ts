@@ -8,6 +8,7 @@ import {
   contextQuery,
   highlightQuery,
   hasOperators,
+  searchTerms,
   type SuggestionSources,
 } from "./search-query";
 
@@ -301,4 +302,34 @@ describe("hasOperators", () => {
     '"a phrase"',
     "prop:ivl>10",
   ])("treats %j as an operator query", (q) => expect(hasOperators(q)).toBe(true));
+});
+
+describe("searchTerms", () => {
+  it("returns nothing for an empty query", () => {
+    expect(searchTerms("")).toEqual([]);
+    expect(searchTerms("   ")).toEqual([]);
+  });
+
+  it("treats a plain query as one phrase, matching the substring filter", () => {
+    expect(searchTerms("dog")).toEqual(["dog"]);
+    expect(searchTerms("big dog")).toEqual(["big dog"]);
+  });
+
+  it("splits an operator query into its bare terms", () => {
+    expect(searchTerms("dog tag:animal")).toEqual(["dog"]);
+    expect(searchTerms("dog or cat")).toEqual(["dog", "cat"]);
+  });
+
+  it("unquotes a phrase", () => {
+    expect(searchTerms('"big dog" tag:animal')).toEqual(["big dog"]);
+  });
+
+  it("skips terms that describe which notes match, not what text to point at", () => {
+    // Negation: the match is the term's absence, so highlighting it would be a lie.
+    expect(searchTerms("-dog tag:animal")).toEqual([]);
+    // Qualifiers, grouping, and wildcards have no literal text to mark.
+    expect(searchTerms("deck:French is:due")).toEqual([]);
+    expect(searchTerms("(dog or cat)")).toEqual([]);
+    expect(searchTerms("d*g tag:animal")).toEqual([]);
+  });
 });

@@ -99,6 +99,18 @@ body {
   }
 }
 
+/* A search-term match inside a note list row. <mark>'s browser default is a
+   fixed black-on-yellow that ignores both themes, so it's replaced with a tint
+   of the theme accent — the same language the app already uses to say "this
+   one". The text colour is set rather than inherited so a match still reads at
+   full strength on the row's dimmed secondary line and tag chips. */
+.search-hit {
+  border-radius: 3px;
+  padding: 0 1px;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent, #2563eb) 26%, transparent);
+}
+
 /* The deck list's audio chip while its clip is sounding — same accent tint and
    pulse as .audio-tag.is-playing, so a playing card reads the same in the list
    as it does in study. */

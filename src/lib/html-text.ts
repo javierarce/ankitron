@@ -38,8 +38,21 @@ export function stripHtml(html: string): string {
   ).trim();
 }
 
+/**
+ * Move `index` off the middle of a surrogate pair, back to where the pair
+ * starts, so slicing there can't strand half an emoji as a "�". String indices
+ * count UTF-16 units, so any offset computed by arithmetic rather than by
+ * walking characters can land inside one.
+ */
+export function charBoundary(text: string, index: number): number {
+  if (index <= 0) return index;
+  const code = text.charCodeAt(index);
+  // A low surrogate at `index` means its high half sits at `index - 1`.
+  return code >= 0xdc00 && code <= 0xdfff ? index - 1 : index;
+}
+
 /** Clip text to `max` characters, appending an ellipsis when it was longer. */
 export function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
-  return text.slice(0, max) + "…";
+  return text.slice(0, charBoundary(text, max)) + "…";
 }
