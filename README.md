@@ -50,17 +50,8 @@ Two buttons also remove the most common grading mistake: pressing Hard when you 
 
 Press <kbd>?</kbd> (or the keyboard button next to the settings cog) to see the full list of shortcuts in the app.
 
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, project structure, and the release process.
-
 ## Disclaimer
 
 Ankitron is an unofficial third-party app and is not affiliated with the official Anki project or Ankitects Pty Ltd.
 
 Use at your own risk. The developer is not responsible for any data loss or synchronization errors with your AnkiWeb account.
-
-## License
-
-GPL-3.0-or-later. See [LICENSE](LICENSE).
