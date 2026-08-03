@@ -22,8 +22,10 @@ import { flagColor, flagTint } from "@/lib/flags";
 import { ActionsMenu } from "./actions-menu";
 import { FlagPicker } from "./flag-picker";
 import { stripCloze } from "@/lib/cloze";
-import { stripHtml, truncate } from "@/lib/html-text";
+import { stripHtml } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
+import { clipToMatch, matchRanges } from "@/lib/search-highlight";
+import { HighlightedText } from "./highlighted-text";
 import {
   extractImageFilenames,
   extractSoundFilenames,
@@ -41,20 +43,27 @@ interface NoteDisplay {
   audio: string[];
 }
 
-// A note's list-row display: two HTML-stripped, truncated text lines plus the
-// media (image + audio filenames) to preview inline. Both the stripHtml DOM
-// parse and the media scan cost a parse per field and the list re-renders on
-// every search keystroke, so the result is cached per note object (weakly — an
-// edit or refetch replaces the note objects, dropping their stale entries with
-// them).
+/** Characters of each display line a row shows before the ellipsis. */
+const DISPLAY_LENGTH = 80;
+
+// A note's list-row display: two HTML-stripped text lines plus the media (image
+// + audio filenames) to preview inline. Both the stripHtml DOM parse and the
+// media scan cost a parse per field and the list re-renders on every search
+// keystroke, so the result is cached per note object (weakly — an edit or
+// refetch replaces the note objects, dropping their stale entries with them).
+//
+// The lines are cached at full length and clipped at render, because where a
+// line is clipped depends on the query (see clipToMatch) while this cache must
+// not — a query-dependent cache would miss on every keystroke, which is the one
+// thing it exists to prevent.
 const displayCache = new WeakMap<Note, NoteDisplay>();
 function noteDisplay(note: Note): NoteDisplay {
   const cached = displayCache.get(note);
   if (cached !== undefined) return cached;
   const { primary, secondary } = noteDisplayFields(note);
   const display: NoteDisplay = {
-    primary: truncate(stripCloze(stripHtml(primary)), 80),
-    secondary: secondary ? truncate(stripCloze(stripHtml(secondary)), 80) : null,
+    primary: stripCloze(stripHtml(primary)),
+    secondary: secondary ? stripCloze(stripHtml(secondary)) : null,
     images: extractImageFilenames(note.fields),
     audio: extractSoundFilenames(note.fields),
   };
@@ -188,6 +197,13 @@ interface NoteRowProps {
   note: Note;
   selected: boolean;
   suspended: boolean;
+  /**
+   * Literal text the active search is looking for, highlighted wherever it
+   * appears in the row (see searchTerms). Empty when nothing is being searched.
+   * Must be identity-stable across renders or every row re-renders on any
+   * change — the parent memoizes it against the query.
+   */
+  terms: string[];
   /** The note's flag (0 = none); tints the row's border and background. */
   flag: number;
   draggable: boolean;
@@ -211,6 +227,7 @@ export const NoteRow = memo(function NoteRow({
   note,
   selected,
   suspended,
+  terms,
   flag,
   draggable,
   onOpen,
@@ -282,23 +299,34 @@ export const NoteRow = memo(function NoteRow({
       <div className={`flex-1 min-w-0 ${suspended ? "opacity-50" : ""}`}>
         {(() => {
           const { primary, secondary } = noteDisplay(note);
+          const first = clipToMatch(primary, DISPLAY_LENGTH, terms);
+          const second = secondary
+            ? clipToMatch(secondary, DISPLAY_LENGTH, terms)
+            : null;
           return (
             <>
-              <p className="text-sm font-medium">{primary}</p>
-              {secondary && (
-                <p className="text-sm text-foreground/50 mt-0.5">{secondary}</p>
+              <p className="text-sm font-medium">
+                <HighlightedText {...first} />
+              </p>
+              {second && (
+                <p className="text-sm text-foreground/50 mt-0.5">
+                  <HighlightedText {...second} />
+                </p>
               )}
             </>
           );
         })()}
         {note.tags.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
+            {/* Tags are part of the search haystack, so they highlight too —
+               otherwise a query that only matched a tag lights up nothing and
+               the row looks like a false positive. */}
             {note.tags.map((tag) => (
               <span
                 key={tag}
                 className="rounded bg-foreground/10 px-1.5 py-0.5 text-xs text-foreground/60"
               >
-                {tag}
+                <HighlightedText text={tag} ranges={matchRanges(tag, terms)} />
               </span>
             ))}
           </div>

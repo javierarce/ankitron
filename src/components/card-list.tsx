@@ -26,6 +26,7 @@ import { stripCloze } from "@/lib/cloze";
 import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
 import { deckLeaf, isCardInDeck, type DeckRename } from "@/lib/deck";
+import { searchTerms } from "@/lib/search-query";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useDeckSegments } from "@/hooks/use-deck-segments";
 import { useNoteDrag } from "@/hooks/use-note-drag";
@@ -198,6 +199,11 @@ export function CardList({
     filteredNotes,
     searchSources,
   } = useNoteSearch({ deckName, segmentNotes, homeDeck });
+
+  // The literal text the query is looking for, for the rows to highlight.
+  // Memoized against the query so every row gets an identity-stable prop and
+  // the memo'd NoteRow keeps ignoring renders the search didn't cause.
+  const highlightTerms = useMemo(() => searchTerms(effective), [effective]);
 
   const {
     selectedIds,
@@ -476,6 +482,7 @@ export function CardList({
                   note={note}
                   selected={selectedIds.has(note.noteId)}
                   suspended={isNoteSuspended(note)}
+                  terms={highlightTerms}
                   flag={noteFlag(note)}
                   draggable={hasSegments}
                   onOpen={setEditingNote}

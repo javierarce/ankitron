@@ -34,7 +34,7 @@ const notes = [
   {
     noteId: 1,
     modelName: "Basic",
-    tags: [],
+    tags: ["numbers"],
     cards: [11],
     fields: { Front: { value: "Uno", order: 0 }, Back: { value: "One", order: 1 } },
   },
@@ -100,5 +100,54 @@ describe("NoteRow memoization", () => {
     // …and the untouched rows did not: their props stayed identity-stable.
     expect(renderCounts.get(1)).toBe(before.get(1));
     expect(renderCounts.get(3)).toBe(before.get(3));
+  });
+});
+
+describe("NoteRow search highlighting", () => {
+  function renderList() {
+    return render(
+      <MemoryRouter>
+        <CardList
+          deckName="Spanish"
+          notes={notes}
+          showAddForm={false}
+          onShowAddForm={vi.fn()}
+          onChanged={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+  }
+
+  /** The text of every <mark> currently on screen. */
+  function marks() {
+    return Array.from(document.querySelectorAll("mark")).map((m) => m.textContent);
+  }
+
+  it("marks nothing until something is searched", () => {
+    renderList();
+    expect(marks()).toEqual([]);
+  });
+
+  it("marks the matching run of a row's display text", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await user.type(screen.getByPlaceholderText("Search notes…"), "re");
+
+    // Only "Tres"/"Three" survives the filter, and the match is marked on both
+    // of its display lines.
+    const row = document.querySelector('[data-note-id="3"]') as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(row.textContent).toContain("Tres");
+    expect(marks()).toEqual(["re", "re"]);
+  });
+
+  it("marks a match in a tag chip", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await user.type(screen.getByPlaceholderText("Search notes…"), "numb");
+
+    // The query matched only the tag, so the tag is what lights up — otherwise
+    // the row looks like a false positive.
+    expect(marks()).toEqual(["numb"]);
   });
 });
