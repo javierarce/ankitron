@@ -22,6 +22,14 @@ import "./app/globals.css";
 // The real (Tauri) app keeps history routing.
 const isDemo = Boolean(import.meta.env.VITE_DEMO);
 
+// The demo is framed by a fake macOS window whose traffic lights overlay the
+// app header, exactly like the real hidden-inset title bar. Reuse the same
+// class so the header nav clears the cluster (see .tauri-mac in globals.css);
+// the Tauri-only behaviour lives behind the separate `tauri` class.
+if (isDemo) {
+  document.documentElement.classList.add("tauri-mac");
+}
+
 const routes = (
   <Routes>
     <Route element={<Layout />}>
