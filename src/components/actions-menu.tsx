@@ -122,6 +122,10 @@ export function ActionsMenu({
     }
     function handleKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
+      // Anything inside the popup gets first refusal — see the popup's own
+      // onKeyDown below. This listener is for Escape pressed with focus
+      // elsewhere (on the trigger, or on body after arming a confirmation).
+      if (menuRef.current?.contains(e.target as Node)) return;
       // Consume it. This menu opens inside ModalDialog, which closes the whole
       // dialog on Escape from BOTH a window listener and its panel's onKeyDown
       // — and React's root handler runs before any window bubble listener, so
@@ -165,6 +169,18 @@ export function ActionsMenu({
         createPortal(
           <div
             ref={menuRef}
+            // Escape from inside the popup, in the bubble phase, so a control
+            // that wants it gets there first: DeckPicker's draft field cancels
+            // the half-typed name, and its filter clears a non-empty query,
+            // both stopping propagation themselves. Only an Escape nobody
+            // claimed reaches this and unwinds a step — and stopping it here
+            // still keeps it away from the surrounding dialog.
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              e.stopPropagation();
+              if (confirming !== null) setConfirming(null);
+              else setOpen(false);
+            }}
             role={confirming === null ? "menu" : "dialog"}
             aria-label={confirming === null ? undefined : label}
             style={style}

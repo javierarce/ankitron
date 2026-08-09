@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { ActionsMenu } from "./actions-menu";
 
 afterEach(cleanup);
@@ -135,5 +136,68 @@ describe("ActionsMenu inline confirmation", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByText("Suspend")).toBeNull();
+  });
+});
+
+// A panel's own controls get Escape first. DeckPicker's draft field cancels a
+// half-typed deck name on Escape and its filter clears a non-empty query, both
+// stopping propagation — so unwinding the whole panel out from under them would
+// lose work the user could see.
+describe("ActionsMenu panel Escape", () => {
+  const panelItem = (input: ReactNode) => [
+    { label: "Suspend", onSelect: vi.fn() },
+    { label: "Move to deck…", panel: () => <div>{input}</div> },
+  ];
+
+  const openPanel = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByLabelText("Note actions"));
+    await user.click(screen.getByText("Move to deck…"));
+  };
+
+  it("leaves the panel open when a control claims Escape", async () => {
+    const user = userEvent.setup();
+    const onEscape = vi.fn();
+    render(
+      <ActionsMenu
+        label="Note actions"
+        items={panelItem(
+          <input
+            aria-label="Deck name"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                onEscape();
+              }
+            }}
+          />,
+        )}
+      />,
+    );
+
+    await openPanel(user);
+    await user.click(screen.getByLabelText("Deck name"));
+    await user.keyboard("{Escape}");
+
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Deck name")).toBeTruthy();
+  });
+
+  // The same field with nothing to unwind (an empty filter) doesn't stop it,
+  // and then Escape should back out of the panel as usual.
+  it("unwinds when nobody claims it", async () => {
+    const user = userEvent.setup();
+    render(
+      <ActionsMenu
+        label="Note actions"
+        items={panelItem(<input aria-label="Deck name" />)}
+      />,
+    );
+
+    await openPanel(user);
+    await user.click(screen.getByLabelText("Deck name"));
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByLabelText("Deck name")).toBeNull();
+    expect(screen.getByText("Suspend")).toBeTruthy();
   });
 });
