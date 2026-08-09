@@ -29,12 +29,14 @@ vi.mock("./card-form", () => ({
     position,
     onSaved,
     onClose,
+    onMove,
   }: {
     deckName: string;
     note?: { noteId: number };
     position?: { index: number; total: number };
     onSaved?: (n?: unknown) => void;
     onClose: () => void;
+    onMove?: (deck: string, isNew: boolean) => void;
   }) => (
     <div
       data-testid="stub-form"
@@ -44,6 +46,10 @@ vi.mock("./card-form", () => ({
     >
       <button onClick={() => onSaved?.()}>stub-save</button>
       <button onClick={onClose}>stub-close</button>
+      <button onClick={() => onMove?.("German", false)}>stub-move-away</button>
+      <button onClick={() => onMove?.("Spanish::Verbs", false)}>
+        stub-move-subdeck
+      </button>
     </div>
   ),
 }));
@@ -769,5 +775,71 @@ describe("CardList forget", () => {
     expect(ankiFetch).not.toHaveBeenCalledWith("forgetCards", expect.anything());
     await user.click(screen.getByLabelText("Note actions"));
     expect(screen.getByText("Unsuspend")).toBeTruthy();
+  });
+});
+
+// Moving a note out of the deck from the editor. handleMoveToDeck alone only
+// patches the local home-deck map — right for a drag between subdecks, but a
+// note that has left the subtree has to leave the list too.
+describe("CardList move from the editor", () => {
+  let restoreStorage: () => void;
+  beforeEach(() => {
+    restoreStorage = installLocalStorageStandIn();
+  });
+  afterEach(() => restoreStorage());
+
+  const notes = [
+    {
+      noteId: 1,
+      modelName: "Basic",
+      tags: [],
+      cards: [11],
+      fields: { Front: { value: "Hola", order: 0 }, Back: { value: "Hello", order: 1 } },
+    },
+  ] as Note[];
+
+  // The stub form exposes onMove so the test can drive it without the real
+  // picker; the deck it reports is what the panel would have chosen.
+  const renderList = (onChanged = vi.fn()) => {
+    renderInRouter(
+      <CardList
+        deckName="Spanish"
+        notes={notes}
+        subdecks={["Spanish::Verbs"]}
+        noteDecks={{ 1: "Spanish" }}
+        showAddForm={false}
+        onShowAddForm={vi.fn()}
+        onChanged={onChanged}
+      />,
+    );
+    return onChanged;
+  };
+
+  it("refetches the list when the note leaves the deck", async () => {
+    const user = userEvent.setup();
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-away"));
+
+    // A refetch with no argument — the note has to disappear from the list,
+    // which an in-place patch of a single note can't do.
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith());
+    // …and the editor doesn't linger over a deck that no longer holds it.
+    expect(screen.queryByTestId("stub-form")).toBeNull();
+  });
+
+  // Within the subtree the note legitimately stays, so the cheap patch stands.
+  it("stays put for a move into one of its own subdecks", async () => {
+    const user = userEvent.setup();
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-subdeck"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("stub-form")).toBeTruthy(),
+    );
+    expect(onChanged).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ import {
   editSequenceSaved,
   editSequenceCurrentId,
   editSequenceCurrentNote,
+  editSequenceDeleted,
 } from "@/lib/edit-sequence";
 import { stripCloze } from "@/lib/cloze";
 import { stripHtml, truncate } from "@/lib/html-text";
@@ -313,12 +314,24 @@ export function CardList({
 
   // The editor's "Move to deck…" — it picks a deck (possibly a new one) and
   // applies it straight away, so the deck has to exist before the move.
+  //
+  // handleMoveToDeck only patches the local home-deck map, which is all a
+  // drag-and-drop move needs: the note stays in this page's list, it just
+  // belongs to a different subdeck of it. A note moved OUT of the subtree is a
+  // different matter — it has to leave the list, and only a refetch does that.
   const moveNoteNow = useCallback(
     async (target: Note, deck: string, isNew: boolean) => {
       if (isNew) await createDeck(deck);
       await handleMoveToDeck([target], deck);
+      if (!isCardInDeck(deck, deckName)) refreshAfterChange();
     },
-    [handleMoveToDeck],
+    [handleMoveToDeck, deckName, refreshAfterChange],
+  );
+
+  /** True once a move has taken the note off this page entirely. */
+  const movedAway = useCallback(
+    (deck: string) => !isCardInDeck(deck, deckName),
+    [deckName],
   );
 
   // Identity-stable so the memo'd rows don't re-render on every list change.
@@ -624,7 +637,12 @@ export function CardList({
           // Both act straight away: the form runs its own inline confirmation
           // rather than stacking a dialog over itself.
           onForget={() => forgetNotesNow([editingNote])}
-          onMove={(deck, isNew) => moveNoteNow(editingNote, deck, isNew)}
+          onMove={async (deck, isNew) => {
+            await moveNoteNow(editingNote, deck, isNew);
+            // The note isn't part of this deck any more; the editor shouldn't
+            // linger over a list that no longer holds it.
+            if (movedAway(deck)) setEditingNote(null);
+          }}
           onDelete={() => deleteNoteNow(editingNote)}
           onClose={() => setEditingNote(null)}
           onSaved={(updated) => {
@@ -657,7 +675,12 @@ export function CardList({
               suspended={isNoteSuspended(note)}
               onToggleSuspend={() => handleToggleSuspend(note)}
               onForget={() => forgetNotesNow([note])}
-              onMove={(deck, isNew) => moveNoteNow(note, deck, isNew)}
+              onMove={async (deck, isNew) => {
+                await moveNoteNow(note, deck, isNew);
+                // Gone from the deck this run is walking, so drop it from the
+                // run and show the next one — the same as deleting it would.
+                if (movedAway(deck)) applyStep(editSequenceDeleted(editSeq));
+              }}
               onDelete={handleSeqDelete}
               onSaved={(updated) => applyStep(editSequenceSaved(editSeq, updated))}
               onClose={() => finishEdit(editSeq.dirty)}
