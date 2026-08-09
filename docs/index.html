@@ -292,26 +292,34 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
     }
 
-    /* macOS-style window title bar — the drag handle. The iframe itself can't
-       be the handle (it needs its own clicks to run the demo), so this slim bar
-       is what you grab to move the window. */
+    /* Like the real app, the window has no title bar of its own: it uses macOS's
+       hidden-inset style, so the traffic lights float over the app's own header
+       (which shifts its nav right to clear them). This transparent strip holds
+       the lights and doubles as the drag handle — the iframe can't be the handle
+       (it needs its own clicks to run the demo), so it covers just the empty
+       corner left of the header nav. Height matches the app header row; width
+       matches the 5.75rem traffic-light clearance in globals.css. */
     .demo-titlebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      flex: none;
-      height: 2.25rem;
-      padding: 0 0.85rem;
-      border-bottom: 1px solid var(--border);
-      background: color-mix(in srgb, var(--foreground) 4%, var(--background));
+      height: 3.25rem;
+      width: 5.75rem;
+      padding-left: 1.25rem;
       cursor: grab;
       user-select: none;
       -webkit-user-select: none;
       touch-action: none;
-      transition: background-color 0.35s ease, border-color 0.35s ease;
     }
 
-    .demo.dragging .demo-titlebar {
+    /* Once a drag is underway the cursor keeps saying so, wherever it wanders
+       (the frame's pointer events are off mid-drag, so this covers the iframe
+       too — inside it, the injected header CSS does the same job). */
+    .demo.dragging,
+    .demo.dragging * {
       cursor: grabbing;
     }
 
@@ -344,16 +352,6 @@
     .demo-traffic .tl-red { background: #ff5f57; }
     .demo-traffic .tl-yellow { background: #febc2e; }
     .demo-traffic .tl-green { background: #28c840; }
-
-    .demo-titlebar-title {
-      flex: 1;
-      margin-right: 2.9rem;
-      /* offset the traffic lights so the title reads centered */
-      text-align: center;
-      font-size: 0.8125rem;
-      font-weight: 500;
-      color: color-mix(in srgb, var(--foreground) 55%, transparent);
-    }
 
     .demo-frame iframe {
       display: block;
@@ -608,13 +606,12 @@
   <div class="desktop">
     <div class="demo">
       <div class="demo-frame">
-        <div class="demo-titlebar" id="demo-titlebar" title="Drag to move the window">
+        <div class="demo-titlebar" id="demo-titlebar">
           <div class="demo-traffic">
             <button class="tl-red" type="button" aria-label="Close" title="Close"></button>
             <button class="tl-yellow" type="button" aria-label="Minimize" title="Minimize"></button>
             <button class="tl-green" type="button" aria-label="Zoom" title="Zoom"></button>
           </div>
-          <span class="demo-titlebar-title">Ankitron</span>
         </div>
         <iframe id="demo" src="demo/" title="Interactive Ankitron demo" allow="clipboard-write"></iframe>
       </div>
@@ -986,28 +983,27 @@
 
     makeDraggable(desktopFile, { onDrop: dropDeckAt });
 
-    // --- Draggable demo window: grab the title bar to move the window around
-    // the desktop. The iframe can't be the handle (it needs its own clicks to
-    // run the demo), so only the title bar starts a drag. Pointer capture keeps
-    // move events flowing even as the cursor passes over the iframe; we also
-    // disable the iframe's pointer events mid-drag as a belt-and-suspenders.
-    // The window is clamped to stay within the desktop. ---
-    const titlebar = document.getElementById("demo-titlebar");
+    // --- Draggable demo window ------------------------------------------------
+    // Like the real app, the whole header is the drag region: the traffic-light
+    // strip out here, plus the app's own header inside the iframe (same-origin,
+    // so we can listen in there). Coordinates from inside the frame are made
+    // page-relative by adding the iframe's *live* rect — as the window follows
+    // the cursor the inner clientX shrinks by exactly as much as the rect grows,
+    // so the sum still tracks the real cursor. The window is clamped to stay
+    // within the desktop. ---
     let offX = 0;
     let offY = 0; // committed window offset
     let drag = null; // active drag state, or null
 
-    titlebar.addEventListener("pointerdown", (e) => {
-      // Don't start a window drag from the traffic-light buttons, nor while the
-      // window is maximized.
-      if (e.target.closest(".demo-traffic") || desktop.classList.contains("maximized")) return;
+    function startDrag(x, y) {
+      if (desktop.classList.contains("maximized")) return;
       const desk = desktop.getBoundingClientRect();
       const frame = demo.getBoundingClientRect(); // includes the current offset
       const baseLeft = frame.left - desk.left - offX;
       const baseTop = frame.top - desk.top - offY;
       drag = {
-        startX: e.clientX,
-        startY: e.clientY,
+        startX: x,
+        startY: y,
         baseOffX: offX,
         baseOffY: offY,
         // Offsets that keep the window fully inside the desktop.
@@ -1017,25 +1013,107 @@
         maxY: desk.height - frame.height - baseTop,
       };
       demo.classList.add("dragging");
-      demoFrame.style.pointerEvents = "none";
-      titlebar.setPointerCapture(e.pointerId);
-    });
+      setFrameState("window-dragging", true);
+    }
 
-    titlebar.addEventListener("pointermove", (e) => {
+    function moveDrag(x, y) {
       if (!drag) return;
-      offX = clamp(drag.baseOffX + (e.clientX - drag.startX), drag.minX, drag.maxX);
-      offY = clamp(drag.baseOffY + (e.clientY - drag.startY), drag.minY, drag.maxY);
+      offX = clamp(drag.baseOffX + (x - drag.startX), drag.minX, drag.maxX);
+      offY = clamp(drag.baseOffY + (y - drag.startY), drag.minY, drag.maxY);
       demo.style.transform = `translate(${offX}px, ${offY}px)`;
-    });
+    }
 
     const endDrag = () => {
       if (!drag) return;
       drag = null;
       demo.classList.remove("dragging");
+      setFrameState("window-dragging", false);
       demoFrame.style.pointerEvents = "";
     };
+
+    // Handle 1: the traffic-light strip. Pointer capture keeps move events
+    // flowing even as the cursor passes over the iframe; we also disable the
+    // iframe's pointer events mid-drag as a belt-and-suspenders.
+    const titlebar = document.getElementById("demo-titlebar");
+
+    titlebar.addEventListener("pointerdown", (e) => {
+      // Don't start a window drag from the traffic-light buttons themselves.
+      if (e.target.closest(".demo-traffic")) return;
+      startDrag(e.clientX, e.clientY);
+      if (!drag) return; // maximized
+      demoFrame.style.pointerEvents = "none";
+      titlebar.setPointerCapture(e.pointerId);
+    });
+
+    titlebar.addEventListener("pointermove", (e) => moveDrag(e.clientX, e.clientY));
     titlebar.addEventListener("pointerup", endDrag);
     titlebar.addEventListener("pointercancel", endDrag);
+
+    // Handle 2: the app's own header inside the frame, minus its interactive
+    // bits — the same regions Tauri drags by on macOS (layout.tsx marks them
+    // .app-header / .app-no-drag). Re-bound on every load, since the demo
+    // hard-reloads itself after some actions. Both documents get the move
+    // listeners: the captured iframe document while the cursor stays over the
+    // window, the parent once a clamped edge leaves the cursor outside it.
+    // Cursor affordance for the part of the drag region that lives inside the
+    // frame, so the grab cursor covers the whole header and not just the strip
+    // out here. Demo-only chrome, so it's injected rather than shipped in the
+    // app's own stylesheet.
+    const HEADER_DRAG_CSS = `
+      .app-header { cursor: grab; }
+      .app-header .app-no-drag { cursor: default; }
+      html.window-dragging, html.window-dragging * { cursor: grabbing !important; }
+      html.window-zoomed .app-header { cursor: default; }
+    `;
+
+    // Mirror the two window states the injected CSS above reacts to.
+    const setFrameState = (name, on) => {
+      const doc = demoFrame.contentDocument;
+      if (doc) doc.documentElement.classList.toggle(name, on);
+    };
+
+    function bindHeaderDrag() {
+      const doc = demoFrame.contentDocument;
+      if (!doc) return;
+
+      const style = doc.createElement("style");
+      style.textContent = HEADER_DRAG_CSS;
+      doc.head.appendChild(style);
+      // The classes live on the frame's own <html>, so a reload drops them.
+      setFrameState("window-zoomed", desktop.classList.contains("maximized"));
+
+      doc.addEventListener("pointerdown", (e) => {
+        // Mouse only. The header can't opt out of touch scrolling (no
+        // touch-action: none in there, and preventDefault on pointerdown
+        // doesn't stop a pan), so a touch drag would just nudge the window a
+        // few pixels before the browser claimed the gesture. Touch users still
+        // get the traffic-light strip, which does set touch-action.
+        if (e.pointerType !== "mouse" || e.button !== 0) return;
+        const target = e.target;
+        if (!target.closest || !target.closest(".app-header")) return;
+        if (target.closest(".app-no-drag")) return;
+        const rect = demoFrame.getBoundingClientRect();
+        startDrag(e.clientX + rect.left, e.clientY + rect.top);
+        if (!drag) return; // maximized
+        e.preventDefault(); // no text selection / focus steal while dragging
+        doc.documentElement.setPointerCapture(e.pointerId);
+      });
+
+      const innerMove = (e) => {
+        if (!drag) return;
+        const rect = demoFrame.getBoundingClientRect();
+        moveDrag(e.clientX + rect.left, e.clientY + rect.top);
+      };
+      doc.addEventListener("pointermove", innerMove);
+      doc.addEventListener("pointerup", endDrag);
+      doc.addEventListener("pointercancel", endDrag);
+    }
+
+    demoFrame.addEventListener("load", bindHeaderDrag);
+    bindHeaderDrag(); // in case the frame is already loaded
+
+    document.addEventListener("pointermove", (e) => moveDrag(e.clientX, e.clientY));
+    document.addEventListener("pointerup", endDrag);
 
     // --- Window controls (the traffic lights) --------------------------------
     // Red/yellow close/minimize the window down to a desktop "Ankitron" icon;
@@ -1055,6 +1133,8 @@
     };
     const toggleZoom = () => {
       desktop.classList.toggle("maximized");
+      // A zoomed window doesn't move, so its header drops the grab cursor.
+      setFrameState("window-zoomed", desktop.classList.contains("maximized"));
       // A zoom re-centers the window, so drop any prior drag offset.
       offX = 0;
       offY = 0;
