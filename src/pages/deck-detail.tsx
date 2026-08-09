@@ -174,6 +174,13 @@ export function DeckDetailPage() {
     // Leave any half-open rename behind with the old deck.
     setEditingName(false);
     setRenameError(null);
+    // The open request belongs to the navigation that carried it. Without this
+    // it survives into the next deck, and since the spinner unmounts the card
+    // list — taking its "already opened this one" memory with it — a deck that
+    // still holds the note (a parent, say, whose search spans the subtree)
+    // would pop the editor open again on its own. A navigation that brings a
+    // new request has already set it above.
+    if (requestedNoteId === null) setOpenNoteId(null);
     // Show the spinner until the new deck loads. The still-mounted page holds
     // the previous deck's notes/subdecks, and rendering that stale data under
     // the new deck name crashes (e.g. buildSubdeckTree walks subdecks that

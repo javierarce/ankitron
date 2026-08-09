@@ -142,8 +142,16 @@ vi.mock("@/lib/anki-fetch", () => ({
 // The editor is a heavy TipTap surface with its own round trips; these tests
 // only care about which note the page hands it, so stand it in with a stub.
 vi.mock("@/components/card-form", () => ({
-  CardForm: ({ note }: { note?: { noteId: number } }) => (
-    <div data-testid="stub-form" data-note={note?.noteId} />
+  CardForm: ({
+    note,
+    onClose,
+  }: {
+    note?: { noteId: number };
+    onClose: () => void;
+  }) => (
+    <div data-testid="stub-form" data-note={note?.noteId}>
+      <button onClick={onClose}>stub-close</button>
+    </div>
   ),
 }));
 
@@ -352,6 +360,38 @@ describe("DeckDetailPage ?note= deep link", () => {
 
     expect(screen.queryByTestId("stub-form")).toBeNull();
     expect(screen.getByTestId("location").textContent).toBe("/decks/Spanish");
+  });
+
+  // The request belongs to the navigation that carried it. Walking up to the
+  // parent deck reloads the page — which unmounts the card list, and with it
+  // the memory of having already opened this note — and the parent's search
+  // spans the subtree, so it holds the note too: nothing else would keep the
+  // editor from reopening on its own.
+  it("doesn't reopen the editor after navigating to another deck", async () => {
+    const user = userEvent.setup();
+
+    function GoParent() {
+      const navigate = useNavigate();
+      return <button onClick={() => navigate("/decks/Spanish")}>go-parent</button>;
+    }
+
+    render(
+      <MemoryRouter initialEntries={["/decks/Spanish::Verbs?note=2"]}>
+        <GoParent />
+        <Routes>
+          <Route path="/decks/:deckName" element={<DeckDetailPage />} />
+          <Route path="*" element={<div data-testid="elsewhere" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByText("stub-close"));
+    expect(screen.queryByTestId("stub-form")).toBeNull();
+
+    await user.click(screen.getByText("go-parent"));
+    await screen.findByText("Front 1");
+
+    expect(screen.queryByTestId("stub-form")).toBeNull();
   });
 });
 
