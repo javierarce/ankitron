@@ -31,7 +31,6 @@ import { createDeck } from "@/lib/decks";
 import { searchTerms } from "@/lib/search-query";
 import {
   countLeeches,
-  isLeech,
   isLeechQuery,
   LEECH_QUERY,
 } from "@/lib/leeches";
@@ -361,26 +360,23 @@ export function CardList({
   // already filtered to them, where it would only describe what's on screen.
   const showLeechBanner = leechCount.total > 0 && !isLeechQuery(effective);
 
-  // Filter the list to the leeches AND select them, which is the whole handoff:
-  // the bulk bar appears holding every action worth taking on a leech, and Edit
-  // there is the one-at-a-time walkthrough the references recommend. Selecting
-  // is also the only way to reach "all of them" — select-all is Cmd+A with no
-  // button (see CardListToolbar), so a banner that merely filtered would leave
-  // the useful part undiscoverable.
+  // Filter the list to the leeches, and nothing more. Showing is not choosing:
+  // selecting them here would be an action the click didn't ask for, and one
+  // that arms the bulk bar's destructive verbs over notes the user has only
+  // just laid eyes on. Cmd+A is right there once they've decided.
   //
   // Deliberately does NOT focus the search box: the shortcut handler ignores
   // keys typed in a field, so focusing it would make Escape stop clearing the
-  // selection we just made.
+  // selection.
   const handleShowLeeches = useCallback(() => {
     // Back to "All" first: the count is deck-wide, so a subdeck still in scope
     // would answer the click with fewer notes than the banner just promised.
     clearSegments();
     setQuery(LEECH_QUERY);
-    // Safe before the debounced `tag:leech` query lands: the selection isn't
-    // pruned against the filtered list, and the bulk actions read the deck's
-    // full note array rather than the filtered one.
-    replaceSelection(notes.filter(isLeech).map((n) => n.noteId));
-  }, [clearSegments, setQuery, replaceSelection, notes]);
+    // Any earlier selection is of notes that are about to leave the view, so
+    // the bulk bar would be describing something off screen.
+    clearSelection();
+  }, [clearSegments, setQuery, clearSelection]);
 
   const {
     editSeq,

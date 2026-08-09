@@ -4,8 +4,8 @@
 //
 // No dismiss on purpose: it's a to-do list, and clearing the `leech` tag off a
 // note you've dealt with is what empties it (see lib/leeches.ts). It stands
-// down once the list is filtered to the leeches — by then the selection it made
-// has handed the job to the bulk action bar.
+// down once the list is filtered to the leeches — by then the notes themselves
+// say everything it was saying.
 //
 // It's a notice, not an alert: amber shows in the icon and the border, while the
 // text stays in the normal foreground colours (amber body text is too low
@@ -16,7 +16,7 @@ import { leechSummary, type LeechCount } from "@/lib/leeches";
 
 interface LeechBannerProps {
   count: LeechCount;
-  /** Filter the list to the leeches and select them. */
+  /** Filter the list to the leeches. */
   onShow: () => void;
 }
 
@@ -37,10 +37,11 @@ export function LeechBanner({ count, onShow }: LeechBannerProps) {
         <p className="text-sm font-medium">{title}</p>
         <p className="text-sm text-foreground/60">{detail}</p>
       </div>
-      {/* One action, and it hands off rather than acting: the selection it
-          leaves behind puts every verb — Edit (the one-at-a-time walkthrough
-          the references recommend), Forget, Suspend, Tag, Delete — in the bulk
-          bar, which can do far more than this banner ever should. */}
+      {/* One action, and it only shows: it filters the list and leaves the
+          deciding to the user. Nothing gets selected — the verbs worth using on
+          a leech (Edit, Forget, Suspend, Tag, Delete) are a row menu or a
+          Cmd+A away, and none of them should be armed by a click that asked to
+          look. */}
       <button
         type="button"
         onClick={onShow}

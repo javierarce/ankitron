@@ -645,21 +645,29 @@ describe("CardList leech banner", () => {
     ).toBeTruthy();
   });
 
-  // The click hands off to the bulk bar rather than acting: select-all has no
-  // button (Cmd+A only), so a banner that merely filtered would leave every
-  // useful action — Edit's one-at-a-time walkthrough especially — out of reach.
-  it("selects the leeches so the bulk actions are ready", async () => {
+  // Showing is not choosing: the click filters and stops there, so the bulk
+  // bar's destructive verbs aren't armed over notes the user only asked to see.
+  it("shows the leeches without selecting them", async () => {
     const user = userEvent.setup();
     renderList(withLeeches(1, 3));
 
     await user.click(screen.getByText("Show leeches"));
 
-    expect(screen.getByText("2 notes selected")).toBeTruthy();
-    // Edit over that selection IS "go through them" — the sequential editor.
-    // By role, so the bulk bar's aria-hidden measurement mirror is skipped.
-    await user.click(screen.getByRole("button", { name: /^Edit/ }));
-    const form = screen.getByTestId("stub-form");
-    expect(form.dataset.position).toBe("1/2");
+    expect(screen.queryByText(/notes? selected/)).toBeNull();
+  });
+
+  // An earlier selection is of notes that just left the view, so the bulk bar
+  // would be offering to act on something off screen.
+  it("drops a selection made before the click", async () => {
+    const user = userEvent.setup();
+    renderList(withLeeches(1, 3));
+
+    await user.click(checkboxIn(rowFor("Dos")));
+    expect(screen.getByText("1 note selected")).toBeTruthy();
+
+    await user.click(screen.getByText("Show leeches"));
+
+    expect(screen.queryByText(/notes? selected/)).toBeNull();
   });
 
   it("filters the list to the leeches and steps aside", async () => {
