@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { CardList } from "@/components/card-list";
 import { DeckHeaderMenu } from "@/components/deck-header-menu";
 import { CenteredSpinner } from "@/components/spinner";
+import { ClearableInput } from "@/components/clearable-input";
 import { fetchAllDueCounts } from "@/lib/anki-fetch";
 import { areSuspended, fetchCardDecks } from "@/lib/cards";
 import { fetchCardFlags } from "@/lib/flags";
@@ -417,10 +418,12 @@ export function DeckDetailPage() {
               </span>
             )}
             {editingName ? (
-              <input
+              <ClearableInput
                 type="text"
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
+                onClear={() => setNameDraft("")}
+                clearLabel="Clear name"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") applyRename();
                   else if (e.key === "Escape") cancelRename();
@@ -432,7 +435,8 @@ export function DeckDetailPage() {
                 autoFocus
                 disabled={renameBusy}
                 aria-label={scopedDeck ? "Subdeck name" : "Deck name"}
-                className={`min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 py-0.5 focus:border-foreground/40 focus:outline-none disabled:opacity-60 ${
+                wrapperClassName="min-w-0 flex-1"
+                className={`w-full rounded-md border border-border bg-transparent px-2 py-0.5 focus:border-foreground/40 focus:outline-none disabled:opacity-60 ${
                   scopedDeck ? "font-normal text-foreground/50" : "font-bold"
                 }`}
               />

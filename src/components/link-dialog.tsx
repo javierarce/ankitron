@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ModalDialog } from "./modal-dialog";
+import { ClearableInput } from "./clearable-input";
 
 interface LinkDialogProps {
   /** Prefill for the visible text — the selection, or an existing link's text. */
@@ -79,24 +80,29 @@ export function LinkDialog({
       }
     >
       <label className="mb-1 block text-xs text-foreground/50">Text</label>
-      <input
+      <ClearableInput
         ref={textRef}
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
+        onClear={() => setText("")}
+        clearLabel="Clear link text"
         onKeyDown={(e) => {
           if (e.key === "Enter") submit();
         }}
         placeholder="Link text"
-        className="mb-4 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
+        wrapperClassName="mb-4"
+        className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
       />
 
       <label className="mb-1 block text-xs text-foreground/50">URL</label>
-      <input
+      <ClearableInput
         ref={urlRef}
         type="text"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
+        onClear={() => setUrl("")}
+        clearLabel="Clear URL"
         onKeyDown={(e) => {
           if (e.key === "Enter") submit();
         }}

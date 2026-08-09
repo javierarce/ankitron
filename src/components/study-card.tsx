@@ -16,6 +16,7 @@ import { flagColor, flagTint } from "@/lib/flags";
 import { ActionsMenu } from "./actions-menu";
 import { FlagPicker } from "./flag-picker";
 import { HtmlContent } from "./card-html";
+import { ClearableInput } from "./clearable-input";
 
 interface StudyCardProps {
   question: string;
@@ -410,10 +411,12 @@ export function StudyCard({
             {typed ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
                 <HtmlContent html={questionBefore} />
-                <input
+                <ClearableInput
                   ref={inputRef}
                   value={typedValue}
                   onChange={(e) => setTypedValue(e.target.value)}
+                  onClear={() => setTypedValue("")}
+                  clearLabel="Clear answer"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -422,7 +425,8 @@ export function StudyCard({
                   }}
                   placeholder="Type your answer…"
                   spellCheck={false}
-                  className="my-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+                  wrapperClassName="my-2"
+                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
                 />
                 <HtmlContent html={questionAfter} />
               </div>

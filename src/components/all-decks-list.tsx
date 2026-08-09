@@ -27,6 +27,7 @@ import { DeleteDeckDialog } from "./delete-deck-dialog";
 import { MoveDeckDialog } from "./move-deck-dialog";
 import { DecksImportExport } from "./decks-import-export";
 import { ImportResultModal } from "./import-result-modal";
+import { ClearableInput } from "./clearable-input";
 
 // Whether a deck (or any of its subdecks, since studying a deck includes them)
 // has cards due. While due counts are still loading we report `true` so the
@@ -242,11 +243,13 @@ export function AllDecksList({
       </div>
 
       <div className="mb-4">
-        <input
+        <ClearableInput
           ref={searchRef}
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onClear={() => setQuery("")}
+          clearLabel="Clear deck search"
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               if (query) setQuery("");
