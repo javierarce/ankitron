@@ -50,6 +50,9 @@ vi.mock("./card-form", () => ({
       <button onClick={() => onMove?.("Spanish::Verbs", false)}>
         stub-move-subdeck
       </button>
+      <button onClick={() => onMove?.("Spanish::Nuevo", true)}>
+        stub-move-new-subdeck
+      </button>
     </div>
   ),
 }));
@@ -840,6 +843,34 @@ describe("CardList move from the editor", () => {
     await waitFor(() =>
       expect(screen.getByTestId("stub-form")).toBeTruthy(),
     );
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  // A brand-new deck has no segment chip and no due count until the page
+  // re-reads its subdecks — onCardsMoved only recounts the ones already known.
+  it("refetches for a new subdeck, even inside this deck", async () => {
+    const user = userEvent.setup();
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-new-subdeck"));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith());
+    // It stayed in the subtree, so the editor is still up.
+    expect(screen.getByTestId("stub-form")).toBeTruthy();
+  });
+
+  // handleMoveToDeck toasts its failures rather than throwing, so without a
+  // reported result the editor would close over a move that never happened.
+  it("leaves the editor alone when the move fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(ankiFetch).mockRejectedValueOnce("AnkiConnect request failed");
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-away"));
+
+    await waitFor(() => expect(screen.getByTestId("stub-form")).toBeTruthy());
     expect(onChanged).not.toHaveBeenCalled();
   });
 });

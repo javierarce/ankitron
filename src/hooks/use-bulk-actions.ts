@@ -355,16 +355,25 @@ export function useBulkActions({
     }
   }
 
-  // Move the given notes into a target (sub)deck; the caller's onMoved patches
-  // its view state so the list updates in place rather than reloading. Notes
-  // already in the target are skipped.
+  /**
+   * Move the given notes into a target (sub)deck; the caller's onMoved patches
+   * its view state so the list updates in place rather than reloading. Notes
+   * already in the target are skipped.
+   *
+   * Reports whether the notes are where they were asked to be. Like the reset
+   * above, a failure is toasted rather than thrown, so without a return value a
+   * caller can't tell — and the editor would react to a move that never
+   * happened by closing itself or dropping the note from a sequence run.
+   */
   const handleMoveToDeck = useCallback(
-    async (noteList: Note[], target: string) => {
+    async (noteList: Note[], target: string): Promise<boolean> => {
       const toMove = noteList.filter((n) => homeDeck(n) !== target);
-      if (toMove.length === 0) return;
+      // Already there: nothing to do, and nothing went wrong.
+      if (toMove.length === 0) return true;
       try {
         await moveNotesToDeck(toMove, target);
         onMoved(toMove, target);
+        return true;
       } catch (err) {
         // Leave the list untouched if the move fails — just say so.
         toast.error(
@@ -375,6 +384,7 @@ export function useBulkActions({
               : "Couldn't move the notes. Is Anki still running?",
           ),
         );
+        return false;
       }
     },
     [homeDeck, onMoved, toast],

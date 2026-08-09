@@ -78,9 +78,11 @@ interface CardFormProps {
   onForget?: () => boolean | Promise<boolean>;
   /**
    * Move the note to `deck`, creating it first when `isNew`. Applied straight
-   * away, like the rest of the menu — not folded into the save.
+   * away, like the rest of the menu — not folded into the save. Resolves to
+   * whether the move landed, so the panel can stay open (rather than close
+   * over an error toast) when it didn't.
    */
-  onMove?: (deck: string, isNew: boolean) => void | Promise<void>;
+  onMove?: (deck: string, isNew: boolean) => boolean | Promise<boolean>;
   /** Delete the current note. Confirmed inline, as with onForget. */
   onDelete?: () => void | Promise<void>;
   /**

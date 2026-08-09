@@ -14,8 +14,12 @@ interface MoveToDeckPanelProps {
   decks: string[] | null;
   /** The note's current deck, offered but not selectable. */
   currentDeck: string;
-  /** Move the note, creating the deck first when `isNew`. */
-  onMove: (deck: string, isNew: boolean) => void | Promise<void>;
+  /**
+   * Move the note, creating the deck first when `isNew`. Resolves to whether it
+   * landed: a move that failed reports it rather than throwing, and the panel
+   * stays open instead of dismissing over the error toast.
+   */
+  onMove: (deck: string, isNew: boolean) => boolean | Promise<boolean>;
   /** Dismiss the panel — after a move, or on Cancel. */
   onClose: () => void;
 }
@@ -37,8 +41,13 @@ export function MoveToDeckPanel({
     setMoving(true);
     setError(null);
     try {
-      await onMove(target.deck, target.isNew);
-      onClose();
+      if (await onMove(target.deck, target.isNew)) {
+        onClose();
+      } else {
+        // The move itself reported failure and has already said so in a toast;
+        // leaving the panel up keeps the chosen deck ready for another go.
+        setError("Couldn't move the note. Is Anki still running?");
+      }
     } catch (err) {
       // Creating the deck can fail before the move is even attempted; say so
       // here rather than closing as though it worked.

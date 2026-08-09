@@ -317,13 +317,19 @@ export function CardList({
   //
   // handleMoveToDeck only patches the local home-deck map, which is all a
   // drag-and-drop move needs: the note stays in this page's list, it just
-  // belongs to a different subdeck of it. A note moved OUT of the subtree is a
-  // different matter — it has to leave the list, and only a refetch does that.
+  // belongs to a different subdeck of it. Two cases need the full refetch:
+  // a note moved OUT of the subtree has to leave the list, and a deck that
+  // didn't exist a moment ago has no chip and no due count until the page
+  // re-reads its subdecks (onCardsMoved only recounts the ones already known).
+  //
+  // Reports whether the move landed, so a caller doesn't react to one that
+  // didn't — a failure here is a toast, not a throw.
   const moveNoteNow = useCallback(
-    async (target: Note, deck: string, isNew: boolean) => {
+    async (target: Note, deck: string, isNew: boolean): Promise<boolean> => {
       if (isNew) await createDeck(deck);
-      await handleMoveToDeck([target], deck);
-      if (!isCardInDeck(deck, deckName)) refreshAfterChange();
+      if (!(await handleMoveToDeck([target], deck))) return false;
+      if (isNew || !isCardInDeck(deck, deckName)) refreshAfterChange();
+      return true;
     },
     [handleMoveToDeck, deckName, refreshAfterChange],
   );
@@ -638,10 +644,12 @@ export function CardList({
           // rather than stacking a dialog over itself.
           onForget={() => forgetNotesNow([editingNote])}
           onMove={async (deck, isNew) => {
-            await moveNoteNow(editingNote, deck, isNew);
+            const moved = await moveNoteNow(editingNote, deck, isNew);
             // The note isn't part of this deck any more; the editor shouldn't
-            // linger over a list that no longer holds it.
-            if (movedAway(deck)) setEditingNote(null);
+            // linger over a list that no longer holds it. Only on a move that
+            // actually happened — closing would discard unsaved field edits.
+            if (moved && movedAway(deck)) setEditingNote(null);
+            return moved;
           }}
           onDelete={() => deleteNoteNow(editingNote)}
           onClose={() => setEditingNote(null)}
@@ -676,10 +684,13 @@ export function CardList({
               onToggleSuspend={() => handleToggleSuspend(note)}
               onForget={() => forgetNotesNow([note])}
               onMove={async (deck, isNew) => {
-                await moveNoteNow(note, deck, isNew);
+                const moved = await moveNoteNow(note, deck, isNew);
                 // Gone from the deck this run is walking, so drop it from the
                 // run and show the next one — the same as deleting it would.
-                if (movedAway(deck)) applyStep(editSequenceDeleted(editSeq));
+                if (moved && movedAway(deck)) {
+                  applyStep(editSequenceDeleted(editSeq));
+                }
+                return moved;
               }}
               onDelete={handleSeqDelete}
               onSaved={(updated) => applyStep(editSequenceSaved(editSeq, updated))}
