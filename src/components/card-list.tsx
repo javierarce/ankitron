@@ -21,12 +21,20 @@ import {
   editSequenceSaved,
   editSequenceCurrentId,
   editSequenceCurrentNote,
+  editSequenceDeleted,
 } from "@/lib/edit-sequence";
 import { stripCloze } from "@/lib/cloze";
 import { stripHtml, truncate } from "@/lib/html-text";
 import { noteDisplayFields } from "@/lib/note-fields";
 import { deckLeaf, isCardInDeck, type DeckRename } from "@/lib/deck";
+import { createDeck } from "@/lib/decks";
 import { searchTerms } from "@/lib/search-query";
+import {
+  countLeeches,
+  isLeech,
+  isLeechQuery,
+  LEECH_QUERY,
+} from "@/lib/leeches";
 import { useVimNav } from "@/hooks/use-vim-nav";
 import { useDeckSegments } from "@/hooks/use-deck-segments";
 import { useNoteDrag } from "@/hooks/use-note-drag";
@@ -39,6 +47,7 @@ import { useCardListShortcuts } from "@/hooks/use-card-list-shortcuts";
 import { NoteRow } from "./card-list-note-row";
 import { SubdeckTree } from "./subdeck-tree";
 import { CardListToolbar } from "./card-list-toolbar";
+import { LeechBanner } from "./leech-banner";
 
 /**
  * Centered placeholder shown when the card list has nothing to render — a fresh
@@ -283,6 +292,12 @@ export function CardList({
     setBulkDeleteOpen,
     bulkDeleting,
     handleBulkDelete,
+    forgettingNotes,
+    setForgettingNotes,
+    forgetting,
+    handleForget,
+    forgetNotesNow,
+    deleteNoteNow,
     handleMoveToDeck,
   } = useBulkActions({
     notes,
@@ -297,12 +312,79 @@ export function CardList({
     closeEditor,
   });
 
+  // The editor's "Move to deck…" — it picks a deck (possibly a new one) and
+  // applies it straight away, so the deck has to exist before the move.
+  //
+  // handleMoveToDeck only patches the local home-deck map, which is all a
+  // drag-and-drop move needs: the note stays in this page's list, it just
+  // belongs to a different subdeck of it. Two cases need the full refetch:
+  // a note moved OUT of the subtree has to leave the list, and a deck that
+  // didn't exist a moment ago has no chip and no due count until the page
+  // re-reads its subdecks (onCardsMoved only recounts the ones already known).
+  //
+  // Reports whether the move landed, so a caller doesn't react to one that
+  // didn't — a failure here is a toast, not a throw.
+  const moveNoteNow = useCallback(
+    async (target: Note, deck: string, isNew: boolean): Promise<boolean> => {
+      if (isNew) await createDeck(deck);
+      if (!(await handleMoveToDeck([target], deck))) return false;
+      if (isNew || !isCardInDeck(deck, deckName)) refreshAfterChange();
+      return true;
+    },
+    [handleMoveToDeck, deckName, refreshAfterChange],
+  );
+
+  /** True once a move has taken the note off this page entirely. */
+  const movedAway = useCallback(
+    (deck: string) => !isCardInDeck(deck, deckName),
+    [deckName],
+  );
+
+  // Identity-stable so the memo'd rows don't re-render on every list change.
+  const handleRowForget = useCallback(
+    (note: Note) => setForgettingNotes([note]),
+    [setForgettingNotes],
+  );
+
+  // The deck's leeches. Free to compute — the notes carry their tags already —
+  // and isNoteSuspended is the live set, so unsuspending one updates the count
+  // in place. Counted over the whole deck rather than the active segments: it's
+  // a deck-level notice (the acknowledgement below is stored per deck), and
+  // clicking through clears the segments so the list shows exactly the notes
+  // the banner named.
+  const leechCount = useMemo(
+    () => countLeeches(notes, isNoteSuspended),
+    [notes, isNoteSuspended],
+  );
+  // Stands until the leeches are dealt with and their tags cleared — there's
+  // nothing to remember, and no dismiss. It does stand down while the list is
+  // already filtered to them, where it would only describe what's on screen.
+  const showLeechBanner = leechCount.total > 0 && !isLeechQuery(effective);
+
+  // Filter the list to the leeches AND select them, which is the whole handoff:
+  // the bulk bar appears holding every action worth taking on a leech, and Edit
+  // there is the one-at-a-time walkthrough the references recommend. Selecting
+  // is also the only way to reach "all of them" — select-all is Cmd+A with no
+  // button (see CardListToolbar), so a banner that merely filtered would leave
+  // the useful part undiscoverable.
+  //
+  // Deliberately does NOT focus the search box: the shortcut handler ignores
+  // keys typed in a field, so focusing it would make Escape stop clearing the
+  // selection we just made.
+  const handleShowLeeches = useCallback(() => {
+    // Back to "All" first: the count is deck-wide, so a subdeck still in scope
+    // would answer the click with fewer notes than the banner just promised.
+    clearSegments();
+    setQuery(LEECH_QUERY);
+    // Safe before the debounced `tag:leech` query lands: the selection isn't
+    // pruned against the filtered list, and the bulk actions read the deck's
+    // full note array rather than the filtered one.
+    replaceSelection(notes.filter(isLeech).map((n) => n.noteId));
+  }, [clearSegments, setQuery, replaceSelection, notes]);
+
   const {
     editSeq,
     setEditSeq,
-    seqDeleteOpen,
-    setSeqDeleteOpen,
-    seqDeleting,
     beginEdit,
     finishEdit,
     applyStep,
@@ -326,6 +408,7 @@ export function CardList({
     bulkMoving ||
     bulkTagging ||
     bulkDeleteOpen ||
+    forgettingNotes !== null ||
     statsIds !== null ||
     !!editSeq;
 
@@ -446,6 +529,12 @@ export function CardList({
         )}
 
         <div className="min-w-0 flex-1">
+          {/* Above the search box rather than down by the rows: it's about the
+              deck, not about the current result set. */}
+          {showLeechBanner && (
+            <LeechBanner count={leechCount} onShow={handleShowLeeches} />
+          )}
+
           {!listEmpty && (
             <div className="mb-4 flex items-center gap-3">
               <SearchInput
@@ -480,6 +569,7 @@ export function CardList({
               onBulkFlag={handleBulkFlag}
               onBulkMove={() => setBulkMoving(true)}
               onBulkTag={() => setBulkTagging(true)}
+              onBulkForget={() => setForgettingNotes(selectedNotes)}
               onBulkDelete={() => setBulkDeleteOpen(true)}
             />
           )}
@@ -515,6 +605,7 @@ export function CardList({
                   onToggleSuspend={handleToggleSuspend}
                   onSetFlag={handleSetFlag}
                   onMove={setMovingNote}
+                  onForget={handleRowForget}
                   onDelete={setDeletingNote}
                   onDragStart={handleRowDragStart}
                   onDragEnd={handleRowDragEnd}
@@ -547,19 +638,32 @@ export function CardList({
           // compares against the baseline and sees no change).
           deckName={homeDeck(editingNote)}
           note={editingNote}
-          onDelete={() => setDeletingNote(editingNote)}
-          blocked={!!deletingNote}
+          suspended={isNoteSuspended(editingNote)}
+          onToggleSuspend={() => handleToggleSuspend(editingNote)}
+          // Both act straight away: the form runs its own inline confirmation
+          // rather than stacking a dialog over itself.
+          onForget={() => forgetNotesNow([editingNote])}
+          onMove={async (deck, isNew) => {
+            const moved = await moveNoteNow(editingNote, deck, isNew);
+            // The note isn't part of this deck any more; the editor shouldn't
+            // linger over a list that no longer holds it. Only on a move that
+            // actually happened — closing would discard unsaved field edits.
+            if (moved && movedAway(deck)) setEditingNote(null);
+            return moved;
+          }}
+          onDelete={() => deleteNoteNow(editingNote)}
           onClose={() => setEditingNote(null)}
-          onSaved={(updated, opts) => {
+          onSaved={(updated) => {
             const editedId = editingNote.noteId;
             setEditingNote(null);
             // A no-op save (paged through, untouched) wrote nothing — skip the
-            // refresh entirely. A same-note, same-deck edit can be patched in
-            // place by the parent; a move or note-type change (new note id)
-            // needs the full refetch to fix list membership and deck badges.
+            // refresh entirely. A same-note edit can be patched in place; a
+            // note-type change mints a new note id and needs the full refetch
+            // to fix list membership.
             if (!updated) return;
-            const patchable = updated.noteId === editedId && !opts?.movedTo;
-            refreshAfterChange(patchable ? updated : undefined);
+            refreshAfterChange(
+              updated.noteId === editedId ? updated : undefined,
+            );
           }}
         />
       )}
@@ -576,8 +680,19 @@ export function CardList({
               position={{ index: editSeq.index, total: editSeq.ids.length }}
               onPrev={() => setEditSeq(editSequencePrev(editSeq))}
               onSkip={() => applyStep(editSequenceNext(editSeq))}
-              onDelete={() => setSeqDeleteOpen(true)}
-              blocked={seqDeleteOpen}
+              suspended={isNoteSuspended(note)}
+              onToggleSuspend={() => handleToggleSuspend(note)}
+              onForget={() => forgetNotesNow([note])}
+              onMove={async (deck, isNew) => {
+                const moved = await moveNoteNow(note, deck, isNew);
+                // Gone from the deck this run is walking, so drop it from the
+                // run and show the next one — the same as deleting it would.
+                if (moved && movedAway(deck)) {
+                  applyStep(editSequenceDeleted(editSeq));
+                }
+                return moved;
+              }}
+              onDelete={handleSeqDelete}
               onSaved={(updated) => applyStep(editSequenceSaved(editSeq, updated))}
               onClose={() => finishEdit(editSeq.dirty)}
             />
@@ -600,24 +715,6 @@ export function CardList({
               index={index}
               onIndexChange={setStatsIndex}
               onClose={() => setStatsIds(null)}
-            />
-          );
-        })()}
-
-      {seqDeleteOpen &&
-        editSeq &&
-        (() => {
-          const note = editSequenceCurrentNote(editSeq, notes);
-          const preview = note
-            ? truncate(stripCloze(stripHtml(noteDisplayFields(note).primary)), 50)
-            : "";
-          return (
-            <ConfirmDialog
-              title="Delete Note"
-              message={preview ? `Delete "${preview}"?` : "Delete this note?"}
-              onConfirm={handleSeqDelete}
-              onCancel={() => setSeqDeleteOpen(false)}
-              loading={seqDeleting}
             />
           );
         })()}
@@ -674,6 +771,24 @@ export function CardList({
           onConfirm={handleBulkDelete}
           onCancel={() => setBulkDeleteOpen(false)}
           loading={bulkDeleting}
+        />
+      )}
+
+      {forgettingNotes && (
+        <ConfirmDialog
+          title={forgettingNotes.length === 1 ? "Forget Note" : "Forget Notes"}
+          message={
+            (forgettingNotes.length === 1
+              ? "Reset this note's cards to new? "
+              : `Reset ${forgettingNotes.length} notes' cards to new? `) +
+            "They lose their interval and ease and come back as unseen cards — " +
+            "use this after rewriting a note so the new version starts fresh. " +
+            "Suspended cards return to study."
+          }
+          confirmLabel="Forget"
+          onConfirm={handleForget}
+          onCancel={() => setForgettingNotes(null)}
+          loading={forgetting}
         />
       )}
 

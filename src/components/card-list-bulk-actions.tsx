@@ -14,6 +14,7 @@ import { Tag } from "@phosphor-icons/react/dist/ssr/Tag";
 import { Flag } from "@phosphor-icons/react/dist/ssr/Flag";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
 import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
+import { ArrowCounterClockwise } from "@phosphor-icons/react/dist/ssr/ArrowCounterClockwise";
 import { DotsThree } from "@phosphor-icons/react/dist/ssr/DotsThree";
 import { ActionsMenu, Kbd, type ActionsMenuItem } from "./actions-menu";
 import { FlagPicker } from "./flag-picker";
@@ -31,6 +32,8 @@ interface BulkActionBarProps {
   onBulkFlag: (flag: number) => void;
   onBulkMove: () => void;
   onBulkTag: () => void;
+  /** Open the confirmation for resetting the selection's scheduling. */
+  onBulkForget: () => void;
   onBulkDelete: () => void;
 }
 
@@ -57,6 +60,7 @@ export function BulkActionBar({
   onBulkFlag,
   onBulkMove,
   onBulkTag,
+  onBulkForget,
   onBulkDelete,
 }: BulkActionBarProps) {
   // The flag picker is a colour grid both as its own dropdown and inside the
@@ -173,6 +177,18 @@ export function BulkActionBar({
         </button>
       ),
       menuItems: [{ label: "Move", kbd: "M", onSelect: onBulkMove }],
+    },
+    {
+      // Last, so it's the first to fold away: resetting scheduling is a
+      // deliberate, occasional act, not part of the everyday row of actions.
+      key: "forget",
+      button: (
+        <button key="forget" onClick={onBulkForget} className={BTN}>
+          <ArrowCounterClockwise size={16} weight="bold" />
+          Forget
+        </button>
+      ),
+      menuItems: [{ label: "Forget", onSelect: onBulkForget }],
     },
   ];
 

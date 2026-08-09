@@ -26,6 +26,9 @@ const STATS_MUTATING = new Set([
   "suspend",
   "unsuspend",
   "importPackage",
+  // Writes a manual revlog row (AnkiConnect passes log: true) and moves the
+  // card back into the new queue, so both the revlog and the forecast shift.
+  "forgetCards",
 ]);
 
 export async function ankiFetch<T = unknown>(

@@ -1,19 +1,15 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CaretLeft } from "@phosphor-icons/react/dist/ssr/CaretLeft";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
-import { Trash } from "@phosphor-icons/react/dist/ssr/Trash";
 import { CardEditor } from "./card-editor";
 import { TagInput } from "./tag-input";
 import { Note } from "@/lib/types";
 import { CLOZE_OPEN_RE, hasClozePattern } from "@/lib/cloze";
-import { compareDeckPaths, deckDepth, deckLeaf, formatDeckPath } from "@/lib/deck";
-import { createDeck } from "@/lib/decks";
 import { basicFieldKeys, isClozeNote, orderedFieldNames } from "@/lib/note-fields";
 import {
   addNote,
   addTagsToNotes,
   deleteNotes,
-  moveNotesToDeck,
   updateNote,
   type NewNote,
 } from "@/lib/notes";
@@ -23,11 +19,12 @@ import {
   defaultCardTypeFor,
   type CardType,
 } from "@/lib/card-types";
+import { isLeech } from "@/lib/leeches";
 import { useAllTags } from "@/hooks/use-all-tags";
 import { useDeckNames } from "@/hooks/use-deck-names";
 import { ModalDialog } from "./modal-dialog";
-import { ClearableInput } from "./clearable-input";
-
+import { MoveToDeckPanel } from "./move-to-deck-panel";
+import { ActionsMenu, type ActionsMenuItem } from "./actions-menu";
 
 // Anki's stock note type that generates a forward and a reverse card per note.
 const BASIC_REVERSED_MODEL = "Basic (and reversed card)";
@@ -42,10 +39,6 @@ const KNOWN_MODELS = new Set<string>([
   CLOZE_TYPED_MODEL,
 ]);
 
-// "Create a new deck" sentinel. The leading space is deliberate: Anki trims
-// deck names, so no real deck path can equal this, keeping it collision-proof.
-const NEW_DECK = " new";
-
 interface CardFormProps {
   deckName: string;
   note?: Note;
@@ -56,10 +49,10 @@ interface CardFormProps {
    * Receives the updated note when fields/tags/deck actually changed, so a
    * sequential editor can keep its list in sync without a full reload; it's
    * called with no argument when nothing was written (a no-op save).
-   * `opts.movedTo` names the destination deck when the save moved the note,
-   * so a deck-scoped list knows an in-place patch isn't enough.
+   * A save never moves the note between decks — that's the actions menu, and
+   * it applies immediately — so a same-id result is always patchable in place.
    */
-  onSaved?: (updated?: Note, opts?: { movedTo?: string }) => void;
+  onSaved?: (updated?: Note) => void;
   /**
    * When editing a selection one card at a time, the current position in the
    * run. Drives the "n / total" progress and the prev/next arrows.
@@ -69,8 +62,29 @@ interface CardFormProps {
   onPrev?: () => void;
   /** Skip to the next card (or finish) without saving the current one. */
   onSkip?: () => void;
-  /** Delete the current card. Renders a Delete button in the footer. */
-  onDelete?: () => void;
+  /**
+   * Whether the note's cards are suspended, for the actions menu's label.
+   * Only meaningful alongside onToggleSuspend.
+   */
+  suspended?: boolean;
+  /** Toggle suspension on every card of this note. */
+  onToggleSuspend?: () => void;
+  /**
+   * Reset the note's cards to new — Anki's Forget. Already confirmed: the menu
+   * asks in place rather than stacking a dialog over this one. Resolves to
+   * whether the reset landed, so a failure isn't reported as a success — the
+   * call fails softly (it toasts and returns) rather than throwing.
+   */
+  onForget?: () => boolean | Promise<boolean>;
+  /**
+   * Move the note to `deck`, creating it first when `isNew`. Applied straight
+   * away, like the rest of the menu — not folded into the save. Resolves to
+   * whether the move landed, so the panel can stay open (rather than close
+   * over an error toast) when it didn't.
+   */
+  onMove?: (deck: string, isNew: boolean) => boolean | Promise<boolean>;
+  /** Delete the current note. Confirmed inline, as with onForget. */
+  onDelete?: () => void | Promise<void>;
   /**
    * Set while a dialog (e.g. the delete confirmation) is stacked on top, so the
    * form ignores Escape and backdrop clicks and lets that dialog handle them.
@@ -86,6 +100,10 @@ export function CardForm({
   position,
   onPrev,
   onSkip,
+  suspended,
+  onToggleSuspend,
+  onForget,
+  onMove,
   onDelete,
   blocked,
 }: CardFormProps) {
@@ -168,27 +186,12 @@ export function CardForm({
   const allTags = useAllTags();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set once a Forget has landed on this note, for the footer's status line.
+  const [forgotten, setForgotten] = useState(false);
 
-  // Only the edit form shows the deck selector; adds always target deckName.
-  // Until the list lands (or if the fetch fails) the selector still offers the
-  // note's current deck, and that deck is always present in the list.
+  // For the move panel in the actions menu (edit only — adds file into the deck
+  // they were opened on). Null while the list loads; the picker handles that.
   const allDecks = useDeckNames({ enabled: isEdit });
-  const decks = useMemo(() => {
-    if (!allDecks) return [deckName];
-    const all = allDecks.includes(deckName) ? allDecks : [deckName, ...allDecks];
-    return [...all].sort(compareDeckPaths);
-  }, [allDecks, deckName]);
-  const [targetDeck, setTargetDeck] = useState(deckName);
-  const [newDeck, setNewDeck] = useState("");
-
-  const creatingDeck = targetDeck === NEW_DECK;
-  const destDeck = creatingDeck ? newDeck.trim() : targetDeck;
-
-  // Which deck's TTS voice the editors should offer. The destination deck, so
-  // moving a note to another deck while editing picks up that deck's voice —
-  // except while a new deck is still being named, where there's nothing to look
-  // up yet and the deck we opened on is the better guess.
-  const voiceDeck = creatingDeck ? deckName : targetDeck;
 
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -234,11 +237,6 @@ export function CardForm({
       }
     }
 
-    if (creatingDeck && !destDeck) {
-      setError("Enter a name for the new deck.");
-      return;
-    }
-
     setSaving(true);
     setError(null);
 
@@ -251,9 +249,6 @@ export function CardForm({
         await ensureClozeTypedModel();
       }
 
-      if (creatingDeck) {
-        await createDeck(destDeck);
-      }
 
       const modelName =
         cardType === "ClozeTyped"
@@ -276,7 +271,6 @@ export function CardForm({
         const tagsChanged =
           [...tags].sort().join("\u0000") !==
           [...initialTags].sort().join("\u0000");
-        const deckChanged = destDeck !== deckName;
 
         if (fieldsChanged || tagsChanged) {
           // One updateNote call writes fields and tags together. Tags are
@@ -307,10 +301,7 @@ export function CardForm({
           if (tagsChanged) payload.tags = tags;
           await updateNote(payload);
         }
-        if (deckChanged) {
-          await moveNotesToDeck([note], destDeck);
-        }
-        if (fieldsChanged || tagsChanged || deckChanged) {
+        if (fieldsChanged || tagsChanged) {
           const updatedFields = { ...note.fields };
           if (customModel) {
             for (const f of customFields) {
@@ -347,13 +338,13 @@ export function CardForm({
       } else {
         const noteData: NewNote = isClozeForm
           ? {
-              deckName: destDeck,
+              deckName,
               modelName,
               fields: { Text: clozeText, "Back Extra": backExtra },
               tags,
             }
           : {
-              deckName: destDeck,
+              deckName,
               modelName,
               fields: { Front: front, Back: back },
               tags,
@@ -389,10 +380,7 @@ export function CardForm({
         }
       }
       if (onSaved) {
-        onSaved(
-          savedNote,
-          isEdit && destDeck !== deckName ? { movedTo: destDeck } : undefined,
-        );
+        onSaved(savedNote);
       } else {
         onClose();
         window.location.reload();
@@ -402,6 +390,69 @@ export function CardForm({
     } finally {
       setSaving(false);
     }
+  }
+
+  // Only what the call site wired up: the add form gets none of these and
+  // renders no menu at all. Forget and Delete arm the footer's inline
+  // confirmation rather than firing — see the footer for why it isn't a dialog.
+  const noteActions: ActionsMenuItem[] = [];
+  if (onToggleSuspend) {
+    noteActions.push({
+      label: suspended ? "Unsuspend" : "Suspend",
+      disabled: saving,
+      onSelect: onToggleSuspend,
+    });
+  }
+  if (onForget) {
+    noteActions.push({
+      label: "Forget",
+      disabled: saving,
+      // Asked and answered inside the popup, where the click happened — the
+      // menu is inside this modal, so a dialog here would be a second one on
+      // top of the first.
+      confirm: {
+        message:
+          "Reset this note's scheduling? It loses its interval and ease and comes back as a new card.",
+        confirmLabel: "Forget",
+      },
+      onSelect: async () => {
+        // Forget changes nothing visible in the form — same fields, same text —
+        // so say what happened, or the click looks like it did nothing. Only
+        // on success: a failed reset already toasts, and a "Scheduling reset"
+        // line sitting under that toast would contradict it.
+        if (await onForget()) setForgotten(true);
+      },
+    });
+  }
+  if (onMove) {
+    noteActions.push({
+      label: "Move to deck…",
+      disabled: saving,
+      // A whole picker rather than a yes/no, but the same idea as the
+      // confirmations above: the step happens inside the popup. Moving is rare
+      // enough that a permanent deck field made the form heavier than it was
+      // worth — and a tree that size was the heaviest thing on it.
+      panel: (close) => (
+        <MoveToDeckPanel
+          decks={allDecks}
+          currentDeck={deckName}
+          onMove={onMove}
+          onClose={close}
+        />
+      ),
+    });
+  }
+  if (onDelete) {
+    noteActions.push({
+      label: "Delete",
+      danger: true,
+      disabled: saving,
+      confirm: {
+        message: "Delete this note? This can't be undone.",
+        confirmLabel: "Delete",
+      },
+      onSelect: onDelete,
+    });
   }
 
   return (
@@ -418,34 +469,84 @@ export function CardForm({
           <h3 className="text-lg font-semibold">
             {isEdit ? "Edit Note" : "Add Note"}
           </h3>
-          {position && (
-            <span className="text-sm tabular-nums text-foreground/40">
-              {position.index + 1} / {position.total}
+          {/* Says WHY this note is in front of you — without it, a walkthrough
+              of a deck's leeches is just a pile of anonymous notes to edit.
+              Reads the live tag state, not the saved note, so clearing the tag
+              here (the way a dealt-with leech is retired) updates it at once. */}
+          {isEdit && isLeech({ tags }) && (
+            <span
+              title="Anki flagged this note as a leech — you forget it far more often than the rest. Rewrite it, split it, or delete it; clear the tag once you've dealt with it."
+              className="rounded-full border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+            >
+              Leech
+            </span>
+          )}
+          {/* Suspension is otherwise invisible in here — the row in the list
+              says it with opacity, which the editor has no equivalent of. Reads
+              the live prop, so toggling Suspend from the menu flips it at once
+              (and a Forget clears it, since Anki's reset unsuspends). Neutral
+              rather than amber: it's a state the user chose, not a problem. */}
+          {isEdit && suspended && (
+            <span
+              title="These cards are suspended — they won't come up in study until you unsuspend them."
+              className="rounded-full border border-border bg-foreground/5 px-2 py-0.5 text-xs font-medium text-foreground/60"
+            >
+              Suspended
             </span>
           )}
         </div>
-        {position && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={onPrev}
-              disabled={saving || position.index === 0}
-              aria-label="Previous note"
-              className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
-            >
-              <CaretLeft size={18} weight="bold" />
-            </button>
-            <button
-              type="button"
-              onClick={onSkip}
-              disabled={saving || position.index === position.total - 1}
-              aria-label="Next note"
-              className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
-            >
-              <CaretRight size={18} weight="bold" />
-            </button>
-          </div>
-        )}
+        {/* Trailing edge of the header: where you are in the run, and what you
+            can do to this note. The counter sits with the arrows that change
+            it, and keeps them still — right-aligned, the group grows leftward
+            as the number widens (9/10 → 10/10), so the buttons never slide out
+            from under the pointer mid-walkthrough. */}
+        <div className="flex items-center gap-3">
+          {/* A run of one has nowhere to page to — the counter would read
+              "1 / 1" beside two permanently disabled arrows. */}
+          {position && position.total > 1 && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm tabular-nums text-foreground/40">
+                {position.index + 1} / {position.total}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={onPrev}
+                  disabled={saving || position.index === 0}
+                  aria-label="Previous note"
+                  className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <CaretLeft size={18} weight="bold" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  disabled={saving || position.index === position.total - 1}
+                  aria-label="Next note"
+                  className="rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <CaretRight size={18} weight="bold" />
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Actions on the NOTE, as opposed to the two footer buttons, which
+              act on this editing session. Same set and same shape as the row's
+              kebab, at the same trailing edge, so the two don't diverge. */}
+          {noteActions.length > 0 && (
+            <ActionsMenu
+              label="Note actions"
+              items={noteActions}
+              menuClassName="min-w-[150px]"
+              triggerClassName={(open) =>
+                `rounded-md p-1.5 text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground ${
+                  open ? "bg-foreground/5 text-foreground" : ""
+                }`
+              }
+              iconSize={18}
+            />
+          )}
+        </div>
       </div>
 
       {isEdit && cardType !== initialType && (
@@ -507,7 +608,7 @@ export function CardForm({
                   }
                   placeholder={`${f.name}…`}
                   clozeMode={isClozeField}
-                  deckName={voiceDeck}
+                  deckName={deckName}
                 />
               </div>
             );
@@ -522,7 +623,7 @@ export function CardForm({
                 content={front}
                 onChange={setFront}
                 placeholder="Front side..."
-                deckName={voiceDeck}
+                deckName={deckName}
               />
             </div>
             <div>
@@ -533,7 +634,7 @@ export function CardForm({
                 content={back}
                 onChange={setBack}
                 placeholder="Back side..."
-                deckName={voiceDeck}
+                deckName={deckName}
               />
             </div>
           </>
@@ -548,7 +649,7 @@ export function CardForm({
                 onChange={setClozeText}
                 placeholder="The capital of {{c1::France}} is {{c2::Paris}}."
                 clozeMode
-                deckName={voiceDeck}
+                deckName={deckName}
               />
             </div>
             <div>
@@ -559,7 +660,7 @@ export function CardForm({
                 content={backExtra}
                 onChange={setBackExtra}
                 placeholder="Extra info shown on the back..."
-                deckName={voiceDeck}
+                deckName={deckName}
               />
             </div>
           </>
@@ -572,62 +673,19 @@ export function CardForm({
           <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
         </div>
 
-        {isEdit && (
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground/70">
-              Deck
-            </label>
-            <select
-              value={targetDeck}
-              onChange={(e) => setTargetDeck(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:border-foreground/30 focus:outline-none"
-            >
-              {decks.map((d) => (
-                <option key={d} value={d}>
-                  {/* Indent by depth and show only the leaf so the list reads
-                      as a tree instead of exposing "::" paths. The indent uses
-                      non-breaking spaces — the browser strips leading ASCII
-                      spaces from <option> labels. */}
-                  {"  ".repeat(deckDepth(d)) + deckLeaf(d)}
-                </option>
-              ))}
-              <option value={NEW_DECK}>+ New deck…</option>
-            </select>
-            {creatingDeck && (
-              <ClearableInput
-                type="text"
-                value={newDeck}
-                onChange={(e) => setNewDeck(e.target.value)}
-                onClear={() => setNewDeck("")}
-                clearLabel="Clear deck name"
-                placeholder="New deck name"
-                wrapperClassName="mt-2"
-                className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
-              />
-            )}
-            {destDeck && destDeck !== deckName && (
-              <p className="mt-1 text-xs text-foreground/50">
-                The note will be moved to {formatDeckPath(destDeck)} when you
-                save.
-              </p>
-            )}
-          </div>
-        )}
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
         <div className="flex items-center justify-between gap-3 pt-2">
+          {/* Forget changes nothing visible in the form, so without this the
+              click looks like it did nothing at all. Otherwise this side stays
+              empty: the footer is for the two session buttons, and the note's
+              own actions live up in the header. */}
           <div>
-            {onDelete && (
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={saving}
-                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-              >
-                <Trash size={16} weight="bold" />
-                Delete
-              </button>
+            {forgotten && (
+              <p className="text-sm text-foreground/50">
+                Scheduling reset — this note comes back as new.
+              </p>
             )}
           </div>
           <div className="flex gap-3">

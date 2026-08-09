@@ -17,7 +17,8 @@ interface UseNoteDragOptions {
   /** The current selection, read at drag start (keeps the handler stable). */
   getSelectedIds: () => Set<number>;
   /** Perform the move — bulk-actions' handleMoveToDeck. */
-  moveToDeck: (notes: Note[], target: string) => Promise<void>;
+  /** Resolves to whether the move landed; the drag has nothing to undo either way. */
+  moveToDeck: (notes: Note[], target: string) => Promise<boolean>;
 }
 
 export function useNoteDrag({

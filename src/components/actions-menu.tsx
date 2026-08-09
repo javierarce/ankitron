@@ -22,6 +22,24 @@ export interface ActionsMenuItem {
   kbd?: string;
   /** Destructive items (Delete) render red. */
   danger?: boolean;
+  /**
+   * Ask before running. The popup swaps its list for this question in place,
+   * rather than opening a dialog — which matters most where the menu is itself
+   * inside a modal, and a confirmation would otherwise be a second modal on top
+   * of the first. Cancel returns to the list; confirming runs onSelect.
+   */
+  confirm?: {
+    message: string;
+    /** The confirming button's label, e.g. "Delete". */
+    confirmLabel: string;
+  };
+  /**
+   * Like `confirm`, but the item supplies the whole panel — for a step that
+   * needs real UI rather than a yes/no (choosing a deck to move to). Gets
+   * `close` to dismiss the popup once it's done. Takes precedence over
+   * `confirm`, and `onSelect` is ignored: the panel owns its own actions.
+   */
+  panel?: (close: () => void) => ReactNode;
   disabled?: boolean;
   /** Tooltip — e.g. the reason a disabled item can't be used. */
   title?: string;
@@ -82,33 +100,60 @@ export function ActionsMenu({
   triggerContent?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  // Index of the item whose confirmation is showing in place of the list.
+  const [confirming, setConfirming] = useState<number | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const style = useMenuPlacement(open, btnRef, menuRef);
+  // The confirmation is a different size from the list, so placement has to be
+  // taken again — a menu that opened upward is anchored by its bottom edge.
+  const style = useMenuPlacement(open, btnRef, menuRef, { remeasure: confirming });
+
+  function close() {
+    setOpen(false);
+    setConfirming(null);
+  }
 
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
       const t = e.target as Node;
       if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
-      setOpen(false);
+      close();
     }
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      // Anything inside the popup gets first refusal — see the popup's own
+      // onKeyDown below. This listener is for Escape pressed with focus
+      // elsewhere (on the trigger, or on body after arming a confirmation).
+      if (menuRef.current?.contains(e.target as Node)) return;
+      // Consume it. This menu opens inside ModalDialog, which closes the whole
+      // dialog on Escape from BOTH a window listener and its panel's onKeyDown
+      // — and React's root handler runs before any window bubble listener, so
+      // a bubble-phase listener here would never get there first. Left alone,
+      // backing out of a confirmation would take the user's unsaved edits with
+      // it, or end a whole sequence run. Hence capture phase + stopPropagation:
+      // Escape unwinds one step at a time, innermost first.
+      e.stopPropagation();
+      if (confirming !== null) setConfirming(null);
+      else setOpen(false);
     }
     window.addEventListener("mousedown", handleClick);
-    window.addEventListener("keydown", handleKey);
+    window.addEventListener("keydown", handleKey, true);
     return () => {
       window.removeEventListener("mousedown", handleClick);
-      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("keydown", handleKey, true);
     };
-  }, [open]);
+  }, [open, confirming]);
 
   return (
     <>
       <button
+        // Never a submit button: this menu is used inside a <form> (the card
+        // editor's footer), where the default type would save and advance
+        // instead of opening the menu.
+        type="button"
         ref={btnRef}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? close() : setOpen(true))}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -124,13 +169,59 @@ export function ActionsMenu({
         createPortal(
           <div
             ref={menuRef}
-            role="menu"
+            // Escape from inside the popup, in the bubble phase, so a control
+            // that wants it gets there first: DeckPicker's draft field cancels
+            // the half-typed name, and its filter clears a non-empty query,
+            // both stopping propagation themselves. Only an Escape nobody
+            // claimed reaches this and unwinds a step — and stopping it here
+            // still keeps it away from the surrounding dialog.
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              e.stopPropagation();
+              if (confirming !== null) setConfirming(null);
+              else setOpen(false);
+            }}
+            role={confirming === null ? "menu" : "dialog"}
+            aria-label={confirming === null ? undefined : label}
             style={style}
             className={`z-50 flex w-max flex-col overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-lg${
               menuClassName ? ` ${menuClassName}` : ""
             }`}
           >
-            {items.map((item, i) =>
+            {confirming !== null && items[confirming]?.panel ? (
+              items[confirming].panel(close)
+            ) : confirming !== null && items[confirming]?.confirm ? (
+              <div className="flex w-60 flex-col gap-3 px-3 py-2">
+                <p className="text-sm text-foreground/70">
+                  {items[confirming].confirm.message}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(null)}
+                    className="rounded-lg px-2.5 py-1.5 text-sm text-foreground/60 transition-colors hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const item = items[confirming];
+                      close();
+                      item.onSelect?.();
+                    }}
+                    className={`rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${
+                      items[confirming].danger
+                        ? "border-red-500/30 text-red-500 hover:bg-red-500/10"
+                        : "border-border hover:bg-foreground/5"
+                    }`}
+                  >
+                    {items[confirming].confirm.confirmLabel}
+                  </button>
+                </div>
+              </div>
+            ) : (
+            items.map((item, i) =>
               item.render ? (
                 <div key={i} role="none">
                   {item.render(() => setOpen(false))}
@@ -138,10 +229,17 @@ export function ActionsMenu({
               ) : (
                 <button
                   key={i}
+                  type="button"
                   disabled={item.disabled}
                   title={item.title}
                   onClick={() => {
-                    setOpen(false);
+                    // An item that asks first — a question or a whole panel —
+                    // swaps the popup instead of running and dismissing.
+                    if (item.confirm || item.panel) {
+                      setConfirming(i);
+                      return;
+                    }
+                    close();
                     item.onSelect?.();
                   }}
                   className={itemClassName(item)}
@@ -156,6 +254,7 @@ export function ActionsMenu({
                   )}
                 </button>
               ),
+            )
             )}
           </div>,
           document.body,

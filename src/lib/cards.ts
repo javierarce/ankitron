@@ -83,3 +83,23 @@ export async function setSuspended(
     await ankiFetch("unsuspend", { cards: cardIds });
   }
 }
+
+/**
+ * Return cards to the new queue, throwing away their scheduling — Anki's
+ * "Forget". Distinct from unsuspending, which puts a card back exactly as it
+ * was: this is for a note you've just REWRITTEN, so the new wording gets judged
+ * on its own merits instead of inheriting the punishment history (short
+ * intervals, crushed ease) earned by the version you replaced.
+ *
+ * Two behaviours worth knowing, both from Anki's own scheduler:
+ *
+ * - It unsuspends. Suspension lives in the card's `queue`, which this resets to
+ *   New, so a parked leech comes back into rotation as part of being forgotten.
+ * - It does NOT reset the lapse counter. AnkiConnect calls the backend with
+ *   `reset_counts: false` hardcoded and exposes no way to change it, so a
+ *   forgotten leech keeps its lapses and re-triggers Anki's leech action after
+ *   another half-threshold of failures (4 more, at the default 8).
+ */
+export async function forgetCards(cardIds: number[]): Promise<void> {
+  await ankiFetch("forgetCards", { cards: cardIds });
+}

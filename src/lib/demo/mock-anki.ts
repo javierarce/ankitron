@@ -485,6 +485,7 @@ const MUTATING = new Set([
   "guiUndo",
   "suspend",
   "unsuspend",
+  "forgetCards",
   "setSpecificValueOfCard",
   "addNote",
   "updateNoteFields",
@@ -721,6 +722,18 @@ async function handleAction(
         if (n) n.suspended = false;
       }
       return true;
+    }
+
+    // Anki's Forget: back to the new queue, which also clears suspension. The
+    // mock has no scheduling state to wipe beyond that, so unsuspending is the
+    // whole of it here.
+    case "forgetCards": {
+      const cards = (params.cards as number[]) ?? [];
+      for (const cardId of cards) {
+        const n = findNote(noteIdOfCard(cardId));
+        if (n) n.suspended = false;
+      }
+      return null;
     }
 
     case "setSpecificValueOfCard": {

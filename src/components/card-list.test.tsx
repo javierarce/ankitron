@@ -29,12 +29,14 @@ vi.mock("./card-form", () => ({
     position,
     onSaved,
     onClose,
+    onMove,
   }: {
     deckName: string;
     note?: { noteId: number };
     position?: { index: number; total: number };
     onSaved?: (n?: unknown) => void;
     onClose: () => void;
+    onMove?: (deck: string, isNew: boolean) => void;
   }) => (
     <div
       data-testid="stub-form"
@@ -44,6 +46,13 @@ vi.mock("./card-form", () => ({
     >
       <button onClick={() => onSaved?.()}>stub-save</button>
       <button onClick={onClose}>stub-close</button>
+      <button onClick={() => onMove?.("German", false)}>stub-move-away</button>
+      <button onClick={() => onMove?.("Spanish::Verbs", false)}>
+        stub-move-subdeck
+      </button>
+      <button onClick={() => onMove?.("Spanish::Nuevo", true)}>
+        stub-move-new-subdeck
+      </button>
     </div>
   ),
 }));
@@ -588,5 +597,280 @@ describe("CardList sort persistence", () => {
       document.querySelectorAll<HTMLElement>("[data-note-id]"),
     ).map((el) => el.dataset.noteId);
     expect(order).toEqual(["1", "2", "3"]);
+  });
+});
+
+// The leech banner. It stands as long as the deck has leeches: `leech` is an
+// ordinary tag, so clearing it off a note that's been dealt with is what makes
+// the notice go away.
+describe("CardList leech banner", () => {
+  // CardList reads localStorage on mount (its saved sort), and the describes
+  // above leave the jsdom original detached.
+  let restoreStorage: () => void;
+  beforeEach(() => {
+    restoreStorage = installLocalStorageStandIn();
+  });
+  afterEach(() => restoreStorage());
+
+  // threeNotes with the named notes tagged as leeches.
+  const withLeeches = (...ids: number[]) =>
+    threeNotes.map((n) =>
+      ids.includes(n.noteId) ? ({ ...n, tags: ["leech"] } as Note) : (n as Note),
+    );
+
+  const renderList = (notes: Note[], suspendedCardIds: number[] = []) =>
+    renderInRouter(
+      <CardList
+        deckName="Spanish"
+        notes={notes}
+        suspendedCardIds={suspendedCardIds}
+        showAddForm={false}
+        onShowAddForm={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+  it("stays out of the way when the deck has no leeches", () => {
+    renderList(threeNotes as Note[]);
+
+    expect(screen.queryByText(/leech/i)).toBeNull();
+  });
+
+  it("names the count and calls out the suspended ones", () => {
+    renderList(withLeeches(1, 2), [11]);
+
+    expect(screen.getByText("2 notes are leeches")).toBeTruthy();
+    expect(
+      screen.getByText(/1 is suspended/),
+    ).toBeTruthy();
+  });
+
+  // The click hands off to the bulk bar rather than acting: select-all has no
+  // button (Cmd+A only), so a banner that merely filtered would leave every
+  // useful action — Edit's one-at-a-time walkthrough especially — out of reach.
+  it("selects the leeches so the bulk actions are ready", async () => {
+    const user = userEvent.setup();
+    renderList(withLeeches(1, 3));
+
+    await user.click(screen.getByText("Show leeches"));
+
+    expect(screen.getByText("2 notes selected")).toBeTruthy();
+    // Edit over that selection IS "go through them" — the sequential editor.
+    // By role, so the bulk bar's aria-hidden measurement mirror is skipped.
+    await user.click(screen.getByRole("button", { name: /^Edit/ }));
+    const form = screen.getByTestId("stub-form");
+    expect(form.dataset.position).toBe("1/2");
+  });
+
+  it("filters the list to the leeches and steps aside", async () => {
+    const user = userEvent.setup();
+    renderList(withLeeches(1));
+
+    await user.click(screen.getByText("Show leeches"));
+
+    expect(
+      (screen.getByPlaceholderText("Search notes…") as HTMLInputElement).value,
+    ).toBe("tag:leech");
+    // Nothing left to announce once the list is showing exactly these notes.
+    expect(screen.queryByText("1 note is a leech")).toBeNull();
+  });
+
+  // No dismiss: looking at them isn't dealing with them.
+  it("is still there on the next visit", () => {
+    renderList(withLeeches(1, 2));
+    expect(screen.getByText("2 notes are leeches")).toBeTruthy();
+
+    cleanup();
+    renderList(withLeeches(1, 2));
+
+    expect(screen.getByText("2 notes are leeches")).toBeTruthy();
+  });
+
+  it("goes away once the leech tags are cleared", () => {
+    renderList(withLeeches(1, 2));
+    expect(screen.getByText("2 notes are leeches")).toBeTruthy();
+
+    // One dealt with and untagged; the other still counts.
+    cleanup();
+    renderList(withLeeches(2));
+    expect(screen.getByText("1 note is a leech")).toBeTruthy();
+
+    cleanup();
+    renderList(withLeeches());
+    expect(screen.queryByText(/leech/i)).toBeNull();
+  });
+});
+
+// Forget (Anki's "reset to new"): the action for a note you've just rewritten,
+// so the new wording isn't scheduled on the old one's failure history.
+describe("CardList forget", () => {
+  let restoreStorage: () => void;
+  beforeEach(() => {
+    restoreStorage = installLocalStorageStandIn();
+  });
+  afterEach(() => restoreStorage());
+
+  const notes = [
+    {
+      noteId: 1,
+      modelName: "Basic",
+      tags: ["leech"],
+      cards: [11, 12],
+      fields: { Front: { value: "Hola", order: 0 }, Back: { value: "Hello", order: 1 } },
+    },
+  ] as Note[];
+
+  const renderList = () =>
+    renderInRouter(
+      <CardList
+        deckName="Spanish"
+        notes={notes}
+        suspendedCardIds={[11, 12]}
+        showAddForm={false}
+        onShowAddForm={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+  it("confirms first, then resets every card of the note", async () => {
+    const user = userEvent.setup();
+    vi.mocked(ankiFetch).mockClear();
+    renderList();
+
+    await user.click(screen.getByLabelText("Note actions"));
+    await user.click(screen.getByText("Forget"));
+
+    // Nothing happens on opening the menu item alone.
+    expect(ankiFetch).not.toHaveBeenCalledWith("forgetCards", expect.anything());
+
+    await user.click(screen.getByRole("button", { name: "Forget" }));
+
+    await waitFor(() =>
+      // Both of the note's cards, so a multi-card note resets as a unit.
+      expect(ankiFetch).toHaveBeenCalledWith("forgetCards", { cards: [11, 12] }),
+    );
+  });
+
+  // Anki's reset clears the queue, which is where suspension lives — so a
+  // forgotten card comes back into rotation. The row menu is where that shows.
+  it("leaves the note unsuspended, since Anki's reset clears the queue", async () => {
+    const user = userEvent.setup();
+    renderList();
+
+    await user.click(screen.getByLabelText("Note actions"));
+    expect(screen.getByText("Unsuspend")).toBeTruthy();
+    await user.click(screen.getByText("Forget"));
+    await user.click(screen.getByRole("button", { name: "Forget" }));
+
+    await user.click(screen.getByLabelText("Note actions"));
+    await waitFor(() => expect(screen.getByText("Suspend")).toBeTruthy());
+  });
+
+  it("backs out cleanly on cancel", async () => {
+    const user = userEvent.setup();
+    vi.mocked(ankiFetch).mockClear();
+    renderList();
+
+    await user.click(screen.getByLabelText("Note actions"));
+    await user.click(screen.getByText("Forget"));
+    await user.click(screen.getByText("Cancel"));
+
+    expect(ankiFetch).not.toHaveBeenCalledWith("forgetCards", expect.anything());
+    await user.click(screen.getByLabelText("Note actions"));
+    expect(screen.getByText("Unsuspend")).toBeTruthy();
+  });
+});
+
+// Moving a note out of the deck from the editor. handleMoveToDeck alone only
+// patches the local home-deck map — right for a drag between subdecks, but a
+// note that has left the subtree has to leave the list too.
+describe("CardList move from the editor", () => {
+  let restoreStorage: () => void;
+  beforeEach(() => {
+    restoreStorage = installLocalStorageStandIn();
+  });
+  afterEach(() => restoreStorage());
+
+  const notes = [
+    {
+      noteId: 1,
+      modelName: "Basic",
+      tags: [],
+      cards: [11],
+      fields: { Front: { value: "Hola", order: 0 }, Back: { value: "Hello", order: 1 } },
+    },
+  ] as Note[];
+
+  // The stub form exposes onMove so the test can drive it without the real
+  // picker; the deck it reports is what the panel would have chosen.
+  const renderList = (onChanged = vi.fn()) => {
+    renderInRouter(
+      <CardList
+        deckName="Spanish"
+        notes={notes}
+        subdecks={["Spanish::Verbs"]}
+        noteDecks={{ 1: "Spanish" }}
+        showAddForm={false}
+        onShowAddForm={vi.fn()}
+        onChanged={onChanged}
+      />,
+    );
+    return onChanged;
+  };
+
+  it("refetches the list when the note leaves the deck", async () => {
+    const user = userEvent.setup();
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-away"));
+
+    // A refetch with no argument — the note has to disappear from the list,
+    // which an in-place patch of a single note can't do.
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith());
+    // …and the editor doesn't linger over a deck that no longer holds it.
+    expect(screen.queryByTestId("stub-form")).toBeNull();
+  });
+
+  // Within the subtree the note legitimately stays, so the cheap patch stands.
+  it("stays put for a move into one of its own subdecks", async () => {
+    const user = userEvent.setup();
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-subdeck"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("stub-form")).toBeTruthy(),
+    );
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  // A brand-new deck has no segment chip and no due count until the page
+  // re-reads its subdecks — onCardsMoved only recounts the ones already known.
+  it("refetches for a new subdeck, even inside this deck", async () => {
+    const user = userEvent.setup();
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-new-subdeck"));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith());
+    // It stayed in the subtree, so the editor is still up.
+    expect(screen.getByTestId("stub-form")).toBeTruthy();
+  });
+
+  // handleMoveToDeck toasts its failures rather than throwing, so without a
+  // reported result the editor would close over a move that never happened.
+  it("leaves the editor alone when the move fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(ankiFetch).mockRejectedValueOnce("AnkiConnect request failed");
+    const onChanged = renderList();
+
+    await user.click(screen.getByText("Hola"));
+    await user.click(screen.getByText("stub-move-away"));
+
+    await waitFor(() => expect(screen.getByTestId("stub-form")).toBeTruthy());
+    expect(onChanged).not.toHaveBeenCalled();
   });
 });

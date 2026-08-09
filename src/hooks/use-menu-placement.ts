@@ -7,6 +7,13 @@ export interface MenuPlacementOptions {
   gap?: number;
   /** Minimum gap in px to keep between the menu and the viewport edges. */
   margin?: number;
+  /**
+   * Bump this whenever the menu's CONTENT changes size while it stays open —
+   * e.g. a popup that swaps its list for an inline confirmation. Placement is
+   * measured from the rendered menu, so without it a menu that opened upward
+   * keeps its old top and the new content spills off the anchor.
+   */
+  remeasure?: unknown;
 }
 
 // Hidden off-screen style used before we've measured the menu. useLayoutEffect
@@ -34,7 +41,7 @@ export function useMenuPlacement(
   open: boolean,
   anchorRef: RefObject<HTMLElement | null>,
   menuRef: RefObject<HTMLElement | null>,
-  { align = "right", gap = 4, margin = 8 }: MenuPlacementOptions = {},
+  { align = "right", gap = 4, margin = 8, remeasure }: MenuPlacementOptions = {},
 ): CSSProperties {
   const [style, setStyle] = useState<CSSProperties | null>(null);
 
@@ -94,7 +101,7 @@ export function useMenuPlacement(
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open, anchorRef, menuRef, align, gap, margin]);
+  }, [open, anchorRef, menuRef, align, gap, margin, remeasure]);
 
   return style ?? HIDDEN;
 }
