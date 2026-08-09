@@ -32,6 +32,7 @@ import {
   type Suggestion,
   type SuggestionSources,
 } from "@/lib/search-query";
+import { ClearButton } from "./clearable-input";
 
 interface SearchInputProps {
   value: string;
@@ -85,7 +86,8 @@ const SEGMENT_CLASS: Record<HighlightKind, string> = {
 // Layout-affecting styles shared verbatim by the coloured backdrop and the
 // editable input — font, size, padding, border width, and single-line wrapping
 // must match exactly so the caret lines up with the text rendered behind it.
-const FIELD = "w-full rounded-lg border px-3 py-2 text-sm";
+// The extra right padding keeps both clear of the clear button.
+const FIELD = "w-full rounded-lg border py-2 pl-3 pr-7 text-sm";
 
 /**
  * GitHub-issue-style search box over Anki's search syntax. A transparent input
@@ -250,6 +252,17 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
             placeholder={placeholder}
             className={`${FIELD} relative border-border bg-transparent text-transparent caret-foreground placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none`}
           />
+          {value && (
+            <ClearButton
+              label="Clear search"
+              onClear={() => {
+                onChange("");
+                setOpen(false);
+                setRevealAll(false);
+                innerRef.current?.focus();
+              }}
+            />
+          )}
         </div>
         {showMenu && (
           <ul className="absolute left-0 z-30 mt-1 max-h-64 w-80 overflow-auto rounded-lg border border-border bg-background py-1 shadow-lg">

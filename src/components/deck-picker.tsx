@@ -13,6 +13,7 @@ import {
   type DeckNode,
 } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
+import { ClearableInput } from "./clearable-input";
 
 interface DeckPickerProps {
   /** All existing deck names (full "::" paths); null while they load. */
@@ -328,13 +329,18 @@ export function DeckPicker({
         className="py-0.5 pr-1"
         style={{ paddingLeft: 4 + depth * 18 + 22 }}
       >
-        <input
+        <ClearableInput
           type="text"
           value={draftName}
           onChange={(e) => {
             setDraftName(e.target.value);
             setDraftError(null);
           }}
+          onClear={() => {
+            setDraftName("");
+            setDraftError(null);
+          }}
+          clearLabel="Clear deck name"
           onKeyDown={(e) => {
             // Keep Enter/Escape inside the picker: Enter must not submit the
             // dialog with a half-typed target, and Escape must not close it.
@@ -379,10 +385,12 @@ export function DeckPicker({
   return (
     <div className={disabled ? "opacity-60" : undefined}>
       {showFilter && (
-        <input
+        <ClearableInput
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onClear={() => setQuery("")}
+          clearLabel="Clear deck filter"
           onKeyDown={(e) => {
             if (e.key === "Escape" && query) {
               e.stopPropagation();
@@ -395,7 +403,8 @@ export function DeckPicker({
           disabled={disabled}
           placeholder="Filter decks…"
           spellCheck={false}
-          className="mb-2 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+          wrapperClassName="mb-2"
+          className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
         />
       )}
 

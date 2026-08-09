@@ -26,6 +26,7 @@ import {
 import { useAllTags } from "@/hooks/use-all-tags";
 import { useDeckNames } from "@/hooks/use-deck-names";
 import { ModalDialog } from "./modal-dialog";
+import { ClearableInput } from "./clearable-input";
 
 
 // Anki's stock note type that generates a forward and a reverse card per note.
@@ -593,12 +594,15 @@ export function CardForm({
               <option value={NEW_DECK}>+ New deck…</option>
             </select>
             {creatingDeck && (
-              <input
+              <ClearableInput
                 type="text"
                 value={newDeck}
                 onChange={(e) => setNewDeck(e.target.value)}
+                onClear={() => setNewDeck("")}
+                clearLabel="Clear deck name"
                 placeholder="New deck name"
-                className="mt-2 w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+                wrapperClassName="mt-2"
+                className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
               />
             )}
             {destDeck && destDeck !== deckName && (

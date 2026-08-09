@@ -305,6 +305,15 @@ select {
   padding-right: 2rem;
 }
 
+/* WebKit draws its own cancel button inside a search field — a blue x that
+   ignores the theme. Every field that wants one gets the app's own grey x
+   instead (see components/clearable-input.tsx), so suppress the native one. */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* Tiptap editor styles */
 .tiptap {
   outline: none;

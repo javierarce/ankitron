@@ -5,6 +5,7 @@ import { Check } from "@phosphor-icons/react/dist/ssr/Check";
 import { compareDeckPaths, deckLeaf, deckParent, formatDeckPath } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
 import { useMenuPlacement } from "@/hooks/use-menu-placement";
+import { ClearableInput } from "./clearable-input";
 
 interface DeckFilterProps {
   /** All deck names (full "::" paths); null while they load. */
@@ -170,13 +171,18 @@ export function DeckFilter({
             style={style}
             className="z-50 flex w-72 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg"
           >
-            <input
+            <ClearableInput
               type="text"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
                 setActive(0);
               }}
+              onClear={() => {
+                setQuery("");
+                setActive(0);
+              }}
+              clearLabel="Clear deck search"
               onKeyDown={onKeyDown}
               placeholder="Search decks…"
               aria-label="Search decks"
@@ -189,7 +195,8 @@ export function DeckFilter({
               }
               spellCheck={false}
               autoFocus
-              className="shrink-0 border-b border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none"
+              wrapperClassName="shrink-0 border-b border-border"
+              className="w-full bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none"
             />
             <div
               ref={listRef}
