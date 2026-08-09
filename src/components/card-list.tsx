@@ -91,6 +91,13 @@ interface CardListProps {
    * retarget its title and its Settings/Add note/Study actions to that subdeck.
    */
   onScopeChange?: (deck: string | null) => void;
+  /**
+   * A note to open for editing as soon as the list has it — how another page
+   * links to a specific card rather than to the deck it lives in (the Stats
+   * page's trouble spots). Ignored when the note isn't in this deck, which is
+   * what a link built from stale cached stats points at.
+   */
+  openNoteId?: number | null;
 }
 
 export function CardList({
@@ -107,8 +114,25 @@ export function CardList({
   showAddForm,
   onShowAddForm,
   onScopeChange,
+  openNoteId,
 }: CardListProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+
+  // Open the note another page asked for, once we have it (adjusting state
+  // during render rather than in an effect, as elsewhere in this file). The
+  // request is remembered as handled so the editor opens exactly once: the
+  // request outlives the open, and every later `notes` array — the post-save
+  // refresh, a drag, a delete — would otherwise reopen what the user closed.
+  // An id we never find (a deck it doesn't live in, a note deleted since the
+  // stats were cached) just leaves the deck as it is.
+  const [handledOpenId, setHandledOpenId] = useState<number | null>(null);
+  if (openNoteId != null && openNoteId !== handledOpenId) {
+    const note = notes.find((n) => n.noteId === openNoteId);
+    if (note) {
+      setHandledOpenId(openNoteId);
+      setEditingNote(note);
+    }
+  }
   // The notes whose stats dialog is open (ids, so the row's onStats handler
   // stays identity-stable for the memo'd rows) plus the page within them. A
   // row opens just its note; the `i` shortcut opens the whole selection so you

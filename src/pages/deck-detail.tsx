@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CardList } from "@/components/card-list";
 import { DeckHeaderMenu } from "@/components/deck-header-menu";
 import { CenteredSpinner } from "@/components/spinner";
@@ -77,6 +77,15 @@ async function fetchDeckData(deckName: string) {
   return { subdecks, notes, suspendedCardIds, noteDecks, noteFlags, exists };
 }
 
+// The `?note=` link target, as a note id. Anything that isn't one — a truncated
+// or hand-edited URL — is no request at all rather than a lookup for a note
+// that can't exist.
+function parseNoteId(raw: string | null): number | null {
+  if (raw === null) return null;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export function DeckDetailPage() {
   // React Router already URL-decodes path params, so use the value as-is.
   // Decoding it a second time throws URIError on any deck whose name contains
@@ -84,6 +93,27 @@ export function DeckDetailPage() {
   const { deckName: rawName } = useParams<{ deckName: string }>();
   const deckName = rawName!;
   const navigate = useNavigate();
+
+  // A note another page asked us to open (`?note=…`, from the Stats page's
+  // trouble spots). The id is held in state and dropped from the URL, since the
+  // request is a one-shot: left in the address it would reopen the editor on
+  // every reload and on every back-navigation to this deck. Replacing rather
+  // than pushing keeps that cleanup out of the back stack.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedNoteId = parseNoteId(searchParams.get("note"));
+  const [openNoteId, setOpenNoteId] = useState<number | null>(requestedNoteId);
+  const [prevRequestedNoteId, setPrevRequestedNoteId] = useState(requestedNoteId);
+  if (requestedNoteId !== prevRequestedNoteId) {
+    setPrevRequestedNoteId(requestedNoteId);
+    // Only a new request updates it — the param going away is us clearing it.
+    if (requestedNoteId !== null) setOpenNoteId(requestedNoteId);
+  }
+  useEffect(() => {
+    if (!searchParams.has("note")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("note");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [suspendedCardIds, setSuspendedCardIds] = useState<number[]>([]);
@@ -144,6 +174,13 @@ export function DeckDetailPage() {
     // Leave any half-open rename behind with the old deck.
     setEditingName(false);
     setRenameError(null);
+    // The open request belongs to the navigation that carried it. Without this
+    // it survives into the next deck, and since the spinner unmounts the card
+    // list — taking its "already opened this one" memory with it — a deck that
+    // still holds the note (a parent, say, whose search spans the subtree)
+    // would pop the editor open again on its own. A navigation that brings a
+    // new request has already set it above.
+    if (requestedNoteId === null) setOpenNoteId(null);
     // Show the spinner until the new deck loads. The still-mounted page holds
     // the previous deck's notes/subdecks, and rendering that stale data under
     // the new deck name crashes (e.g. buildSubdeckTree walks subdecks that
@@ -476,6 +513,7 @@ export function DeckDetailPage() {
           showAddForm={showAddForm}
           onShowAddForm={setShowAddForm}
           onScopeChange={setScopedDeck}
+          openNoteId={openNoteId}
         />
       )}
     </div>
