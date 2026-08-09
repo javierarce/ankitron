@@ -67,3 +67,73 @@ describe("ActionsMenu", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 });
+
+// An item can ask before it runs, and the popup answers the question in place —
+// it's used inside modals, where a confirmation dialog would be a second modal
+// stacked on the first.
+describe("ActionsMenu inline confirmation", () => {
+  const items = (onSelect: () => void) => [
+    { label: "Suspend", onSelect: vi.fn() },
+    {
+      label: "Delete",
+      danger: true,
+      confirm: { message: "Delete this? This can't be undone.", confirmLabel: "Delete" },
+      onSelect,
+    },
+  ];
+
+  it("swaps the list for the question instead of running", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<ActionsMenu label="Note actions" items={items(onSelect)} />);
+
+    await user.click(screen.getByLabelText("Note actions"));
+    await user.click(screen.getByText("Delete"));
+
+    expect(screen.getByText(/Delete this\?/)).toBeTruthy();
+    expect(screen.queryByText("Suspend")).toBeNull();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("runs the item once confirmed", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<ActionsMenu label="Note actions" items={items(onSelect)} />);
+
+    await user.click(screen.getByLabelText("Note actions"));
+    await user.click(screen.getByText("Delete"));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    // …and the popup is gone.
+    expect(screen.queryByText(/Delete this\?/)).toBeNull();
+  });
+
+  it("returns to the list on cancel", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<ActionsMenu label="Note actions" items={items(onSelect)} />);
+
+    await user.click(screen.getByLabelText("Note actions"));
+    await user.click(screen.getByText("Delete"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByText("Suspend")).toBeTruthy();
+  });
+
+  // Escape unwinds one step at a time rather than dumping you out of both.
+  it("backs out of the question before closing the menu", async () => {
+    const user = userEvent.setup();
+    render(<ActionsMenu label="Note actions" items={items(vi.fn())} />);
+
+    await user.click(screen.getByLabelText("Note actions"));
+    await user.click(screen.getByText("Delete"));
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByText("Suspend")).toBeTruthy();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByText("Suspend")).toBeNull();
+  });
+});

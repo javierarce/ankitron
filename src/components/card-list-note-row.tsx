@@ -217,6 +217,8 @@ interface NoteRowProps {
   onSetFlag: (note: Note, flag: number) => void;
   /** Open the move-to-deck dialog for the note. */
   onMove: (note: Note) => void;
+  /** Open the confirmation for resetting the note's scheduling. */
+  onForget: (note: Note) => void;
   /** Open the delete confirmation for the note. */
   onDelete: (note: Note) => void;
   onDragStart: (e: ReactDragEvent, note: Note) => void;
@@ -236,6 +238,7 @@ export const NoteRow = memo(function NoteRow({
   onToggleSuspend,
   onSetFlag,
   onMove,
+  onForget,
   onDelete,
   onDragStart,
   onDragEnd,
@@ -389,6 +392,10 @@ export const NoteRow = memo(function NoteRow({
               label: "Move to deck…",
               kbd: "M",
               onSelect: () => onMove(note),
+            },
+            {
+              label: "Forget",
+              onSelect: () => onForget(note),
             },
             {
               label: "Delete",

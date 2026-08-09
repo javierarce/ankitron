@@ -24,6 +24,8 @@ interface CardListToolbarProps {
   onBulkFlag: (flag: number) => void;
   onBulkMove: () => void;
   onBulkTag: () => void;
+  /** Open the confirmation for resetting the selection's scheduling. */
+  onBulkForget: () => void;
   onBulkDelete: () => void;
 }
 
@@ -40,6 +42,7 @@ export function CardListToolbar({
   onBulkFlag,
   onBulkMove,
   onBulkTag,
+  onBulkForget,
   onBulkDelete,
 }: CardListToolbarProps) {
   const selectionActive = selectedCount > 0;
@@ -83,6 +86,7 @@ export function CardListToolbar({
           onBulkFlag={onBulkFlag}
           onBulkMove={onBulkMove}
           onBulkTag={onBulkTag}
+          onBulkForget={onBulkForget}
           onBulkDelete={onBulkDelete}
         />
       )}

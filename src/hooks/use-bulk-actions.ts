@@ -5,7 +5,10 @@
 
 import { useCallback, useState } from "react";
 import type { Note } from "@/lib/types";
-import { setSuspended as setCardsSuspended } from "@/lib/cards";
+import {
+  forgetCards,
+  setSuspended as setCardsSuspended,
+} from "@/lib/cards";
 import { setNoteFlag } from "@/lib/flags";
 import { deleteNotes, moveNotesToDeck } from "@/lib/notes";
 import { failureMessage } from "@/lib/failure-message";
@@ -56,6 +59,11 @@ export function useBulkActions({
   const [deleting, setDeleting] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  // The notes a pending Forget would reset (null = no confirmation open). Held
+  // as notes rather than a boolean because Forget runs from both the row menu
+  // and the selection, and the dialog names how many it's about to affect.
+  const [forgettingNotes, setForgettingNotes] = useState<Note[] | null>(null);
+  const [forgetting, setForgetting] = useState(false);
 
   const isNoteSuspended = useCallback(
     (note: Note): boolean => (note.cards ?? []).some((id) => suspended.has(id)),
@@ -272,6 +280,81 @@ export function useBulkActions({
     }
   }
 
+  /**
+   * Reset every card of these notes back to new, no questions asked — the
+   * caller has already confirmed however it sees fit (the list uses a dialog,
+   * the editor asks inline in its own footer).
+   *
+   * Anki's reset also clears suspension, so the local suspended set is pruned
+   * and the parent asked to refresh its due counts: a forgotten card is back in
+   * rotation and the deck's New count just went up.
+   *
+   * Reports whether the reset actually landed. Failures are toasted here rather
+   * than thrown, so without a return value a caller can't tell — and the editor
+   * would announce "Scheduling reset" over the top of an error toast.
+   */
+  const forgetNotesNow = useCallback(
+    async (targets: Note[]): Promise<boolean> => {
+      const cardIds = targets.flatMap((n) => n.cards ?? []);
+      if (cardIds.length === 0) return false;
+      try {
+        await forgetCards(cardIds);
+        setSuspended((prev) => {
+          const next = new Set(prev);
+          for (const id of cardIds) next.delete(id);
+          return next;
+        });
+        onSuspendChange?.();
+        // The rows themselves don't change, but their scheduling did — refetch
+        // so anything reading card state (the suspended badge, the note's
+        // statistics) is honest.
+        refreshAfterChange();
+        return true;
+      } catch (err) {
+        toast.error(
+          failureMessage(
+            err,
+            targets.length === 1
+              ? "Couldn't reset the note. Is Anki still running?"
+              : "Couldn't reset the selected notes. Is Anki still running?",
+          ),
+        );
+        return false;
+      }
+    },
+    [onSuspendChange, refreshAfterChange, toast],
+  );
+
+  /** Delete one note without the dialog, for the same reason as above. */
+  const deleteNoteNow = useCallback(
+    async (target: Note) => {
+      try {
+        await deleteNotes([target.noteId]);
+        // The editor may have been the delete's entry point.
+        closeEditor();
+        refreshAfterChange();
+      } catch (err) {
+        toast.error(
+          failureMessage(err, "Couldn't delete the note. Is Anki still running?"),
+        );
+      }
+    },
+    [closeEditor, refreshAfterChange, toast],
+  );
+
+  /** The list's dialog-driven Forget, over the selection or one row. */
+  async function handleForget() {
+    const targets = forgettingNotes;
+    if (!targets || targets.length === 0) return;
+    setForgetting(true);
+    try {
+      await forgetNotesNow(targets);
+    } finally {
+      setForgetting(false);
+      setForgettingNotes(null);
+    }
+  }
+
   // Move the given notes into a target (sub)deck; the caller's onMoved patches
   // its view state so the list updates in place rather than reloading. Notes
   // already in the target are skipped.
@@ -314,6 +397,12 @@ export function useBulkActions({
     setBulkDeleteOpen,
     bulkDeleting,
     handleBulkDelete,
+    forgettingNotes,
+    setForgettingNotes,
+    forgetting,
+    handleForget,
+    forgetNotesNow,
+    deleteNoteNow,
     handleMoveToDeck,
   };
 }
