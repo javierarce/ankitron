@@ -160,6 +160,66 @@ describe("CardList edit form deck", () => {
   });
 });
 
+// How the Stats page's trouble spots link to a specific card: the deck page
+// passes the note id down and the list opens its editor.
+describe("CardList openNoteId", () => {
+  const notes = [
+    {
+      noteId: 1,
+      modelName: "Basic",
+      tags: [],
+      cards: [11],
+      fields: { Front: { value: "Hola", order: 0 }, Back: { value: "Hello", order: 1 } },
+    },
+    {
+      noteId: 2,
+      modelName: "Basic",
+      tags: [],
+      cards: [12],
+      fields: { Front: { value: "Adiós", order: 0 }, Back: { value: "Bye", order: 1 } },
+    },
+  ] as Note[];
+
+  const listWith = (openNoteId: number | null, list: Note[] = notes) => (
+    <CardList
+      deckName="Spanish"
+      notes={list}
+      openNoteId={openNoteId}
+      showAddForm={false}
+      onShowAddForm={vi.fn()}
+    />
+  );
+
+  it("opens the requested note's editor", () => {
+    renderInRouter(listWith(2));
+
+    expect(screen.getByTestId("stub-form").dataset.note).toBe("2");
+  });
+
+  // A link built from cached stats can point at a note that has since been
+  // deleted or moved out of this deck; the deck still opens normally.
+  it("ignores a note the deck doesn't hold", () => {
+    renderInRouter(listWith(999));
+
+    expect(screen.queryByTestId("stub-form")).toBeNull();
+  });
+
+  // The request outlives the open — the deck page keeps it in state — so the
+  // one-shot has to be remembered here. Otherwise the next `notes` array (a
+  // post-save refresh, a drag, a delete) reopens what the user just closed.
+  it("stays closed once dismissed, even as the note list changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderInRouter(listWith(2));
+
+    await user.click(screen.getByText("stub-close"));
+    expect(screen.queryByTestId("stub-form")).toBeNull();
+
+    rerender(<MemoryRouter>{listWith(2, [...notes])}</MemoryRouter>);
+
+    expect(screen.queryByTestId("stub-form")).toBeNull();
+  });
+});
+
 describe("CardList count label", () => {
   const notes = [
     {

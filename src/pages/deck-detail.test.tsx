@@ -139,6 +139,14 @@ vi.mock("@/lib/anki-fetch", () => ({
   fetchDueCount: vi.fn(async () => ({ new: 0, learn: 0, review: 0 })),
 }));
 
+// The editor is a heavy TipTap surface with its own round trips; these tests
+// only care about which note the page hands it, so stand it in with a stub.
+vi.mock("@/components/card-form", () => ({
+  CardForm: ({ note }: { note?: { noteId: number } }) => (
+    <div data-testid="stub-form" data-note={note?.noteId} />
+  ),
+}));
+
 import { DeckDetailPage } from "./deck-detail";
 import { ankiFetch } from "@/lib/anki-fetch";
 
@@ -163,9 +171,9 @@ function Landed({ name }: { name: string }) {
   return <div data-testid={name}>{pathname + search}</div>;
 }
 
-function renderPage() {
+function renderPage(entry = "/decks/Spanish") {
   return render(
-    <MemoryRouter initialEntries={["/decks/Spanish"]}>
+    <MemoryRouter initialEntries={[entry]}>
       {/* Always-mounted probe, so a test can read the URL even when the
           destination is the deck page itself (a move lands on one). */}
       <Landed name="location" />
@@ -321,6 +329,29 @@ describe("DeckDetailPage inline rename", () => {
     expect(screen.getByTitle("Rename deck").textContent).not.toContain(
       "Español",
     );
+  });
+});
+
+// How the Stats page's trouble spots link to a card rather than to its deck.
+describe("DeckDetailPage ?note= deep link", () => {
+  it("opens the linked note's editor and drops the param from the URL", async () => {
+    renderPage("/decks/Spanish?note=2");
+
+    const form = await screen.findByTestId("stub-form");
+    expect(form.dataset.note).toBe("2");
+    // Cleared so a reload — or coming back here — doesn't reopen the editor.
+    // Replaced, not pushed, so back doesn't return to the linked URL either.
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe("/decks/Spanish"),
+    );
+  });
+
+  it("just opens the deck when the note isn't one of its own", async () => {
+    renderPage("/decks/Spanish?note=999");
+    await screen.findByText("Front 1");
+
+    expect(screen.queryByTestId("stub-form")).toBeNull();
+    expect(screen.getByTestId("location").textContent).toBe("/decks/Spanish");
   });
 });
 

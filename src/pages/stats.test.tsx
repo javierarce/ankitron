@@ -291,7 +291,7 @@ describe("StatsPage", () => {
   });
 
   describe("trouble spots", () => {
-    it("lists failing notes with their tallies, linking into the deck", async () => {
+    it("lists failing notes with their tallies, linking to the note itself", async () => {
       fetchStatsMock.mockResolvedValue(stats());
       renderPage();
       await screen.findByText("Trouble spots");
@@ -299,8 +299,10 @@ describe("StatsPage", () => {
       expect(screen.getByText("el perro")).toBeTruthy();
       expect(screen.getByText(/4 lapses/)).toBeTruthy();
       const link = screen.getByText("el perro").closest("a");
+      // The note id rides along so the deck page can open its editor — the
+      // fix-list points at work, and the work is editing the note.
       expect(link?.getAttribute("href")).toBe(
-        `/decks/${encodeURIComponent("Spanish::Verbs")}`,
+        `/decks/${encodeURIComponent("Spanish::Verbs")}?note=100`,
       );
     });
 

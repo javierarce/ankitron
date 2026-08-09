@@ -264,8 +264,12 @@ function TroubleSpots({ stats }: { stats: CollectionStats }) {
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {hardest.map((note) => (
             <li key={note.noteId}>
+              {/* Straight to the note's editor, not just to its deck: this
+                  block is a fix-list, and the fix is an edit. The deck page
+                  loads behind the editor, so closing it leaves you somewhere
+                  you can keep working. */}
               <Link
-                to={`/decks/${encodeURIComponent(note.deckName)}`}
+                to={`/decks/${encodeURIComponent(note.deckName)}?note=${note.noteId}`}
                 className="flex h-full flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5 transition-colors hover:bg-foreground/5"
               >
                 {/* Wraps to two lines rather than truncating: the front IS
