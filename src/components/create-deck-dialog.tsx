@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createDeck } from "@/lib/decks";
 import { ModalDialog } from "./modal-dialog";
+import { ClearableInput } from "./clearable-input";
 
 interface CreateDeckDialogProps {
   /**
@@ -67,7 +68,7 @@ export function CreateDeckDialog({
   return (
     <ModalDialog title="Create New Deck" busy={creating} onClose={onClose}>
       <form onSubmit={handleCreateDeck}>
-        <input
+        <ClearableInput
           ref={inputRef}
           type="text"
           value={newDeckName}
@@ -75,9 +76,14 @@ export function CreateDeckDialog({
             setNewDeckName(e.target.value);
             setError(null);
           }}
+          onClear={() => {
+            setNewDeckName("");
+            setError(null);
+          }}
+          clearLabel="Clear deck name"
           spellCheck={false}
           placeholder="Deck name…"
-          className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+          className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
         />
         {deckNameExists ? (
           <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">

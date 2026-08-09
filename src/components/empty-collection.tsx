@@ -4,6 +4,7 @@ import { Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 import { createDeck } from "@/lib/decks";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { CardForm } from "./card-form";
+import { ClearableInput } from "./clearable-input";
 
 interface EmptyCollectionProps {
   /** Deck the first card lands in — usually Anki's stock "Default" deck. */
@@ -121,14 +122,16 @@ function CreateDeckDialog({
       <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
         <h3 className="mb-4 text-lg font-semibold">Create New Deck</h3>
         <form onSubmit={handleSubmit}>
-          <input
+          <ClearableInput
             autoFocus
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onClear={() => setName("")}
+            clearLabel="Clear deck name"
             spellCheck={false}
             placeholder="Deck name…"
-            className="w-full rounded-lg border border-border bg-transparent px-4 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
           />
           {nameExists ? (
             <p className="mt-2 text-sm text-amber-600 dark:text-amber-500">

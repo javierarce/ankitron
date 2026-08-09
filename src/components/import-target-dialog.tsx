@@ -5,6 +5,7 @@ import type { ExportedDeck } from "@/lib/import-export";
 import { CardPreview } from "./card-preview";
 import { DeckPicker } from "./deck-picker";
 import { ModalDialog } from "./modal-dialog";
+import { ClearableInput } from "./clearable-input";
 
 type TargetMode = "new" | "existing";
 
@@ -100,13 +101,18 @@ export function ImportTargetDialog({
           <span className="flex-1">
             <span className="block">New deck</span>
             {mode === "new" && (
-              <input
+              <ClearableInput
                 type="text"
                 value={newName}
                 onChange={(e) => {
                   setTouched(true);
                   setNewName(e.target.value);
                 }}
+                onClear={() => {
+                  setTouched(true);
+                  setNewName("");
+                }}
+                clearLabel="Clear deck name"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !submitDisabled) {
                     e.preventDefault();
@@ -115,7 +121,8 @@ export function ImportTargetDialog({
                 }}
                 placeholder="Deck name"
                 spellCheck={false}
-                className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+                wrapperClassName="mt-1"
+                className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
               />
             )}
           </span>

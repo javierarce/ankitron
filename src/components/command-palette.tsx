@@ -22,6 +22,7 @@ import { useTheme } from "@/lib/theme-context";
 import { CardForm } from "./card-form";
 import { CreateDeckDialog } from "./create-deck-dialog";
 import { ModalDialog } from "./modal-dialog";
+import { ClearableInput } from "./clearable-input";
 
 type Mode = "search" | "pickDeckForCard";
 
@@ -315,7 +316,7 @@ export function CommandPalette() {
               weight="regular"
               className="shrink-0 text-foreground/40"
             />
-            <input
+            <ClearableInput
               ref={inputRef}
               type="text"
               spellCheck={false}
@@ -327,10 +328,16 @@ export function CommandPalette() {
                 setQuery(e.target.value);
                 setSelected(0);
               }}
+              onClear={() => {
+                setQuery("");
+                setSelected(0);
+              }}
+              clearLabel="Clear search"
               onKeyDown={onKeyDown}
               placeholder={
                 mode === "search" ? "Search decks or actions\u2026" : "Pick a deck for the new note\u2026"
               }
+              wrapperClassName="min-w-0 flex-1"
               className="w-full bg-transparent py-3 text-sm placeholder:text-foreground/40 focus:outline-none"
             />
           </div>

@@ -8,6 +8,7 @@ import {
   setApiKey,
   setModelId,
 } from "@/lib/elevenlabs";
+import { ClearableInput } from "./clearable-input";
 
 const PERMISSIONS_HINT = "Add the text_to_speech and voices_read permissions.";
 
@@ -85,17 +86,20 @@ export function ElevenLabsSettings() {
       <div className="mt-3 flex gap-2">
         {editing ? (
           <>
-            <input
+            <ClearableInput
               type="password"
               value={keyInput}
               onChange={(e) => setKeyInput(e.target.value)}
+              onClear={() => setKeyInput("")}
+              clearLabel="Clear API key"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSave();
               }}
               placeholder="ElevenLabs API key"
               autoComplete="off"
               autoFocus
-              className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-3 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
+              wrapperClassName="min-w-0 flex-1"
+              className="w-full rounded-md border border-border bg-transparent px-3 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/40 focus:outline-none"
             />
             <button
               onClick={handleSave}

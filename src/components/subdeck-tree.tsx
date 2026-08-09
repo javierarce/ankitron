@@ -24,6 +24,7 @@ import {
   type DeckNode,
 } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
+import { ClearableInput } from "./clearable-input";
 
 // Above this many subdecks the tree gets a filter box; below it the box is just
 // clutter for a handful of rows you can already see at a glance.
@@ -208,10 +209,12 @@ export function SubdeckTree({
       className="sticky top-4 w-56 shrink-0 self-start max-h-[calc(100vh-6rem)] overflow-y-auto"
     >
       {segmentDecks.length > FILTER_THRESHOLD && (
-        <input
+        <ClearableInput
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onClear={() => setQuery("")}
+          clearLabel="Clear subdeck filter"
           onKeyDown={(e) => {
             if (e.key === "Escape" && query) {
               e.stopPropagation();
@@ -220,7 +223,8 @@ export function SubdeckTree({
           }}
           spellCheck={false}
           placeholder="Filter subdecks…"
-          className="mb-2 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+          wrapperClassName="mb-2"
+          className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
         />
       )}
 
