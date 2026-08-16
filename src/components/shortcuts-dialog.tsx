@@ -19,6 +19,12 @@ type Shortcut = {
 
 type Section = { title: string; shortcuts: Shortcut[] };
 
+// Cmd+R is only claimed inside the app — in browser dev and the demo build it
+// stays the browser's reload, so listing it there would advertise a refresh
+// that actually throws the page away.
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 // Kept deliberately lean: the command palette's own navigation isn't listed
 // (only how to invoke it), and the general list-navigation keys live in Global
 // rather than being repeated per page. This is the single source of truth for
@@ -32,6 +38,9 @@ const SECTIONS: Section[] = [
       { combos: [{ keys: ["Cmd", ","] }], desc: "Open settings" },
       { combos: [{ keys: ["Cmd", "S"] }], desc: "Go to Study" },
       { combos: [{ keys: ["Cmd", "D"] }], desc: "Go to Decks" },
+      ...(isTauri
+        ? [{ combos: [{ keys: ["Cmd", "R"] }], desc: "Refresh from Anki" }]
+        : []),
       { combos: [{ keys: ["?"] }], desc: "Show keyboard shortcuts" },
       { combos: [{ keys: ["j"] }, { keys: ["↓"] }], desc: "Move down a list" },
       { combos: [{ keys: ["k"] }, { keys: ["↑"] }], desc: "Move up a list" },

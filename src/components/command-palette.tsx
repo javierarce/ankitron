@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowElbowDownLeft } from "@phosphor-icons/react/dist/ssr/ArrowElbowDownLeft";
 import { ArrowUp } from "@phosphor-icons/react/dist/ssr/ArrowUp";
 import { ArrowDown } from "@phosphor-icons/react/dist/ssr/ArrowDown";
@@ -9,6 +9,7 @@ import { FolderPlus } from "@phosphor-icons/react/dist/ssr/FolderPlus";
 import { FolderSimple } from "@phosphor-icons/react/dist/ssr/FolderSimple";
 import { GraduationCap } from "@phosphor-icons/react/dist/ssr/GraduationCap";
 import { ChartBar } from "@phosphor-icons/react/dist/ssr/ChartBar";
+import { ArrowsClockwise } from "@phosphor-icons/react/dist/ssr/ArrowsClockwise";
 import { Gear } from "@phosphor-icons/react/dist/ssr/Gear";
 import { Sun } from "@phosphor-icons/react/dist/ssr/Sun";
 import { Moon } from "@phosphor-icons/react/dist/ssr/Moon";
@@ -18,11 +19,15 @@ import { fetchDeckNames } from "@/lib/decks";
 import { formatDeckPath } from "@/lib/deck";
 import { foldText } from "@/lib/fold-text";
 import { isScrollLocked } from "@/hooks/use-scroll-lock";
+import { useSync } from "@/lib/sync-context";
 import { useTheme } from "@/lib/theme-context";
 import { CardForm } from "./card-form";
 import { CreateDeckDialog } from "./create-deck-dialog";
 import { ModalDialog } from "./modal-dialog";
 import { ClearableInput } from "./clearable-input";
+
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 type Mode = "search" | "pickDeckForCard";
 
@@ -32,6 +37,7 @@ type ActionId =
   | "study"
   | "decks"
   | "stats"
+  | "refresh"
   | "settings"
   | "theme-toggle"
   | "theme-system";
@@ -52,6 +58,12 @@ type Item =
 export function CommandPalette() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const { refresh } = useSync();
+  // Cmd+K still opens the palette mid-review, so the Refresh action has to sit
+  // out study sessions the same way Cmd+R and the provider's auto-refresh do —
+  // a sync landing mid-session can reschedule the cards it's holding. Dropped
+  // from the list rather than silently doing nothing when picked.
+  const canRefresh = !useLocation().pathname.endsWith("/study");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("search");
   // True only when the deck picker was reached from the search step (via the
@@ -93,6 +105,17 @@ export function CommandPalette() {
         if (isScrollLocked()) return;
         e.preventDefault();
         navigate("/settings");
+      } else if (mod && e.key.toLowerCase() === "r" && isTauri) {
+        // In the app, WebKit would map Cmd+R to a hard reload of the webview —
+        // throwing away the current route and every page's state — so claim it
+        // for a data refresh instead. Claim it even on the study page, where a
+        // reload mid-session would be the most destructive of all, though the
+        // refresh itself is skipped there (a sync can reschedule the cards the
+        // session is holding). In a browser — dev, and the demo build — leave
+        // Cmd+R alone; reload is what it's supposed to do there.
+        e.preventDefault();
+        if (!canRefresh || isScrollLocked()) return;
+        refresh();
       } else if (mod && (e.key.toLowerCase() === "s" || e.key.toLowerCase() === "d")) {
         // Quick-nav to Study (S) / Decks (D). pathname + hash so this holds
         // under both history and hash routing (the demo build uses HashRouter,
@@ -111,7 +134,7 @@ export function CommandPalette() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [navigate]);
+  }, [navigate, refresh, canRefresh]);
 
   useEffect(() => {
     if (!open) return;
@@ -182,6 +205,17 @@ export function CommandPalette() {
       icon: ChartBar,
       hint: "go",
     },
+    ...(canRefresh
+      ? [
+          {
+            id: "refresh" as const,
+            label: "Refresh",
+            keywords: "refresh reload sync update due counts today",
+            icon: ArrowsClockwise,
+            hint: "refresh",
+          },
+        ]
+      : []),
     {
       id: "settings",
       label: "Settings",
@@ -240,6 +274,11 @@ export function CommandPalette() {
       }
       if (item.id === "study" || item.id === "decks" || item.id === "stats") {
         navigate(item.id === "study" ? "/" : `/${item.id}`);
+        close();
+        return;
+      }
+      if (item.id === "refresh") {
+        refresh();
         close();
         return;
       }

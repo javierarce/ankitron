@@ -1,11 +1,29 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { syncCollection } from "@/lib/anki-fetch";
 import { Spinner } from "@/components/spinner";
 import { SyncContext, type SyncStatus } from "@/lib/sync-context";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+// How long the app's data may sit untouched before coming back to the window
+// refreshes it. Deliberately generous: a sync invalidates the Stats page's
+// revlog cache (see lib/stats/cache.ts), so a short window would make routine
+// app-switching throw away an expensive read for nothing. The case this exists
+// for — the app left open overnight — clears it many times over.
+const STALE_AFTER_MS = 30 * 60 * 1000;
+
+// How often we check the clock ourselves, for the stretches where no focus
+// event ever arrives (see the wake/rollover note in the listener below).
+const STALE_POLL_MS = 60 * 1000;
 
 // Set the first time a sync succeeds on this install. We use it to tell a
 // configured user (whose sync genuinely failed and should see it) apart from a
@@ -28,15 +46,26 @@ function readSyncedBefore(): boolean {
  * full-screen spinner, so opening no longer waits on an AnkiWeb round-trip.
  * (Ankitron and Anki can't run at once, so a launch sync replaces the manual
  * Sync button.) Progress shows as a small corner indicator; pages refresh when
- * `syncedAt` bumps.
+ * `refreshedAt` bumps.
+ *
+ * It also owns the app's staleness policy. Pages fetch on mount and otherwise
+ * only when told to, so an app left open overnight would sit on yesterday's
+ * numbers — Anki's day rolls over at 4am and reviews done on the phone land on
+ * AnkiWeb, with nothing to tell the app either happened. Coming back to the
+ * window (or simply enough time passing) triggers a refresh.
  */
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [error, setError] = useState("");
   const [syncedAt, setSyncedAt] = useState(0);
+  const [refreshedAt, setRefreshedAt] = useState(0);
   const [pageLoads, setPageLoads] = useState(0);
   const [syncedBefore, setSyncedBefore] = useState(readSyncedBefore);
   const inFlight = useRef(false);
+  // When the last sync attempt finished, successful or not, as the clock reads
+  // it — a failed attempt still means we just asked, so a broken connection
+  // can't turn every focus event into another doomed request.
+  const lastAttemptAt = useRef(0);
 
   const registerPageLoad = useCallback(() => {
     setPageLoads((n) => n + 1);
@@ -48,7 +77,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const sync = useCallback(async () => {
+  // Shared body of `sync` and `refresh`. They differ only in what happens when
+  // the sync fails: a refresh still bumps `refreshedAt`, because the caller
+  // wants current data and the most common staleness (the day rollover) is
+  // local and owes nothing to AnkiWeb.
+  const run = useCallback(async ({ refreshOnFailure = false } = {}) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setStatus("syncing");
@@ -56,6 +89,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     try {
       await syncCollection();
       setSyncedAt((n) => n + 1);
+      setRefreshedAt((n) => n + 1);
       setStatus("idle");
       // Record that sync works here, so future failures are shown as real.
       try {
@@ -72,9 +106,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       console.warn("Sync failed:", e);
       setError(e instanceof Error ? e.message : String(e));
       setStatus("error");
+      if (refreshOnFailure) setRefreshedAt((n) => n + 1);
     } finally {
+      lastAttemptAt.current = Date.now();
       inFlight.current = false;
     }
+  }, []);
+
+  const sync = useCallback(() => void run(), [run]);
+  const refresh = useCallback(() => void run({ refreshOnFailure: true }), [run]);
+  const noteSyncAttempt = useCallback(() => {
+    lastAttemptAt.current = Date.now();
   }, []);
 
   // Kick off the launch sync once the provider mounts (it only mounts after
@@ -87,12 +129,99 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     sync();
   }, [sync]);
 
+  // Mid-review the study page runs its own sync when the session ends, and a
+  // sync landing mid-session can reschedule the very cards the session is
+  // holding. It doesn't read `refreshedAt` either, and leaving it remounts the
+  // pages that do — so an auto-refresh there is all cost and no benefit.
+  const location = useLocation();
+  const studying = location.pathname.endsWith("/study");
+  const studyingRef = useRef(studying);
+  useEffect(() => {
+    studyingRef.current = studying;
+  }, [studying]);
+
+  const refreshIfStale = useCallback(() => {
+    if (!isTauri || inFlight.current || studyingRef.current) return;
+    if (Date.now() - lastAttemptAt.current < STALE_AFTER_MS) return;
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const check = () => {
+      if (document.visibilityState === "visible") refreshIfStale();
+    };
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+
+    // Tauri's own focus event is the dependable one for a native window: the
+    // DOM events above don't consistently fire in WKWebView when the OS window
+    // is activated.
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) =>
+        getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+          if (focused) refreshIfStale();
+        }),
+      )
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch(() => {
+        // Focus events only make the refresh prompt; the poll below still
+        // catches staleness within the minute if the window API is missing.
+      });
+
+    // The window can also go a long time without ever losing focus. Left
+    // frontmost when the machine sleeps, it wakes with no focus change at all;
+    // sitting visible on a second monitor, it crosses the 4am rollover without
+    // one either. So watch the clock too — `refreshIfStale` caps the cost at
+    // one sync per STALE_AFTER_MS however often this fires.
+    const timer = setInterval(check, STALE_POLL_MS);
+
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+      clearInterval(timer);
+      unlisten?.();
+    };
+  }, [refreshIfStale]);
+
   const pageLoading = pageLoads > 0;
 
+  // Memoised so navigating (which re-renders this provider, via useLocation
+  // above) doesn't re-render every consumer in the app.
+  const value = useMemo(
+    () => ({
+      status,
+      error,
+      syncedAt,
+      refreshedAt,
+      sync,
+      refresh,
+      noteSyncAttempt,
+      pageLoading,
+      registerPageLoad,
+    }),
+    [
+      status,
+      error,
+      syncedAt,
+      refreshedAt,
+      sync,
+      refresh,
+      noteSyncAttempt,
+      pageLoading,
+      registerPageLoad,
+    ],
+  );
+
   return (
-    <SyncContext.Provider
-      value={{ status, error, syncedAt, sync, pageLoading, registerPageLoad }}
-    >
+    <SyncContext.Provider value={value}>
       {children}
       <SyncIndicator
         status={status}

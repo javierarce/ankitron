@@ -74,6 +74,23 @@ interface FetchParams {
   decks?: string[];
 }
 
+// The page subscribes to the provider's refresh counter. Drive it directly
+// rather than standing up a real SyncProvider, which would want a live sync.
+const syncMock = vi.hoisted(() => ({
+  value: {
+    status: "idle" as const,
+    error: "",
+    syncedAt: 0,
+    refreshedAt: 0,
+    sync: () => {},
+    refresh: () => {},
+    noteSyncAttempt: () => {},
+    pageLoading: false,
+    registerPageLoad: () => () => {},
+  },
+}));
+vi.mock("@/lib/sync-context", () => ({ useSync: () => syncMock.value }));
+
 vi.mock("@/lib/anki-fetch", () => ({
   ankiFetch: vi.fn(async (action: string, params: FetchParams = {}) => {
     switch (action) {
@@ -169,7 +186,13 @@ Object.defineProperty(window, "localStorage", {
   },
 });
 
-beforeEach(reset);
+beforeEach(() => {
+  reset();
+  syncMock.value = { ...syncMock.value, refreshedAt: 0 };
+  // Call history accumulates across tests otherwise, so anything counting
+  // round trips would be reading the previous test's traffic too.
+  vi.mocked(ankiFetch).mockClear();
+});
 afterEach(cleanup);
 
 // Stands in for the routes the header's menu navigates to, so a test can read
@@ -179,8 +202,8 @@ function Landed({ name }: { name: string }) {
   return <div data-testid={name}>{pathname + search}</div>;
 }
 
-function renderPage(entry = "/decks/Spanish") {
-  return render(
+function pageTree(entry: string) {
+  return (
     <MemoryRouter initialEntries={[entry]}>
       {/* Always-mounted probe, so a test can read the URL even when the
           destination is the deck page itself (a move lands on one). */}
@@ -191,8 +214,15 @@ function renderPage(entry = "/decks/Spanish") {
         <Route path="/stats" element={<Landed name="stats" />} />
         <Route path="*" element={<div data-testid="elsewhere" />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderPage(entry = "/decks/Spanish") {
+  const view = render(pageTree(entry));
+  // Re-render the same tree so the page picks up a changed syncMock value —
+  // the mocked useSync has no way to notify on its own.
+  return { ...view, applySync: () => view.rerender(pageTree(entry)) };
 }
 
 async function renameTopDeck(
@@ -504,5 +534,55 @@ describe("DeckDetailPage header menu", () => {
     expect((await screen.findByTestId("stats")).textContent).toBe(
       "/stats?deck=Spanish%3A%3AVerbs",
     );
+  });
+});
+
+// The deck page is the one most likely to be left open overnight, so it has to
+// follow the app-wide staleness refresh (see SyncProvider) rather than sitting
+// on the data it fetched when it mounted.
+describe("DeckDetailPage background refresh", () => {
+  it("re-reads the deck when the app refreshes, without blanking the list", async () => {
+    const { applySync } = renderPage();
+    await screen.findByText("Front 1");
+
+    vi.mocked(ankiFetch).mockClear();
+    // A staleness refresh — or the user's own Cmd+R — lands while we sit here.
+    syncMock.value = { ...syncMock.value, refreshedAt: 1 };
+    await act(async () => {
+      applySync();
+    });
+
+    await waitFor(() =>
+      expect(
+        vi.mocked(ankiFetch).mock.calls.some(([action]) => action === "findNotes"),
+      ).toBe(true),
+    );
+    // Silent in-place path, not the mount load: the list never blanked behind a
+    // spinner while the refetch was in flight.
+    expect(screen.getByText("Front 1")).toBeTruthy();
+  });
+
+  it("doesn't refetch on mount, where the load effect is already fetching", async () => {
+    renderPage();
+    await screen.findByText("Front 1");
+    // Let any follow-up effect land before counting, so a mount-time refresh
+    // would show up here rather than racing the assertion.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Exactly one pass over the deck: the refresh subscription must ignore the
+    // counter value it sees at mount, or every deck open would fetch twice.
+    // Counted by query so the card list's own search (a separate findNotes over
+    // the same deck) doesn't muddy the number.
+    const deckLoads = vi
+      .mocked(ankiFetch)
+      .mock.calls.filter(
+        ([action, params]) =>
+          action === "findNotes" &&
+          (params as FetchParams | undefined)?.query === 'deck:"Spanish"',
+      ).length;
+    expect(deckLoads).toBe(1);
   });
 });

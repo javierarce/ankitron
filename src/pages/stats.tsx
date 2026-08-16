@@ -44,7 +44,7 @@ export function StatsPage() {
   } | null>(null);
   const [hasError, setHasError] = useState(false);
   const decks = useDeckNames();
-  const { syncedAt, registerPageLoad } = useSync();
+  const { syncedAt, refreshedAt, registerPageLoad } = useSync();
 
   const loading = rendered === null && !hasError;
   const pending = rendered !== null && rendered.deckName !== deckName;
@@ -53,9 +53,11 @@ export function StatsPage() {
     if (loading) return registerPageLoad();
   }, [loading, registerPageLoad]);
 
-  // Re-runs when the deck filter changes and, silently, when a sync completes.
-  // syncedAt doubles as the cache key, so a sync is the one thing that forces a
-  // fresh read of the collection's history.
+  // Re-runs when the deck filter changes and, silently, on any refresh. The
+  // cache key stays syncedAt, so a *successful sync* remains the one thing that
+  // forces a fresh read of the collection's history: a refresh that couldn't
+  // reach AnkiWeb re-reads today's figures off the cached revlog instead of
+  // paying for a history it knows hasn't changed.
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -75,7 +77,8 @@ export function StatsPage() {
     return () => {
       cancelled = true;
     };
-  }, [deckName, syncedAt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncedAt is read as the cache key, but refreshedAt is what decides when to re-read; it bumps on every successful sync too, so no staleness slips through
+  }, [deckName, refreshedAt]);
 
   if (hasError) return <AnkiConnectionError reason="unreachable" />;
   // Checked directly rather than via `loading` so TypeScript narrows it.

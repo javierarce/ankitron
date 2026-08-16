@@ -91,7 +91,8 @@ export function SettingsPage() {
           <div>
             <p className="text-sm font-medium">Sync</p>
             <p className="text-xs text-foreground/50">
-              Ankitron syncs on launch and after studying.
+              Ankitron syncs on launch, after studying, and when you come back
+              to a window that's been sitting a while.
               {syncStatus === "idle" && syncedAt > 0 && " — synced"}
               {syncStatus === "error" && ` — ${syncError}`}
             </p>

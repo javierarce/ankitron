@@ -12,7 +12,10 @@ const mock = vi.hoisted(() => {
     status: "idle",
     error: "",
     syncedAt: 0,
+    refreshedAt: 0,
     sync,
+    refresh: () => {},
+    noteSyncAttempt: () => {},
     pageLoading: false,
     registerPageLoad: () => () => {},
   } as SyncContextValue;

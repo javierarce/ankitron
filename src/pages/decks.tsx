@@ -12,7 +12,7 @@ export function DecksPage() {
   const [dueCounts, setDueCounts] = useState<Record<string, DueCounts>>({});
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { syncedAt, registerPageLoad } = useSync();
+  const { refreshedAt, registerPageLoad } = useSync();
 
   // While our blocking spinner is up, suppress the corner sync indicator so the
   // two never show at once.
@@ -91,9 +91,10 @@ export function DecksPage() {
     return () => {
       cancelled = true;
     };
-    // Re-run silently when a sync completes (`loading` is already false by then,
-    // so no spinner) to pick up changes pulled from AnkiWeb.
-  }, [syncedAt]);
+    // Re-run silently on any refresh (`loading` is already false by then, so no
+    // spinner) to pick up changes pulled from AnkiWeb and a day that has rolled
+    // over since.
+  }, [refreshedAt]);
 
   if (loading) {
     return <CenteredSpinner />;

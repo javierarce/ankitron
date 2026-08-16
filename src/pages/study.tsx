@@ -24,6 +24,7 @@ import {
 } from "@/lib/deck";
 import { fetchCardFlags, setNoteFlag } from "@/lib/flags";
 import { useToast } from "@/lib/toast-context";
+import { useSync } from "@/lib/sync-context";
 import {
   answerCard,
   resolveNoteForCard,
@@ -132,6 +133,7 @@ function StudyPage() {
   // Fades the progress bar in once on mount, so it eases in rather than popping.
   const [barVisible, setBarVisible] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
+  const { noteSyncAttempt } = useSync();
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
   // Whether the flag was changed during the current card's review, so grading
@@ -395,6 +397,14 @@ function StudyPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editingNote, showAddForm, pendingExit, deckName, requestExit, handleEdit, handleUndo, handleSetFlag, flag]);
 
+  // This sync stays the page's own rather than going through the provider: the
+  // summary offers an inline retry right where the failure is reported, and the
+  // provider's corner pill would only duplicate it. But the app-wide staleness
+  // clock still has to count it. The provider suppresses its poll while we're
+  // studying, so that clock is frozen for the session's whole duration — and
+  // any session *ending* more than the staleness window after the last provider
+  // sync (studying from minute 25 to minute 35 is enough) would otherwise draw
+  // a second, redundant sync the moment the user lands back on a deck page.
   useEffect(() => {
     if (!completed || reviewed === 0 || syncStatus !== "idle") return;
     let cancelled = false;
@@ -408,12 +418,16 @@ function StudyPage() {
         }
       } catch {
         if (!cancelled) setSyncStatus("error");
+      } finally {
+        // Outside the cancelled guard: the request reached Anki either way, and
+        // that's what the clock is recording.
+        noteSyncAttempt();
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [completed, reviewed, syncStatus]);
+  }, [completed, reviewed, syncStatus, noteSyncAttempt]);
 
   // Once the session ends, fetch this deck's recent accuracy for the summary's
   // trend sparkline. Waits only on the deck NAMES (not the full due snapshot),

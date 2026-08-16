@@ -35,7 +35,7 @@ export function HomePage() {
   // Bumped after the user adds their first card from the onboarding screen, to
   // re-run the loader and drop out of the empty state into the deck view.
   const [refreshTick, setRefreshTick] = useState(0);
-  const { syncedAt, registerPageLoad } = useSync();
+  const { refreshedAt, registerPageLoad } = useSync();
 
   // While our blocking spinner is up, suppress the corner sync indicator so the
   // two never show at once.
@@ -89,7 +89,7 @@ export function HomePage() {
         setCollectionEmpty(empty);
 
         // Clear any earlier failure so a recovered background refetch (on a
-        // syncedAt bump) drops the "Anki isn't connected" overlay.
+        // refreshedAt bump) drops the "Anki isn't connected" overlay.
         if (!cancelled) setHasError(false);
       } catch (err) {
         console.error("Home page load failed:", err);
@@ -104,10 +104,11 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-    // Re-run silently when a sync completes (`loading` is already false by then,
-    // so no spinner) to pick up cards pulled from AnkiWeb, or when the user adds
-    // their first card from the onboarding screen (refreshTick).
-  }, [syncedAt, refreshTick]);
+    // Re-run silently on any refresh (`loading` is already false by then, so no
+    // spinner) to pick up cards pulled from AnkiWeb and a day that has rolled
+    // over since — or when the user adds their first card from the onboarding
+    // screen (refreshTick).
+  }, [refreshedAt, refreshTick]);
 
   if (loading) {
     // Boot load: keep the launch spinner up. Later visits: a small in-content

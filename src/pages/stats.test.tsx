@@ -18,7 +18,11 @@ vi.mock("@/hooks/use-deck-names", () => ({
   useDeckNames: () => ["Spanish", "Spanish::Verbs"],
 }));
 vi.mock("@/lib/sync-context", () => ({
-  useSync: () => ({ syncedAt: 0, registerPageLoad: () => () => {} }),
+  useSync: () => ({
+    syncedAt: 0,
+    refreshedAt: 0,
+    registerPageLoad: () => () => {},
+  }),
 }));
 
 const day = (offset: number) => new Date(2026, 5, 15 + offset).getTime();
