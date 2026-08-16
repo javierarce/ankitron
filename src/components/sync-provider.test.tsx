@@ -23,6 +23,15 @@ const { syncCollection, controls } = vi.hoisted(() => {
 });
 vi.mock("@/lib/anki-fetch", () => ({ syncCollection }));
 
+// The provider subscribes to the native window's focus event. Stub the plugin:
+// under jsdom the real one has no Tauri IPC to talk to, and the tests drive
+// staleness through the DOM focus event and the clock instead.
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onFocusChanged: () => Promise.resolve(() => {}),
+  }),
+}));
+
 import { SyncProvider } from "./sync-provider";
 import { useSync } from "@/lib/sync-context";
 
@@ -44,9 +53,9 @@ function LocationProbe() {
 
 // The provider renders the corner pill, which navigates on click — so every
 // render needs a router in the tree.
-function renderWithRouter(ui: ReactNode) {
+function renderWithRouter(ui: ReactNode, route = "/") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       {ui}
       <LocationProbe />
     </MemoryRouter>,
@@ -54,7 +63,7 @@ function renderWithRouter(ui: ReactNode) {
 }
 
 function Consumer({ pageLoadAtFirst = false }: { pageLoadAtFirst?: boolean }) {
-  const { syncedAt, registerPageLoad } = useSync();
+  const { syncedAt, refreshedAt, registerPageLoad, noteSyncAttempt } = useSync();
   const [loading, setLoading] = useState(pageLoadAtFirst);
   useEffect(() => {
     if (loading) return registerPageLoad();
@@ -62,7 +71,10 @@ function Consumer({ pageLoadAtFirst = false }: { pageLoadAtFirst?: boolean }) {
   return (
     <div>
       <span data-testid="synced">{syncedAt}</span>
+      <span data-testid="refreshed">{refreshedAt}</span>
       <button onClick={() => setLoading(false)}>release</button>
+      {/* Stands in for the study page reporting its end-of-session sync. */}
+      <button onClick={noteSyncAttempt}>note sync</button>
     </div>
   );
 }
@@ -181,5 +193,122 @@ describe("SyncProvider", () => {
 
     // Failures aren't suppressed — the page spinner can't communicate them.
     expect(await screen.findByText("Sync failed")).toBeTruthy();
+  });
+});
+
+// The app left open overnight used to sit on yesterday's numbers: pages fetch
+// on mount and nothing else told them the day had rolled over. These cover the
+// staleness policy that fixes it.
+describe("SyncProvider staleness refresh", () => {
+  const STALE_AFTER_MS = 30 * 60 * 1000;
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Mount, settle the launch sync, and hand back its result promise controls. */
+  async function mountSynced(route = "/") {
+    renderWithRouter(
+      <SyncProvider>
+        <Consumer />
+      </SyncProvider>,
+      route,
+    );
+    await act(async () => {
+      controls.resolve?.();
+    });
+    expect(syncCollection).toHaveBeenCalledTimes(1);
+  }
+
+  it("refreshes once the data has gone stale, with no user input at all", async () => {
+    await mountSynced();
+
+    // Overnight: the machine sleeps, no focus event ever fires, and the window
+    // is still frontmost on wake. The clock is the only signal there is.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STALE_AFTER_MS + 60_000);
+    });
+    expect(syncCollection).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      controls.resolve?.();
+    });
+    // Pages refetch off refreshedAt, so the home screen picks up the new day.
+    expect(screen.getByTestId("refreshed").textContent).toBe("2");
+  });
+
+  it("leaves fresh data alone when the window regains focus", async () => {
+    await mountSynced();
+
+    // Alt-tabbing away and back must not cost a sync — every one of them
+    // throws away the Stats page's cached revlog read.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(syncCollection).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes on focus once the data is stale", async () => {
+    await mountSynced();
+
+    // Jump the clock without letting the poll fire, so this exercises the
+    // focus path on its own.
+    await act(async () => {
+      vi.setSystemTime(Date.now() + STALE_AFTER_MS + 1000);
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(syncCollection).toHaveBeenCalledTimes(2);
+  });
+
+  it("still refetches pages when the catch-up sync fails", async () => {
+    markSyncedBefore();
+    await mountSynced();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STALE_AFTER_MS + 60_000);
+    });
+    await act(async () => {
+      controls.reject?.(new Error("offline"));
+    });
+
+    // Being offline doesn't make yesterday's due counts correct — the day
+    // rolled over locally — so pages re-read even though the sync failed. The
+    // Stats cache key (syncedAt) stays put, since nothing new arrived.
+    expect(screen.getByTestId("refreshed").textContent).toBe("2");
+    expect(screen.getByTestId("synced").textContent).toBe("1");
+  });
+
+  it("counts a sync run outside the provider, so study's doesn't get doubled", async () => {
+    await mountSynced();
+
+    // A long session: study runs its own end-of-session sync and reports it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STALE_AFTER_MS - 60_000);
+      screen.getByText("note sync").click();
+    });
+
+    // Leaving the session, the clock now reads from study's sync — not from
+    // before the session — so no duplicate round trip lands on top of it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    });
+    expect(syncCollection).toHaveBeenCalledTimes(1);
+
+    // The threshold still applies from that point on.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STALE_AFTER_MS);
+    });
+    expect(syncCollection).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds off while a study session is in progress", async () => {
+    await mountSynced("/decks/Spanish/study");
+
+    // A sync landing mid-review can reschedule the cards the session is
+    // holding, and the study page doesn't read refreshedAt anyway.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STALE_AFTER_MS + 60_000);
+    });
+    expect(syncCollection).toHaveBeenCalledTimes(1);
   });
 });

@@ -160,7 +160,7 @@ export function DeckDetailPage() {
   // The last rename's from→to mapping, handed to the card list so it can carry
   // a scoped subdeck selection over to the renamed name in place.
   const [scopeRenames, setScopeRenames] = useState<DeckRename[] | null>(null);
-  const { registerPageLoad } = useSync();
+  const { refreshedAt, registerPageLoad } = useSync();
 
   // A fresh deck starts unscoped; clear any lingering scope from the previous
   // deck before its card list remounts and reports the new one.
@@ -246,6 +246,27 @@ export function DeckDetailPage() {
       // Keep the current view if a refresh fails; the user just acted on it.
     }
   }, [deckName, notes, applyData, refreshDue]);
+
+  // Pick up an app-wide refresh (SyncProvider's staleness policy, or the user's
+  // own Cmd+R). This page is the one most likely to be left open overnight, and
+  // without this it would keep showing yesterday's due counts after everything
+  // else had moved on. Reuses the silent in-place path above rather than the
+  // load effect below, so a background refresh never blanks the list behind a
+  // spinner.
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
+  const refreshedAtSeen = useRef(refreshedAt);
+  useEffect(() => {
+    // Skip the value present at mount: the load effect below is already
+    // fetching this deck, and refetching on top of it would double the work.
+    if (refreshedAtSeen.current === refreshedAt) return;
+    refreshedAtSeen.current = refreshedAt;
+    refreshRef.current();
+    // `refresh` is read through a ref on purpose — it changes identity whenever
+    // `notes` does, so depending on it directly would refetch in a loop.
+  }, [refreshedAt]);
 
   useEffect(() => {
     // We just renamed the opened deck and navigated to its new URL; our state is
