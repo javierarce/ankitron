@@ -1,4 +1,5 @@
 import { clearStatsCache } from "./stats/cache";
+import { FULL_SYNC_MESSAGE } from "./sync-error";
 import { AnkiResponse, DeckStats, DueCounts } from "./types";
 
 /** True when running inside Tauri's webview. */
@@ -136,13 +137,10 @@ export async function ankiMulti<T>(
  * FULL_UPLOAD 4 — after a schema bump, or when the two sides have diverged) it
  * gives up with "Sync status N not one of [0, 1]", because picking upload vs
  * download is a destructive choice the headless API can't make. Match that
- * message so we can replace it with something the user can act on.
+ * message so we can replace it with FULL_SYNC_MESSAGE, which lives with the
+ * rest of the sync copy in lib/sync-error.ts.
  */
 const FULL_SYNC_ERROR = /Sync status \d+ not one of/i;
-
-const FULL_SYNC_MESSAGE =
-  "A full sync is required, which Ankitron can't do on its own. Quit Ankitron, " +
-  "open Anki and sync there (choosing which side to keep), then reopen Ankitron.";
 
 /**
  * Trigger a sync with AnkiWeb. Throws on failure (no AnkiWeb account

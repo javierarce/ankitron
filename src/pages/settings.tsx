@@ -19,9 +19,30 @@ export function SettingsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   // Drive sync through the provider so the whole app stays in one state: a
-  // manual sync here clears the corner "Sync failed" pill on success and bumps
+  // manual sync here clears the corner failure pill on success and bumps
   // syncedAt so pages refetch — the same handler that owns the launch sync.
-  const { status: syncStatus, error: syncError, syncedAt, sync } = useSync();
+  const {
+    status: syncStatus,
+    failure: syncFailure,
+    syncedAt,
+    sync,
+    reconnect,
+  } = useSync();
+
+  // A lost connection to Anki can't be retried in place — Anki has to be
+  // started back up first, which `reconnect` does. Anything else is a plain
+  // retry. Routing both through one handler keeps the button honest: pressing
+  // it always does the thing that could actually fix what's on screen.
+  const ankiDown = syncFailure?.kind === "anki-unreachable";
+  const retrySync = ankiDown ? reconnect : sync;
+  const syncButtonLabel =
+    syncStatus === "syncing"
+      ? ankiDown
+        ? "Reconnecting…"
+        : "Syncing…"
+      : ankiDown
+        ? "Reconnect"
+        : "Sync now";
 
   useEffect(() => {
     if (!isTauri) return;
@@ -30,16 +51,17 @@ export function SettingsPage() {
     );
   }, []);
 
-  // The corner "Sync failed" pill can't say *why* sync failed, so tapping it
-  // brings the user here and asks us to run a sync — the failure (or success,
-  // if they've since fixed it) then shows inline in the Sync row below. Clear
-  // the navigation flag first so a refresh or back-navigation doesn't re-fire.
+  // The corner pill can't say *why* sync failed, so tapping it brings the user
+  // here and asks us to retry — reconnecting first if Anki is what went away.
+  // The failure (or success, if they've since fixed it) then shows inline in
+  // the Sync row below. Clear the navigation flag first so a refresh or
+  // back-navigation doesn't re-fire.
   useEffect(() => {
     const state = location.state as { syncOnArrive?: boolean } | null;
     if (!state?.syncOnArrive) return;
     navigate(".", { replace: true, state: null });
-    sync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the flag; sync is a stable provider callback and re-firing on it would loop the sync
+    retrySync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the flag; the retry callbacks are stable provider callbacks and re-firing on them would loop the sync
   }, [location.state]);
 
   async function checkForUpdates() {
@@ -94,15 +116,31 @@ export function SettingsPage() {
               Ankitron syncs on launch, after studying, and when you come back
               to a window that's been sitting a while.
               {syncStatus === "idle" && syncedAt > 0 && " — synced"}
-              {syncStatus === "error" && ` — ${syncError}`}
             </p>
+            {/* The failure gets its own line, in the alert colour: it's the
+                answer to "why isn't this working", not a footnote to the
+                description of when we sync. */}
+            {syncStatus === "error" && syncFailure && (
+              <>
+                <p className="mt-1 text-xs text-red-500">
+                  {syncFailure.message}
+                </p>
+                {/* Only unrecognised failures carry raw text, and it's the
+                    only clue there is — keep it, quietly. */}
+                {syncFailure.detail && (
+                  <p className="mt-1 text-xs text-foreground/40">
+                    {syncFailure.detail}
+                  </p>
+                )}
+              </>
+            )}
           </div>
           <button
-            onClick={sync}
+            onClick={retrySync}
             disabled={syncStatus === "syncing"}
             className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 disabled:opacity-60"
           >
-            {syncStatus === "syncing" ? "Syncing…" : "Sync now"}
+            {syncButtonLabel}
           </button>
         </div>
 
