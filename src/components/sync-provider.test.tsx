@@ -23,6 +23,13 @@ const { syncCollection, controls } = vi.hoisted(() => {
 });
 vi.mock("@/lib/anki-fetch", () => ({ syncCollection }));
 
+// Restarting Anki is a backend call; the tests only care that it happens
+// before the retry goes out.
+const { ensureAnkiRunning } = vi.hoisted(() => ({
+  ensureAnkiRunning: vi.fn(() => Promise.resolve(true)),
+}));
+vi.mock("@/lib/anki-launch", () => ({ ensureAnkiRunning }));
+
 // The provider subscribes to the native window's focus event. Stub the plugin:
 // under jsdom the real one has no Tauri IPC to talk to, and the tests drive
 // staleness through the DOM focus event and the clock instead.
@@ -63,7 +70,15 @@ function renderWithRouter(ui: ReactNode, route = "/") {
 }
 
 function Consumer({ pageLoadAtFirst = false }: { pageLoadAtFirst?: boolean }) {
-  const { syncedAt, refreshedAt, registerPageLoad, noteSyncAttempt } = useSync();
+  const {
+    syncedAt,
+    refreshedAt,
+    registerPageLoad,
+    noteSyncAttempt,
+    reconnect,
+    refresh,
+    failure,
+  } = useSync();
   const [loading, setLoading] = useState(pageLoadAtFirst);
   useEffect(() => {
     if (loading) return registerPageLoad();
@@ -72,15 +87,21 @@ function Consumer({ pageLoadAtFirst = false }: { pageLoadAtFirst?: boolean }) {
     <div>
       <span data-testid="synced">{syncedAt}</span>
       <span data-testid="refreshed">{refreshedAt}</span>
+      <span data-testid="failure">{failure?.kind ?? "none"}</span>
       <button onClick={() => setLoading(false)}>release</button>
       {/* Stands in for the study page reporting its end-of-session sync. */}
       <button onClick={noteSyncAttempt}>note sync</button>
+      {/* Stands in for Settings' Reconnect button. */}
+      <button onClick={reconnect}>reconnect</button>
+      {/* Stands in for Cmd+R / the command palette's Refresh item. */}
+      <button onClick={refresh}>refresh</button>
     </div>
   );
 }
 
 beforeEach(() => {
   syncCollection.mockClear();
+  ensureAnkiRunning.mockClear();
   controls.resolve = undefined;
   controls.reject = undefined;
   // Node's own experimental localStorage global shadows jsdom's here and its
@@ -141,10 +162,16 @@ describe("SyncProvider", () => {
     );
 
     await act(async () => {
-      controls.reject?.(new Error("offline"));
+      // What the Tauri proxy rejects with when Anki has quit — a bare string,
+      // not an Error.
+      controls.reject?.(
+        "AnkiConnect request failed: error sending request for url (http://127.0.0.1:8765/)",
+      );
     });
 
-    const pill = await screen.findByText("Sync failed");
+    // The pill names the problem rather than reciting the transport error.
+    const pill = await screen.findByText("Anki isn't running");
+    expect(screen.queryByText(/127\.0\.0\.1/)).toBeNull();
     expect(syncCollection).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("location").textContent).toBe("/");
 
@@ -158,6 +185,75 @@ describe("SyncProvider", () => {
       ),
     );
     expect(syncCollection).toHaveBeenCalledTimes(1);
+  });
+
+  it("restarts Anki before retrying, when Anki is what went away", async () => {
+    markSyncedBefore();
+    renderWithRouter(
+      <SyncProvider>
+        <Consumer />
+      </SyncProvider>,
+    );
+
+    await act(async () => {
+      controls.reject?.("AnkiConnect request failed: error sending request");
+    });
+    expect(await screen.findByText("Anki isn't running")).toBeTruthy();
+
+    // Retrying the request alone would fail identically — which is what
+    // "pressing sync again does nothing" looked like. Anki comes back up first.
+    await act(async () => {
+      screen.getByText("reconnect").click();
+    });
+    expect(ensureAnkiRunning).toHaveBeenCalledTimes(1);
+    expect(syncCollection).toHaveBeenCalledTimes(2);
+    // The failure survives its own retry: Settings reads `failure.kind` to keep
+    // the button saying "Reconnecting…" rather than reverting to "Syncing…"
+    // halfway through the reconnect it started.
+    expect(screen.getByTestId("failure").textContent).toBe("anki-unreachable");
+
+    // The retry lands (after the pressed sync's minimum visible spell, which is
+    // why this waits rather than asserting straight away).
+    await act(async () => {
+      controls.resolve?.();
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("synced").textContent).toBe("1"),
+    );
+    expect(screen.queryByText("Anki isn't running")).toBeNull();
+    // …and is dropped once a sync actually works.
+    expect(screen.getByTestId("failure").textContent).toBe("none");
+  });
+
+  it("shows a pressed refresh working, even when the sync behind it fails at once", async () => {
+    markSyncedBefore();
+    renderWithRouter(
+      <SyncProvider>
+        <Consumer />
+      </SyncProvider>,
+    );
+    await act(async () => {
+      controls.resolve?.();
+    });
+
+    // Cmd+R and the palette's Refresh go through `refresh`, so they're presses
+    // too: the attempt has to be visible before the failure lands, or a refresh
+    // against a dead Anki looks as inert as the sync button used to.
+    await act(async () => {
+      screen.getByText("refresh").click();
+    });
+    expect(screen.getByText("Syncing…")).toBeTruthy();
+
+    await act(async () => {
+      controls.reject?.("AnkiConnect request failed: error sending request");
+    });
+    expect(screen.getByText("Syncing…")).toBeTruthy();
+
+    await waitFor(() =>
+      expect(screen.getByText("Anki isn't running")).toBeTruthy(),
+    );
+    // Pages still re-read: the day may have rolled over regardless.
+    expect(screen.getByTestId("refreshed").textContent).toBe("2");
   });
 
   it("hides the syncing indicator while a page shows its own spinner", async () => {
@@ -192,7 +288,7 @@ describe("SyncProvider", () => {
     });
 
     // Failures aren't suppressed — the page spinner can't communicate them.
-    expect(await screen.findByText("Sync failed")).toBeTruthy();
+    expect(await screen.findByText("AnkiWeb unreachable")).toBeTruthy();
   });
 });
 

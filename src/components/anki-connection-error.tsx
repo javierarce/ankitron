@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Spinner } from "@/components/spinner";
-
-const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+import { ensureAnkiRunning } from "@/lib/anki-launch";
 
 /** AnkiConnect's add-on code on AnkiWeb — what the user pastes into Anki. */
 const ANKICONNECT_CODE = "2055492159";
@@ -35,16 +33,9 @@ export function AnkiConnectionError({
   async function retry() {
     setRetrying(true);
     // Anki may just have been closed, or the add-on was only now installed —
-    // ask the backend to (re)launch Anki headless, then reload so startup
-    // re-probes the connection from scratch.
-    if (isTauri) {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("ensure_anki");
-      } catch (err) {
-        console.error("Could not start Anki:", err);
-      }
-    }
+    // (re)launch Anki headless, then reload so startup re-probes the connection
+    // from scratch.
+    await ensureAnkiRunning();
     window.location.reload();
   }
 
@@ -151,9 +142,12 @@ function ReasonBody({ reason }: { reason: AnkiConnectionReason }) {
   return (
     <>
       <h2 className="text-xl font-semibold">Anki isn&apos;t connected</h2>
+      {/* Not "make sure Anki is running" — Ankitron starts Anki headless
+          itself, and an instance opened by hand can't run alongside it. Trying
+          again is the whole fix. */}
       <p className="mt-2 max-w-sm text-sm text-foreground/60">
-        Ankitron can&apos;t reach Anki right now. Make sure Anki is running,
-        then try again.
+        Ankitron can&apos;t reach Anki right now. Try again and Ankitron will
+        start it in the background.
       </p>
     </>
   );

@@ -1,15 +1,23 @@
 import { createContext, useContext } from "react";
+import type { SyncFailure } from "@/lib/sync-error";
 
 export type SyncStatus = "idle" | "syncing" | "error";
 
 export interface SyncContextValue {
   status: SyncStatus;
   /**
-   * The reason the last sync failed, for surfaces with room to show it (the
-   * Settings sync row). Empty unless `status` is "error". The corner pill only
-   * has room for "Sync failed", so it sends the user to Settings to read this.
+   * Why the last sync failed, classified (see lib/sync-error.ts) so each
+   * surface can show the part it has room for: the corner pill shows the short
+   * label, the Settings row the full explanation and the matching fix.
+   *
+   * Set when an attempt fails and kept until a later one succeeds — so it
+   * outlives the failure itself and is still readable while a retry is in
+   * flight ("syncing"), which is how Settings knows the in-flight attempt is a
+   * reconnect and keeps its button saying "Reconnecting…". Gate failure UI on
+   * `status === "error"`, not on this being non-null, or a retry will render
+   * the failure it's busy clearing.
    */
-  error: string;
+  failure: SyncFailure | null;
   /**
    * Increments each time a sync completes successfully — i.e. each time the
    * collection itself may have changed under us. The Stats page uses it as its
@@ -27,9 +35,17 @@ export interface SyncContextValue {
   /** Trigger a sync. No-op while one is already in flight. */
   sync: () => void;
   /**
+   * Restart Anki if it has quit, then sync. The fix offered when a sync fails
+   * with `kind: "anki-unreachable"` — a plain retry against an Anki that isn't
+   * there would only fail the same way.
+   */
+  reconnect: () => void;
+  /**
    * Re-read the app's data, syncing first when possible. Unlike `sync`, pages
    * refetch even if the sync itself fails — being offline doesn't make
    * yesterday's due counts correct. No-op while a sync is already in flight.
+   * This is the user-facing refresh (Cmd+R, the command palette); the
+   * provider's own staleness catch-up doesn't come through here.
    */
   refresh: () => void;
   /**
@@ -54,10 +70,11 @@ export interface SyncContextValue {
 
 export const SyncContext = createContext<SyncContextValue>({
   status: "idle",
-  error: "",
+  failure: null,
   syncedAt: 0,
   refreshedAt: 0,
   sync: () => {},
+  reconnect: () => {},
   refresh: () => {},
   noteSyncAttempt: () => {},
   pageLoading: false,

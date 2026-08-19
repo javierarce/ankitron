@@ -25,6 +25,8 @@ import {
 import { fetchCardFlags, setNoteFlag } from "@/lib/flags";
 import { useToast } from "@/lib/toast-context";
 import { useSync } from "@/lib/sync-context";
+import { ensureAnkiRunning } from "@/lib/anki-launch";
+import { describeSyncFailure, type SyncFailure } from "@/lib/sync-error";
 import {
   answerCard,
   resolveNoteForCard,
@@ -133,6 +135,10 @@ function StudyPage() {
   // Fades the progress bar in once on mount, so it eases in rather than popping.
   const [barVisible, setBarVisible] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle");
+  // Why the end-of-session sync failed, so the summary can say what went wrong
+  // (and offer the fix) instead of a bare "Sync failed."
+  const [syncFailure, setSyncFailure] = useState<SyncFailure | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
   const { noteSyncAttempt } = useSync();
   // Guards against overlapping reveal/answer transitions (e.g. mashing space).
   const transitioningRef = useRef(false);
@@ -416,8 +422,11 @@ function StudyPage() {
         if (!cancelled) {
           setSyncStatus("ok");
         }
-      } catch {
-        if (!cancelled) setSyncStatus("error");
+      } catch (e) {
+        if (!cancelled) {
+          setSyncFailure(describeSyncFailure(e));
+          setSyncStatus("error");
+        }
       } finally {
         // Outside the cancelled guard: the request reached Anki either way, and
         // that's what the clock is recording.
@@ -428,6 +437,20 @@ function StudyPage() {
       cancelled = true;
     };
   }, [completed, reviewed, syncStatus, noteSyncAttempt]);
+
+  // Retry from the summary. Dropping back to "idle" re-arms the effect above;
+  // when Anki itself is what went away, start it back up first — a plain retry
+  // would fail for exactly the same reason, which is what "pressing it again
+  // does nothing" looks like from the outside.
+  async function retrySync() {
+    if (syncFailure?.kind === "anki-unreachable") {
+      setReconnecting(true);
+      await ensureAnkiRunning();
+      setReconnecting(false);
+    }
+    setSyncFailure(null);
+    setSyncStatus("idle");
+  }
 
   // Once the session ends, fetch this deck's recent accuracy for the summary's
   // trend sparkline. Waits only on the deck NAMES (not the full due snapshot),
@@ -750,12 +773,19 @@ function StudyPage() {
           )}
           {reviewed > 0 && syncStatus === "error" && (
             <div className="mb-4 flex flex-col items-center gap-2">
-              <p className="text-xs text-foreground/40">Sync failed.</p>
+              <p className="max-w-sm text-center text-xs text-foreground/40">
+                {syncFailure?.message ?? "Sync failed."}
+              </p>
               <button
-                onClick={() => setSyncStatus("idle")}
-                className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                onClick={retrySync}
+                disabled={reconnecting}
+                className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-60"
               >
-                Retry sync
+                {reconnecting
+                  ? "Reconnecting…"
+                  : syncFailure?.kind === "anki-unreachable"
+                    ? "Reconnect"
+                    : "Retry sync"}
               </button>
             </div>
           )}
