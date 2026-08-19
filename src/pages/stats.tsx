@@ -143,6 +143,18 @@ function HeroTiles({
   deckName: string;
 }) {
   const { streak, totals, retention } = stats;
+  // The streak number counts yesterday's day too (see computeStreaks), so on
+  // its own it can't tell "safe" from "study today or lose it" — which is
+  // exactly the moment the tile matters. So today's state drives both the
+  // sub-line and the colour: the accent means "today is banked" and nothing
+  // else, which is what makes a grey number readable at a glance instead of
+  // needing the words underneath it. One condition, not a scale of urgency —
+  // grey is unlit, not a warning.
+  const longest = `longest ${streak.longest}`;
+  // Scoped like everything else on this tile: under a deck filter, a day spent
+  // on other decks isn't a day studied here, and an unqualified "Not studied
+  // today" would read as a collection-wide claim that's simply false.
+  const today = deckName ? "here today" : "today";
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {/* A deck-scoped streak counts days you studied THAT deck, so it must say
@@ -150,7 +162,8 @@ function HeroTiles({
       <Stat
         label={deckName ? `${formatDeckPath(deckName)} streak` : "Current streak"}
         value={`${streak.current}`}
-        sub={`longest ${streak.longest}`}
+        sub={`${streak.studiedToday ? "Studied" : "Not studied"} ${today} · ${longest}`}
+        tone={streak.studiedToday ? "accent" : "muted"}
         // Collection-wide "Current streak" is self-evident; the deck-scoped
         // number needs the qualifier or it looks like the streak regressed.
         hint={
@@ -158,7 +171,6 @@ function HeroTiles({
             ? "Days in a row you studied this deck. Days spent only on other decks don't count here."
             : undefined
         }
-        accent
       />
       <Stat
         label="Reviews"
@@ -181,26 +193,30 @@ function HeroTiles({
 }
 
 function Activity({ stats }: { stats: CollectionStats }) {
+  // The day the figures describe, not the render-time clock — same reason the
+  // forecast axis uses it: a page still on screen after midnight would
+  // otherwise mark the wrong cell as today.
+  const todayMs = stats.forecastAnchorMs;
+  const recent = stats.recentDays;
+  const last = recent.length - 1;
+  // Weekly ticks, so each label sits on the same weekday as today — with the
+  // final one named rather than dated, since "did I study today" is the
+  // question this chart is most often opened to answer.
+  const weeklyTicks = everyNth(recent.length, 7, (i) => shortDate(recent[i].dayMs));
   return (
     <section className="flex flex-col gap-4">
       <Heading>Activity</Heading>
-      <Heatmap days={stats.heatmapDays} />
+      <Heatmap days={stats.heatmapDays} todayMs={todayMs} />
       <div className="flex flex-col gap-1.5">
         <span className="text-xs text-muted-foreground">
           Reviews per day · last 30 days
         </span>
         <Bars
-          values={stats.recentDays.map((d) => d.reviews)}
-          tipFor={(i) =>
-            `${dateLabel(stats.recentDays[i].dayMs)} · ${plural(
-              stats.recentDays[i].reviews,
-              "review",
-            )}`
+          values={recent.map((d) => d.reviews)}
+          tipFor={(i) => dayTip(recent[i], todayMs)}
+          labelFor={(i) =>
+            recent[i].dayMs === todayMs && i === last ? "Today" : weeklyTicks(i)
           }
-          // Weekly ticks, so each label sits on the same weekday as today.
-          labelFor={everyNth(stats.recentDays.length, 7, (i) =>
-            shortDate(stats.recentDays[i].dayMs),
-          )}
         />
       </div>
     </section>
@@ -376,7 +392,7 @@ const BAR_FILL = "bg-[#3b82f6] dark:bg-[#60a5fa]";
  * rather than a continuous ramp so a single heavy day can't wash every ordinary
  * one out to the same faint tint.
  */
-function Heatmap({ days }: { days: DayActivity[] }) {
+function Heatmap({ days, todayMs }: { days: DayActivity[]; todayMs: number }) {
   const max = Math.max(...days.map((d) => d.reviews), 1);
   const total = days.reduce((sum, d) => sum + d.reviews, 0);
 
@@ -417,8 +433,15 @@ function Heatmap({ days }: { days: DayActivity[] }) {
                 ) : (
                   <div
                     key={d.dayMs}
-                    data-tip={`${dateLabel(d.dayMs)} · ${plural(d.reviews, "review")}`}
-                    className={`aspect-square rounded-[2px] ${HEAT_STEPS[heatLevel(d.reviews, max)]}`}
+                    data-tip={dayTip(d, todayMs)}
+                    // Today is ringed so the eye can find it: an unstudied
+                    // today is the faintest step there is, indistinguishable
+                    // from the empty padding at the end of the last column.
+                    className={`aspect-square rounded-[2px] ${HEAT_STEPS[heatLevel(d.reviews, max)]} ${
+                      d.dayMs === todayMs
+                        ? "ring-1 ring-inset ring-foreground/40"
+                        : ""
+                    }`}
                   />
                 ),
               )}
@@ -703,7 +726,7 @@ function Stat({
   value,
   sub,
   hint,
-  accent = false,
+  tone,
 }: {
   label: string;
   value: string;
@@ -714,8 +737,20 @@ function Stat({
    * that genuinely need it; a page of dotted underlines reads as homework.
    */
   hint?: string;
-  /** Colour the headline number — for the one tile that leads the page. */
-  accent?: boolean;
+  /**
+   * Colour the headline number — for the one tile that leads the page.
+   *
+   * The two tones are lit and unlit, not good and bad: "muted" replaces the
+   * accent rather than adding a second colour beside it, so a streak that
+   * hasn't been kept today simply isn't lit up yet. A warning colour here was
+   * both louder than the situation deserves and, next to the accent, two
+   * competing signals in one small tile.
+   *
+   * Only meaningful because the caller uses it for exactly one condition — a
+   * tone that sometimes means "unlit" and sometimes "less important" would
+   * mean nothing at all.
+   */
+  tone?: "accent" | "muted";
 }) {
   return (
     <div className="rounded-lg border border-border px-3 py-2.5">
@@ -732,7 +767,11 @@ function Stat({
       </div>
       <div
         className={`text-xl font-semibold tabular-nums ${
-          accent ? "text-[#2563eb] dark:text-[#60a5fa]" : ""
+          tone === "accent"
+            ? "text-[#2563eb] dark:text-[#60a5fa]"
+            : tone === "muted"
+              ? "text-muted-foreground"
+              : ""
         }`}
       >
         {value}
@@ -770,6 +809,16 @@ function minutesLabel(minutes: number): string {
   const rounded = Math.round(minutes);
   if (rounded < 1) return "less than a minute";
   return `about ${plural(rounded, "minute")}`;
+}
+
+/**
+ * A day's tooltip in the heatmap and the 30-day bars. Today is named rather
+ * than dated: reading a date off the last mark and matching it against your own
+ * sense of the date is exactly the work this page shouldn't ask for.
+ */
+function dayTip(day: DayActivity, todayMs: number): string {
+  const when = day.dayMs === todayMs ? "Today" : dateLabel(day.dayMs);
+  return `${when} · ${plural(day.reviews, "review")}`;
 }
 
 function dateLabel(ms: number): string {

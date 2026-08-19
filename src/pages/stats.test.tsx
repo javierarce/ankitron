@@ -48,7 +48,13 @@ const days = (count: number) =>
 
 const stats = (over: Partial<CollectionStats> = {}): CollectionStats => ({
   totals: { reviews: 1200, seconds: 7200, firstReviewAt: day(-300), cardsSeen: 84 },
-  streak: { current: 12, longest: 40, lastStudiedDay: day(0), activeDays: 200 },
+  streak: {
+    current: 12,
+    longest: 40,
+    studiedToday: true,
+    lastStudiedDay: day(0),
+    activeDays: 200,
+  },
   heatmapDays: days(365),
   recentDays: days(30),
   retention: {
@@ -98,11 +104,97 @@ describe("StatsPage", () => {
     fetchStatsMock.mockResolvedValue(stats());
     renderPage();
 
-    expect(await screen.findByText("12")).toBeTruthy(); // current streak
-    expect(screen.getByText("longest 40")).toBeTruthy();
+    // The accent is the "kept today" signal, so it's on in the fixture's
+    // studied-today state and nowhere else.
+    expect((await screen.findByText("12")).className).toContain("#2563eb");
+    expect(screen.getByText("Studied today · longest 40")).toBeTruthy();
     expect(screen.getByText("1,200")).toBeTruthy(); // lifetime reviews
     expect(screen.getByText("2 h")).toBeTruthy();
     expect(screen.getByText("88%")).toBeTruthy(); // overall retention
+  });
+
+  // The whole point of the sub-line: a streak that counts yesterday looks
+  // identical to one banked today, and only one of them can still be lost.
+  it("keeps the streak number grey while today is still owed", async () => {
+    fetchStatsMock.mockResolvedValue(
+      stats({
+        streak: {
+          current: 12,
+          longest: 40,
+          studiedToday: false,
+          lastStudiedDay: day(-1),
+          activeDays: 200,
+        },
+      }),
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText("Not studied today · longest 40"),
+    ).toBeTruthy();
+    // The accent reads as "kept", so it stays off until today is banked: the
+    // number is grey while the streak can still be lost today.
+    const value = screen.getByText("12");
+    expect(value.className).toContain("text-muted-foreground");
+    expect(value.className).not.toContain("#2563eb");
+  });
+
+  // Under a deck filter the whole tile is deck-scoped — label and hint say so,
+  // and the sub-line must too. A day spent on other decks isn't a day studied
+  // here, so a flat "Not studied today" would be a claim about the collection
+  // that the number underneath it isn't making.
+  it("scopes today's state to the deck when one is selected", async () => {
+    fetchStatsMock.mockResolvedValue(
+      stats({
+        streak: {
+          current: 12,
+          longest: 40,
+          studiedToday: false,
+          lastStudiedDay: day(-1),
+          activeDays: 200,
+        },
+      }),
+    );
+    renderPage("/stats?deck=Spanish");
+
+    expect(
+      await screen.findByText("Not studied here today · longest 40"),
+    ).toBeTruthy();
+  });
+
+  // Grey means "today isn't done" — not "a streak is at risk". A broken streak
+  // is the same unlit state as an unkept one, so the tile answers the question
+  // there too rather than going silent on it.
+  it("still states today when there's no streak running", async () => {
+    fetchStatsMock.mockResolvedValue(
+      stats({
+        streak: {
+          current: 0,
+          longest: 40,
+          studiedToday: false,
+          lastStudiedDay: day(-9),
+          activeDays: 200,
+        },
+      }),
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText("Not studied today · longest 40"),
+    ).toBeTruthy();
+    expect(screen.getByText("0").className).toContain("text-muted-foreground");
+  });
+
+  // An unstudied today is the faintest heat step there is — without a marker
+  // it's indistinguishable from the padding after the last column.
+  it("rings today's heatmap cell and names it in the tooltip", async () => {
+    fetchStatsMock.mockResolvedValue(stats());
+    renderPage();
+    await screen.findByText("Activity");
+
+    const cells = heatmap().querySelectorAll<HTMLElement>('[data-tip^="Today ·"]');
+    expect(cells).toHaveLength(1);
+    expect(cells[0].className).toContain("ring-");
   });
 
   // A small deck scope has real study time but under an hour; rounding to
@@ -340,9 +432,13 @@ describe("StatsPage", () => {
       await screen.findByText(/Reviews per day/);
 
       // recentDays runs to day(0); weekly ticks back from there.
-      for (const offset of [0, -7, -14, -21, -28]) {
+      for (const offset of [-7, -14, -21, -28]) {
         expect(screen.getAllByText(axisDate(day(offset))).length).toBeGreaterThan(0);
       }
+      // The final tick is named rather than dated — matching a date against
+      // your own sense of the date is the work this chart shouldn't ask for.
+      expect(screen.getAllByText("Today").length).toBeGreaterThan(0);
+      expect(screen.queryByText(axisDate(day(0)))).toBeNull();
       // Not a label per bar — the day between two ticks stays blank.
       expect(screen.queryByText(axisDate(day(-1)))).toBeNull();
     });

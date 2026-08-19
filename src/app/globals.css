@@ -11,6 +11,17 @@
      `border-border` / `divide-border` utilities rather than ad-hoc
      border-foreground/NN so the two themes stay in sync. */
   --border: color-mix(in srgb, var(--foreground) 13%, transparent);
+  /* Semantic secondary text: tile labels, axis ticks, sub-lines — anything
+     that supports the thing it sits next to rather than being read first.
+     60% rather than the 50% that ad-hoc text-foreground/50 uses around the
+     app: most of this text is text-xs, which needs 4.5:1 to stay legible, and
+     50% lands under it on white. Use the `text-muted-foreground` utility so
+     both themes stay in sync.
+
+     No dark counterpart, unlike --border directly above: 60% of --foreground
+     is the right weight on either theme, and since .dark lands on the same
+     element this declaration already picks up the dark --foreground. */
+  --muted-foreground: color-mix(in srgb, var(--foreground) 60%, transparent);
 
   /* Card flag colours (1–7, Anki's order). Used directly as the flagged card's
      border, and at 10% as its front tint (see src/lib/flags.ts). These light
@@ -44,6 +55,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-border: var(--border);
+  --color-muted-foreground: var(--muted-foreground);
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }

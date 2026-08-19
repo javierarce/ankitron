@@ -130,6 +130,7 @@ describe("computeStreaks", () => {
     expect(result).toEqual({
       current: 1,
       longest: 1,
+      studiedToday: true,
       lastStudiedDay: day(0),
       activeDays: 1,
     });
@@ -139,9 +140,22 @@ describe("computeStreaks", () => {
     expect(computeStreaks([], now)).toEqual({
       current: 0,
       longest: 0,
+      studiedToday: false,
       lastStudiedDay: null,
       activeDays: 0,
     });
+  });
+
+  // The distinction the streak number can't carry on its own: both of these
+  // report a live streak, but only one of them is safe.
+  it("separates a streak already banked today from one still owed", () => {
+    const banked = computeStreaks([studied(-1), studied(0)], now);
+    const owed = computeStreaks([studied(-2), studied(-1)], now);
+
+    expect(banked.current).toBe(2);
+    expect(banked.studiedToday).toBe(true);
+    expect(owed.current).toBe(2);
+    expect(owed.studiedToday).toBe(false);
   });
 });
 
