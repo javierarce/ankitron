@@ -62,6 +62,12 @@ export interface StreakInfo {
   /** Consecutive studied days ending today or yesterday — see computeStreaks. */
   current: number;
   longest: number;
+  /**
+   * Whether today itself holds a graded answer. `current` deliberately can't
+   * answer that — it counts a yesterday-anchored streak too — so a user reading
+   * the number alone can't tell whether today is still owed. The UI needs both.
+   */
+  studiedToday: boolean;
   /** Local midnight of the most recent studied day, or null. */
   lastStudiedDay: number | null;
   /** Distinct days with at least one graded answer. */
@@ -111,7 +117,8 @@ export function computeDailyActivity(entries: RevlogEntry[]): DayActivity[] {
  * `current` anchors on today, but falls back to yesterday when today is still
  * empty: a streak shouldn't appear broken at 00:01 simply because the user
  * hasn't studied yet. It only ends once a full calendar day has passed with
- * nothing in it.
+ * nothing in it. That forgiveness is why `studiedToday` ships alongside it —
+ * the number alone can't distinguish "safe" from "due today or it's gone".
  *
  * `days` is expected in ascending order — computeDailyActivity's output.
  */
@@ -120,7 +127,13 @@ export function computeStreaks(
   nowMs: number,
 ): StreakInfo {
   if (days.length === 0) {
-    return { current: 0, longest: 0, lastStudiedDay: null, activeDays: 0 };
+    return {
+      current: 0,
+      longest: 0,
+      studiedToday: false,
+      lastStudiedDay: null,
+      activeDays: 0,
+    };
   }
 
   const studied = new Set(days.map((d) => d.dayMs));
@@ -134,8 +147,9 @@ export function computeStreaks(
 
   const today = startOfLocalDay(nowMs);
   const yesterday = previousDay(today);
+  const studiedToday = studied.has(today);
   let anchor: number | null = null;
-  if (studied.has(today)) anchor = today;
+  if (studiedToday) anchor = today;
   else if (studied.has(yesterday)) anchor = yesterday;
 
   let current = 0;
@@ -146,6 +160,7 @@ export function computeStreaks(
   return {
     current,
     longest,
+    studiedToday,
     lastStudiedDay: days[days.length - 1].dayMs,
     activeDays: days.length,
   };
