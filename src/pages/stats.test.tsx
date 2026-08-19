@@ -107,7 +107,13 @@ describe("StatsPage", () => {
     // The accent is the "kept today" signal, so it's on in the fixture's
     // studied-today state and nowhere else.
     expect((await screen.findByText("12")).className).toContain("#2563eb");
-    expect(screen.getByText("Studied today · longest 40")).toBeTruthy();
+    // Today is banked, so the accent carries that and the line is free to
+    // report the longest streak rather than repeat it.
+    expect(screen.getByText("Longest streak 40")).toBeTruthy();
+    // The accent is the only visible "banked" signal, and colour is what a
+    // screen reader can't relay — so the state is still said out loud there.
+    const banked = screen.getByText("Studied today.");
+    expect(banked.className).toContain("sr-only");
     expect(screen.getByText("1,200")).toBeTruthy(); // lifetime reviews
     expect(screen.getByText("2 h")).toBeTruthy();
     expect(screen.getByText("88%")).toBeTruthy(); // overall retention
