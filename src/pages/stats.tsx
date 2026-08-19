@@ -150,11 +150,25 @@ function HeroTiles({
   // else, which is what makes a grey number readable at a glance instead of
   // needing the words underneath it. One condition, not a scale of urgency —
   // grey is unlit, not a warning.
-  const longest = `longest ${streak.longest}`;
   // Scoped like everything else on this tile: under a deck filter, a day spent
   // on other decks isn't a day studied here, and an unqualified "Not studied
   // today" would read as a collection-wide claim that's simply false.
   const today = deckName ? "here today" : "today";
+  // Once today is banked there's nothing left to say about it — the accent
+  // already says it — so the line spends itself on the longest streak instead.
+  // It only turns into a study message when today is still owed.
+  // ...but the accent is a colour, and colour is exactly what a screen reader
+  // doesn't relay — read aloud, "banked" would be nothing but the absence of
+  // "Not studied". So the positive state is said out loud where only assistive
+  // tech hears it, and the visible line stays free of the redundancy.
+  const sub = streak.studiedToday ? (
+    <>
+      <span className="sr-only">Studied {today}. </span>
+      {`Longest streak ${streak.longest}`}
+    </>
+  ) : (
+    `Not studied ${today} · longest ${streak.longest}`
+  );
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {/* A deck-scoped streak counts days you studied THAT deck, so it must say
@@ -162,7 +176,7 @@ function HeroTiles({
       <Stat
         label={deckName ? `${formatDeckPath(deckName)} streak` : "Current streak"}
         value={`${streak.current}`}
-        sub={`${streak.studiedToday ? "Studied" : "Not studied"} ${today} · ${longest}`}
+        sub={sub}
         tone={streak.studiedToday ? "accent" : "muted"}
         // Collection-wide "Current streak" is self-evident; the deck-scoped
         // number needs the qualifier or it looks like the streak regressed.
@@ -730,7 +744,7 @@ function Stat({
 }: {
   label: string;
   value: string;
-  sub?: string;
+  sub?: ReactNode;
   /**
    * A plain-language explanation of a jargon label, shown on hover — the same
    * dotted-underline idiom as the note-stats panel's Fact. Reserved for terms
