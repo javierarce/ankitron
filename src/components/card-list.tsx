@@ -345,15 +345,15 @@ export function CardList({
     [setForgettingNotes],
   );
 
-  // The deck's leeches. Free to compute — the notes carry their tags already —
+  // The leeches in scope. Free to compute — the notes carry their tags already —
   // and isNoteSuspended is the live set, so unsuspending one updates the count
-  // in place. Counted over the whole deck rather than the active segments: it's
-  // a deck-level notice (the acknowledgement below is stored per deck), and
-  // clicking through clears the segments so the list shows exactly the notes
-  // the banner named.
+  // in place. Counted over the active segments rather than the whole deck: a
+  // banner that stays put while you click into a clean subdeck is naming
+  // leeches that aren't on screen and can't be reached from here, and one that
+  // keeps the parent's number would over-count the subdeck you did scope to.
   const leechCount = useMemo(
-    () => countLeeches(notes, isNoteSuspended),
-    [notes, isNoteSuspended],
+    () => countLeeches(segmentNotes, isNoteSuspended),
+    [segmentNotes, isNoteSuspended],
   );
   // Stands until the leeches are dealt with and their tags cleared — there's
   // nothing to remember, and no dismiss. It does stand down while the list is
@@ -369,14 +369,14 @@ export function CardList({
   // keys typed in a field, so focusing it would make Escape stop clearing the
   // selection.
   const handleShowLeeches = useCallback(() => {
-    // Back to "All" first: the count is deck-wide, so a subdeck still in scope
-    // would answer the click with fewer notes than the banner just promised.
-    clearSegments();
+    // The segments stay as they are: the count was taken over them, so leaving
+    // the scope alone is what makes the click land on exactly the notes the
+    // banner just named.
     setQuery(LEECH_QUERY);
     // Any earlier selection is of notes that are about to leave the view, so
     // the bulk bar would be describing something off screen.
     clearSelection();
-  }, [clearSegments, setQuery, clearSelection]);
+  }, [setQuery, clearSelection]);
 
   const {
     editSeq,

@@ -707,6 +707,77 @@ describe("CardList leech banner", () => {
     renderList(withLeeches());
     expect(screen.queryByText(/leech/i)).toBeNull();
   });
+
+  // Scoping to a subdeck scopes the notice with it. A banner that kept the
+  // parent's number would be naming notes that aren't on screen and can't be
+  // reached from here — worst of all over a subdeck that has no leeches at all.
+  describe("scoped to a subdeck", () => {
+    // Uno is a leech under Verbs, Dos a leech under Nouns, Tres is clean and
+    // sits in Adjectives.
+    const renderScoped = () =>
+      renderInRouter(
+        <CardList
+          deckName="Spanish"
+          notes={withLeeches(1, 2)}
+          noteDecks={{
+            1: "Spanish::Verbs",
+            2: "Spanish::Nouns",
+            3: "Spanish::Adjectives",
+          }}
+          subdecks={["Spanish::Adjectives", "Spanish::Nouns", "Spanish::Verbs"]}
+          showAddForm={false}
+          onShowAddForm={vi.fn()}
+          onChanged={vi.fn()}
+        />,
+      );
+
+    const chip = (name: RegExp) => screen.getByRole("button", { name });
+
+    it("counts only the leeches in the selected subdeck", async () => {
+      const user = userEvent.setup();
+      renderScoped();
+
+      // "All" sees the whole subtree.
+      expect(screen.getByText("2 notes are leeches")).toBeTruthy();
+
+      await user.click(chip(/Verbs/));
+      expect(screen.getByText("1 note is a leech")).toBeTruthy();
+    });
+
+    it("stands down in a subdeck that has none", async () => {
+      const user = userEvent.setup();
+      renderScoped();
+
+      await user.click(chip(/Adjectives/));
+
+      expect(screen.queryByText(/leech/i)).toBeNull();
+    });
+
+    it("comes back with the parent's count when the scope clears", async () => {
+      const user = userEvent.setup();
+      renderScoped();
+
+      await user.click(chip(/Adjectives/));
+      expect(screen.queryByText(/leech/i)).toBeNull();
+
+      // The tree's root row is the "All" scope.
+      await user.click(chip(/^Spanish/));
+      expect(screen.getByText("2 notes are leeches")).toBeTruthy();
+    });
+
+    // The count was taken over the scope, so the click has to land on exactly
+    // those notes — clearing the scope would show more than the banner named.
+    it("shows the scoped leeches, and only those", async () => {
+      const user = userEvent.setup();
+      renderScoped();
+
+      await user.click(chip(/Verbs/));
+      await user.click(screen.getByText("Show leeches"));
+
+      expect(screen.getByText("Uno")).toBeTruthy();
+      expect(screen.queryByText("Dos")).toBeNull();
+    });
+  });
 });
 
 // Forget (Anki's "reset to new"): the action for a note you've just rewritten,
